@@ -1,0 +1,118 @@
+<div class="turnos-container">
+  <!-- Botones superiores -->
+  <div class="acciones-superiores">
+    <button class="btn-nuevo-turno" (click)="nuevoTurno()">
+      <span class="icono">+</span>
+      <span>Nuevo Turno</span>
+    </button>
+    
+    <button class="btn-reporte">
+      <span class="icono">📊</span>
+      <span>Reporte de inscritos</span>
+    </button>
+  </div>
+
+  <!-- Tabla de turnos -->
+  <div class="tabla-container">
+    <table class="tabla-turnos">
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Grados</th>
+          <th>Hora inicio entrada</th>
+          <th>Hora fin entrada</th>
+          <th>Hora inicio prueba</th>
+          <th>Hora fin prueba</th>
+          <th class="col-acciones">ACCIONES</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let turno of turnosPaginados; let i = index">
+          <td class="codigo">{{ turno.codigo }}</td>
+          <td class="grados">
+            <div class="grados-lista">
+              <span *ngFor="let grado of turno.grados" class="grado-tag">
+                {{ grado }} {{ turno.nivel.toUpperCase() }}
+              </span>
+            </div>
+          </td>
+          <td class="hora">
+            <div class="fecha-hora">
+              <span class="fecha">{{ formatearFecha(turno.fecha) }}</span>
+              <span class="hora-valor">{{ turno.horaInicioEntrada }}</span>
+            </div>
+          </td>
+          <td class="hora">
+            <div class="fecha-hora">
+              <span class="fecha">{{ formatearFecha(turno.fecha) }}</span>
+              <span class="hora-valor">{{ turno.horaFinEntrada }}</span>
+            </div>
+          </td>
+          <td class="hora">
+            <div class="fecha-hora">
+              <span class="fecha">{{ formatearFecha(turno.fecha) }}</span>
+              <span class="hora-valor">{{ turno.horaInicioPrueba }}</span>
+            </div>
+          </td>
+          <td class="hora">
+            <div class="fecha-hora">
+              <span class="fecha">{{ formatearFecha(turno.fecha) }}</span>
+              <span class="hora-valor">{{ turno.horaFinPrueba }}</span>
+            </div>
+          </td>
+          <td class="acciones">
+            <button class="btn-accion btn-editar" (click)="onEditarTurno(turno)" title="Editar">
+              ✏️
+            </button>
+            <button class="btn-accion btn-ver" title="Ver detalles">
+              🏫
+            </button>
+            <button class="btn-accion btn-eliminar" (click)="onEliminarTurno(turno)" title="Eliminar">
+              🗑️
+            </button>
+          </td>
+        </tr>
+        
+        <!-- Fila vacía cuando no hay datos -->
+        <tr *ngIf="turnos.length === 0" class="fila-vacia">
+          <td colspan="7" class="mensaje-vacio">
+            No hay turnos registrados. Haga clic en "Nuevo Turno" para crear uno.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Paginación -->
+  <div class="paginacion">
+    <span class="info-pagina">
+      {{ (paginaActual - 1) * itemsPorPagina + 1 }} - 
+      {{ Math.min(paginaActual * itemsPorPagina, totalItems) }} de {{ totalItems }}
+    </span>
+    
+    <div class="items-por-pagina">
+      <label>items por página</label>
+      <select [(ngModel)]="itemsPorPagina" (change)="onItemsPorPaginaChange($event)">
+        <option value="3">3</option>
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="20">20</option>
+      </select>
+    </div>
+    
+    <div class="navegacion">
+      <button 
+        class="btn-nav" 
+        [disabled]="paginaActual === 1"
+        (click)="cambiarPagina('anterior')">
+        ‹
+      </button>
+      <button 
+        class="btn-nav" 
+        [disabled]="paginaActual === totalPaginas"
+        (click)="cambiarPagina('siguiente')">
+        ›
+      </button>
+    </div>
+  </div>
+</div>

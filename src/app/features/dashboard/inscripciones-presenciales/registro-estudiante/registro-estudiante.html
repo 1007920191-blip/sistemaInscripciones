@@ -1,0 +1,92 @@
+<div class="registro-container">
+  <div class="header">
+    <h2>Datos del Estudiante</h2>
+    <span class="progreso">{{progreso}}</span>
+    <button class="btn-cerrar" (click)="onCancelar()" type="button">✕</button>
+  </div>
+
+  <!-- ✅ NAVEGACIÓN: Mostrar siempre que haya más de 1 estudiante -->
+<div class="navegacion-estudiantes" *ngIf="totalEstudiantes > 1">
+  <button 
+    type="button" 
+    class="btn-nav" 
+    [disabled]="numeroEstudiante === 1"
+    (click)="irAnterior()">
+    ← Anterior
+  </button>
+  <span class="indicador">{{numeroEstudiante}} / {{totalEstudiantes}}</span>
+  <button 
+    type="button" 
+    class="btn-nav" 
+    [disabled]="numeroEstudiante === totalEstudiantes"
+    (click)="irSiguiente()">
+    Siguiente →
+  </button>
+</div>
+
+  <form (ngSubmit)="onGuardar()">
+    <div class="fila">
+      <div class="campo">
+        <label>TIPO DE DOCUMENTO *</label>
+        <select [(ngModel)]="estudiante.tipoDocumento" name="tipoDocumento" required>
+          <option value="">Seleccione...</option>
+          <option *ngFor="let tipo of tiposDocumento" [value]="tipo.id">{{tipo.nombre}}</option>
+        </select>
+      </div>
+      
+      <div class="campo" *ngIf="estudiante.tipoDocumento !== 'sd'">
+        <label>NÚMERO DOCUMENTO *</label>
+        <input 
+          type="text" 
+          [(ngModel)]="estudiante.numeroDocumento" 
+          name="numeroDocumento"
+          placeholder="Ej: 12345678">
+      </div>
+    </div>
+
+    <div class="campo">
+      <label>NOMBRES *</label>
+      <input type="text" [(ngModel)]="estudiante.nombres" name="nombres" placeholder="Nombres completos">
+    </div>
+
+    <div class="campo">
+      <label>APELLIDOS *</label>
+      <input type="text" [(ngModel)]="estudiante.apellidos" name="apellidos" placeholder="Apellidos completos">
+    </div>
+
+    <div class="fila">
+      <div class="campo">
+        <label>NIVEL</label>
+        <input type="text" [value]="estudiante.nivel" readonly class="readonly">
+      </div>
+      
+      <div class="campo">
+        <label>GRADO *</label>
+        <select [(ngModel)]="estudiante.grado" name="grado" required>
+          <option value="">Seleccione grado...</option>
+          <option *ngFor="let grado of gradosDisponibles" [value]="grado">{{grado}}</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="info-colegio">
+      <p><strong>Colegio:</strong> {{colegio?.IE}}</p>
+      <p><strong>Código Modular:</strong> {{colegio?.CODIGOMODULAR}}</p>
+    </div>
+
+     <div class="botones">
+      <button type="button" class="btn-volver" (click)="onVolver()">
+        ← Volver
+      </button>
+      
+      <button 
+        type="submit" 
+        class="btn-guardar"
+        [disabled]="procesando">
+        <span *ngIf="procesando">Guardando...</span>
+        <span *ngIf="!procesando && esUltimoEstudiante">✓ Finalizar Inscripción</span>
+        <span *ngIf="!procesando && !esUltimoEstudiante">+ Guardar y Continuar</span>
+      </button>
+    </div>
+  </form>
+</div>

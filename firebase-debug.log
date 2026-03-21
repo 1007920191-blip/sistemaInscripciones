@@ -1,0 +1,70 @@
+[debug] [2026-01-16T00:22:48.322Z] ----------------------------------------------------------------------
+[debug] [2026-01-16T00:22:48.330Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\lucer\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init
+[debug] [2026-01-16T00:22:48.331Z] CLI Version:   15.3.1
+[debug] [2026-01-16T00:22:48.331Z] Platform:      win32
+[debug] [2026-01-16T00:22:48.331Z] Node Version:  v24.13.0
+[debug] [2026-01-16T00:22:48.331Z] Time:          Thu Jan 15 2026 19:22:48 GMT-0500 (hora estándar de Perú)
+[debug] [2026-01-16T00:22:48.331Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  D:\2024\Tesis\Proyecto de tesis\sistemaIncripciones\sistemaInscripciones
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] 
+[debug] [2026-01-16T00:23:28.946Z] ExitPromptError: User force closed the prompt with SIGINT
+    at Interface.sigint (C:\Users\lucer\AppData\Roaming\npm\node_modules\firebase-tools\node_modules\@inquirer\core\dist\commonjs\lib\create-prompt.js:101:37)
+    at Interface.emit (node:events:508:28)
+    at [_ttyWrite] [as _ttyWrite] (node:internal/readline/interface:1327:18)
+    at ReadStream.onkeypress (node:internal/readline/interface:284:20)
+    at ReadStream.emit (node:events:520:35)
+    at emitKeys (node:internal/readline/utils:371:14)
+    at emitKeys.next (<anonymous>)
+    at ReadStream.onData (node:internal/readline/emitKeypressEvents:64:36)
+    at ReadStream.emit (node:events:508:28)
+    at addChunk (node:internal/streams/readable:559:12)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-01-16T00:23:33.346Z] ----------------------------------------------------------------------
+[debug] [2026-01-16T00:23:33.350Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\lucer\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init
+[debug] [2026-01-16T00:23:33.350Z] CLI Version:   15.3.1
+[debug] [2026-01-16T00:23:33.350Z] Platform:      win32
+[debug] [2026-01-16T00:23:33.350Z] Node Version:  v24.13.0
+[debug] [2026-01-16T00:23:33.351Z] Time:          Thu Jan 15 2026 19:23:33 GMT-0500 (hora estándar de Perú)
+[debug] [2026-01-16T00:23:33.351Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  D:\2024\Tesis\Proyecto de tesis\sistemaIncripciones\sistemaInscripciones
+
+[debug] [2026-01-16T00:25:08.000Z] ExitPromptError: User force closed the prompt with SIGINT
+    at Interface.sigint (C:\Users\lucer\AppData\Roaming\npm\node_modules\firebase-tools\node_modules\@inquirer\core\dist\commonjs\lib\create-prompt.js:101:37)
+    at Interface.emit (node:events:508:28)
+    at [_ttyWrite] [as _ttyWrite] (node:internal/readline/interface:1327:18)
+    at ReadStream.onkeypress (node:internal/readline/interface:284:20)
+    at ReadStream.emit (node:events:520:35)
+    at emitKeys (node:internal/readline/utils:371:14)
+    at emitKeys.next (<anonymous>)
+    at ReadStream.onData (node:internal/readline/emitKeypressEvents:64:36)
+    at ReadStream.emit (node:events:508:28)
+    at addChunk (node:internal/streams/readable:559:12)
+[error] 
+[error] Error: An unexpected error has occurred.

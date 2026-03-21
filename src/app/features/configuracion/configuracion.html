@@ -1,0 +1,206 @@
+<div class="configuracion-container">
+  <div class="header-actions">
+    <button type="button" class="btn-volver" (click)="volverAlMenu()">
+      ← Volver al Menú
+    </button>
+  </div>
+  
+  <h1> Configuración del Concurso</h1>
+  
+  <!-- Mensajes -->
+  <div *ngIf="mensajeExito" class="alert alert-success">
+    {{ mensajeExito }}
+  </div>
+  <div *ngIf="mensajeError" class="alert alert-error">
+    {{ mensajeError }}
+  </div>
+
+  <div *ngIf="cargando" class="loading">
+    Cargando configuración...
+  </div>
+
+  <form *ngIf="!cargando" (ngSubmit)="guardarConfiguracion()" class="config-form">
+    
+    <!-- Información General -->
+    <section class="form-section">
+      <h2> Información General</h2>
+      
+      <div class="form-group">
+        <label for="nombreConcurso">Nombre del Concurso *</label>
+        <input 
+          type="text" 
+          id="nombreConcurso"
+          [(ngModel)]="config.nombreConcurso" 
+          name="nombreConcurso"
+          placeholder="Ej: X Concurso de Matemática"
+          required>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="edicion">Edición (Año) *</label>
+          <input 
+            type="text" 
+            id="edicion"
+            [(ngModel)]="config.edicion" 
+            name="edicion"
+            placeholder="2026"
+            maxlength="4"
+            required>
+        </div>
+
+        <div class="form-group">
+          <label for="costoInscripcion">Costo de Inscripción (S/.) *</label>
+          <input 
+            type="number" 
+            id="costoInscripcion"
+            [(ngModel)]="config.costoInscripcion" 
+            name="costoInscripcion"
+            min="1"
+            step="0.01"
+            required>
+          <small>Este valor se actualizará automáticamente en el módulo de pagos</small>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="eslogan">Eslogan</label>
+        <input 
+          type="text" 
+          id="eslogan"
+          [(ngModel)]="config.eslogan" 
+          name="eslogan"
+          placeholder="Ej: El gran reto">
+      </div>
+    </section>
+
+    <!-- Logos y Fondo - Diseño Compacto -->
+    <section class="form-section">
+      <h2> Imágenes del Concurso</h2>
+      
+      <!-- Logo Izquierdo -->
+      <div class="file-upload-row">
+        <label>Logo Izquierdo:</label>
+        <div class="file-upload-controls">
+          <input 
+            type="file" 
+            #fileInputIzq
+            (change)="onFileSelected($event, 'logoIzquierdo')" 
+            accept="image/*"
+            hidden>
+          
+          <span class="file-name" *ngIf="!logoIzquierdoFile && !config.logoIzquierdo">Sin archivo seleccionado</span>
+          <span class="file-name" *ngIf="logoIzquierdoFile">{{ logoIzquierdoFile.name }}</span>
+          <span class="file-name" *ngIf="!logoIzquierdoFile && config.logoIzquierdo">Imagen guardada</span>
+          
+          <button type="button" class="btn-seleccionar" (click)="fileInputIzq.click()">
+            Seleccionar
+          </button>
+          
+          <button 
+            *ngIf="logoIzquierdoFile || config.logoIzquierdo" 
+            type="button" 
+            class="btn-eliminar"
+            (click)="eliminarImagen('logoIzquierdo')"
+            title="Eliminar">
+            🗑️
+          </button>
+        </div>
+      </div>
+
+      <!-- Logo Derecho -->
+      <div class="file-upload-row">
+        <label>Logo Derecho:</label>
+        <div class="file-upload-controls">
+          <input 
+            type="file" 
+            #fileInputDer
+            (change)="onFileSelected($event, 'logoDerecho')" 
+            accept="image/*"
+            hidden>
+          
+          <span class="file-name" *ngIf="!logoDerechoFile && !config.logoDerecho">Sin archivo seleccionado</span>
+          <span class="file-name" *ngIf="logoDerechoFile">{{ logoDerechoFile.name }}</span>
+          <span class="file-name" *ngIf="!logoDerechoFile && config.logoDerecho">Imagen guardada</span>
+          
+          <button type="button" class="btn-seleccionar" (click)="fileInputDer.click()">
+            Seleccionar
+          </button>
+          
+          <button 
+            *ngIf="logoDerechoFile || config.logoDerecho" 
+            type="button" 
+            class="btn-eliminar"
+            (click)="eliminarImagen('logoDerecho')"
+            title="Eliminar">
+            🗑️
+          </button>
+        </div>
+      </div>
+
+      <!-- Fondo Credencial -->
+      <div class="file-upload-row">
+        <label>Fondo Credencial:</label>
+        <div class="file-upload-controls">
+          <input 
+            type="file" 
+            #fileInputFondo
+            (change)="onFileSelected($event, 'fondoCredencial')" 
+            accept="image/*"
+            hidden>
+          
+          <span class="file-name" *ngIf="!fondoCredencialFile && !config.fondoCredencial">Sin archivo seleccionado</span>
+          <span class="file-name" *ngIf="fondoCredencialFile">{{ fondoCredencialFile.name }}</span>
+          <span class="file-name" *ngIf="!fondoCredencialFile && config.fondoCredencial">Imagen guardada</span>
+          
+          <button type="button" class="btn-seleccionar" (click)="fileInputFondo.click()">
+            Seleccionar
+          </button>
+          
+          <button 
+            *ngIf="fondoCredencialFile || config.fondoCredencial" 
+            type="button" 
+            class="btn-eliminar"
+            (click)="eliminarImagen('fondoCredencial')"
+            title="Eliminar">
+            🗑️
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Vista Previa de Credencial -->
+    <section class="form-section preview-section" *ngIf="config.nombreConcurso">
+      <h2> Vista Previa de Credencial</h2>
+      <div class="credencial-preview">
+        <div class="credencial-mockup" [style.background-image]="fondoCredencialPreview ? 'url(' + fondoCredencialPreview + ')' : 'none'">
+          <div class="credencial-header">
+            <img *ngIf="logoIzquierdoPreview" [src]="logoIzquierdoPreview" class="logo-small">
+            <div class="credencial-info">
+              <h3>{{ config.nombreConcurso || 'Nombre del Concurso' }}</h3>
+              <p>Edición: {{ config.edicion || '2026' }}</p>
+              <p class="eslogan">{{ config.eslogan || 'Eslogan del concurso' }}</p>
+            </div>
+            <img *ngIf="logoDerechoPreview" [src]="logoDerechoPreview" class="logo-small">
+          </div>
+          <div class="credencial-body">
+            <div class="foto-placeholder">FOTO</div>
+            <div class="datos-placeholder">
+              <p><strong>Nombre del Estudiante</strong></p>
+              <p>Colegio: Ejemplo</p>
+              <p>Nivel: Primaria</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Botones -->
+    <div class="form-actions">
+      <button type="submit" class="btn-guardar" [disabled]="guardando">
+        <span *ngIf="guardando"> Guardando...</span>
+        <span *ngIf="!guardando"> Guardar Configuración</span>
+      </button>
+    </div>
+  </form>
+</div>

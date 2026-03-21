@@ -1,0 +1,44 @@
+<div class="aulas-container">
+  <div class="header">
+    <button class="btn-nueva" (click)="nuevaAula()">
+      <span>+</span> Nueva aula
+    </button>
+    
+    <div class="buscador">
+      <input 
+        type="text" 
+        placeholder="BUSCAR:" 
+        [(ngModel)]="busqueda" 
+        (input)="filtrarAulas()"
+      >
+    </div>
+  </div>
+
+  <table class="tabla-aulas">
+    <thead>
+      <tr>
+        <th>Código</th>
+        <th>CAPACIDAD</th>
+        <th>LOCAL</th>
+        <th>PABELLON</th>
+        <th>PISO</th>
+        <th>PUERTA DE ACCESO</th>
+        <th>ACCIONES</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let aula of aulasFiltradas">
+        <td>{{ aula.codigo }}</td>
+        <td>{{ aula.capacidad }}</td>
+        <td>{{ aula.local }}</td>
+        <td>{{ aula.pabellon }}</td>
+        <td>{{ aula.piso }}</td>
+        <td>{{ aula.puertaAcceso }}</td>
+        <td class="acciones">
+          <button class="btn-editar" (click)="editar(aula)">✏️</button>
+          <button class="btn-eliminar" (click)="eliminarAula(aula)">🗑️</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,45 @@
+<div class="form-container">
+  <div class="form-header">
+    <h3>{{ esEdicion ? 'EDITAR AULA' : 'NUEVA AULA' }}</h3>
+    <button class="btn-cerrar" (click)="onCancelar()">×</button>
+  </div>
+
+  <form (ngSubmit)="onSubmit()">
+    <div class="form-group">
+      <label>CÓDIGO *</label>
+      <input type="text" [(ngModel)]="aulaForm.codigo" name="codigo" required placeholder="Ej: A1, A2...">
+    </div>
+
+    <div class="form-group">
+      <label>LOCAL *</label>
+      <input type="text" [(ngModel)]="aulaForm.local" name="local" required>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>CAPACIDAD *</label>
+        <input type="number" [(ngModel)]="aulaForm.capacidad" name="capacidad" required>
+      </div>
+      <div class="form-group">
+        <label>PABELLÓN *</label>
+        <input type="text" [(ngModel)]="aulaForm.pabellon" name="pabellon" required>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>PISO *</label>
+        <input type="number" [(ngModel)]="aulaForm.piso" name="piso" required>
+      </div>
+      <div class="form-group">
+        <label>PUERTA DE ACCESO *</label>
+        <input type="text" [(ngModel)]="aulaForm.puertaAcceso" name="puertaAcceso" required>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="button" class="btn-cancelar" (click)="onCancelar()">Cancelar</button>
+      <button type="submit" class="btn-guardar">💾 Guardar</button>
+    </div>
+  </form>
+</div>

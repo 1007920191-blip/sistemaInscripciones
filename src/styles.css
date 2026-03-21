@@ -1,0 +1,81 @@
+/* You can add global styles to this file, and also import other style files */
+/* Centrado absoluto del componente login */
+app-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg, #005cbf 0%, #003d7a 100%);
+}
+
+/* Caja interna (misma tipografía que dashboard) */
+.login-box {
+  background: white;
+  padding: 50px 60px;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  font-family: Arial, sans-serif;
+}
+.login-box h2 {
+  margin: 0 0 25px;
+  font-size: 2rem;
+  color: #005cbf;
+  font-weight: 600;
+}
+.login-box label {
+  display: block;
+  text-align: left;
+  margin: 18px 0 6px;
+  font-weight: 600;
+  color: #333;
+  font-size: 1rem;
+}
+.login-box input {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+.login-box button {
+  width: 100%;
+  padding: 14px;
+  margin-top: 25px;
+  background: #005cbf;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+.login-box button:hover {
+  background: #004499;
+}
+.login-box a {
+  display: inline-block;
+  margin-top: 18px;
+  color: #005cbf;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 0.95rem;
+}
+
+/* Ventanas emergentes (misma tipografía) */
+.modal,
+.overlay {
+  font-family: Arial, sans-serif;
+}
+/* Botones dentro de ventanas: enviar = azul, cancelar = gris */
+.modal-content button:first-of-type {
+  background: #005cbf !important;
+  color: white !important;
+}
+.modal-content button:last-of-type {
+  background: #eee !important;
+  color: #333 !important;
+}

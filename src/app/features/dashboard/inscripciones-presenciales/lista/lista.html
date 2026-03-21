@@ -1,0 +1,59 @@
+<div class="lista-container" *ngIf="!mostrarNuevaInscripcion">
+  <!-- Mientras carga -->
+  <div *ngIf="cargando" style="text-align: center; padding: 20px;">
+    Cargando inscripciones...
+  </div>
+  
+  <!-- Contenido cuando NO está cargando -->
+  <div *ngIf="!cargando">
+    <h2>Inscripciones presenciales</h2>
+    
+    <button class="btn-nueva" (click)="irANueva()">
+      + Nueva inscripción
+    </button>
+
+    <table class="tabla-inscripciones" *ngIf="inscripciones.length > 0">
+      <thead>
+        <tr>
+          <th>N°</th>
+          <th>Estudiante</th>
+          <th>Colegio</th>
+          <th>Fecha</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let ins of inscripciones; let i = index">
+          <td>{{ i + 1 }}</td>
+          <td>
+            {{ ins.estudiantes[0]?.nombres }} {{ ins.estudiantes[0]?.apellidos }}
+            <span *ngIf="ins.cantidadEstudiantes > 1">
+              (+{{ ins.cantidadEstudiantes - 1 }} más)
+            </span>
+          </td>
+          <td>{{ ins.colegio?.IE }}</td>
+          <td>{{ formatearFecha(ins.fechaInscripcion) }}</td>
+          <td>{{ ins.estado }}</td>
+          <td>
+            <button class="btn-editar" (click)="editarInscripcion(ins)">
+              Editar
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    
+    <div *ngIf="inscripciones.length === 0" style="text-align: center; padding: 20px;">
+      No hay inscripciones registradas
+    </div>
+  </div>
+</div>
+
+<app-nueva-inscripcion 
+  *ngIf="mostrarNuevaInscripcion"
+  [inscripcionEditar]="inscripcionEditar"
+  [estudiantesEditar]="estudiantesEditar"
+  (volverLista)="volverALista()"
+  (inscripcionGuardada)="recargarInscripciones()">
+</app-nueva-inscripcion>

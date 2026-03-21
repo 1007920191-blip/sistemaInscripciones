@@ -1,0 +1,63 @@
+<div class="dashboard">
+  <aside class="sidebar">
+    <h3>Menú</h3>
+    <ul>
+      <li><button (click)="section = 'inscripciones-presenciales'">Inscripciones presenciales</button></li>
+      <li><button (click)="section = 'inscripciones-online'">Inscripciones online</button></li>
+      <li><button (click)="section = 'concursos'">Concursos</button></li>
+      <li><button (click)="section = 'participantes'">Participantes</button></li>
+      <li><button (click)="section = 'aulas'">Aulas</button></li>  <!-- AÑADIDO -->
+      <li><button (click)="section = 'turnos'">Turnos</button></li>
+      <li><button (click)="section = 'reportes'">Reportes</button></li>
+      <li><button (click)="irAConfiguracion()">Configuración</button></li>
+      <li><button (click)="logout()">Salir</button></li>
+    </ul>
+  </aside>
+
+  <main class="content">
+    <!-- Inscripciones presenciales -->
+    <app-lista-presenciales *ngIf="section === 'inscripciones-presenciales'" (cambiarSeccion)="section = $any($event)"></app-lista-presenciales>
+    
+    <!-- Inscripciones online -->
+    <app-lista-online *ngIf="section === 'inscripciones-online'"></app-lista-online>
+    
+    <!-- Nueva inscripción -->
+    <app-nueva-inscripcion *ngIf="section === 'nueva-inscripcion'"></app-nueva-inscripcion>
+
+    <!-- AULAS - Lista -->
+    <app-lista-aulas 
+      *ngIf="section === 'aulas'" 
+      [recargar]="recargarAulas"
+      (cambiarSeccion)="onCambiarSeccion($event)"
+      (editarAula)="onEditarAula($event)">
+    </app-lista-aulas>
+    
+    <!-- AULAS - Formulario (nueva/editar) -->
+    <app-aula-form 
+      *ngIf="section === 'nueva-aula' || section === 'editar-aula'"
+      [aula]="aulaEnEdicion"
+      (guardar)="onAulaGuardada()"
+      (cancelar)="onCancelarAula()">
+    </app-aula-form>
+
+    <!-- Turnos - Lista -->
+    <app-lista-turnos 
+      *ngIf="section === 'turnos'" 
+      (cambiarSeccion)="onCambiarSeccion($event)"
+      (editarTurno)="onEditarTurno($event)">
+    </app-lista-turnos>
+    
+    <!-- Turnos - Formulario -->
+    <app-turno-form 
+      *ngIf="section === 'nuevo-turno' || section === 'editar-turno'"
+      [turnoEditar]="turnoEnEdicion"
+      (guardar)="onTurnoGuardado()"
+      (cancelar)="onCancelarTurno()">
+    </app-turno-form>
+    
+    <!-- Otros módulos -->
+    <div *ngIf="section === 'concursos'"><h2>Concursos</h2></div>
+    <div *ngIf="section === 'participantes'"><h2>Participantes</h2></div>
+    <div *ngIf="section === 'reportes'"><h2>Reportes</h2></div>
+  </main>
+</div>

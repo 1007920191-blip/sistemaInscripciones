@@ -1,0 +1,131 @@
+<div class="modal-overlay" (click)="onCancelar()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <!-- Header -->
+    <div class="modal-header">
+      <h2>DATOS DEL TURNO</h2>
+      <button class="btn-cerrar" (click)="onCancelar()">×</button>
+    </div>
+
+    <!-- Formulario -->
+    <div class="modal-body">
+      <form (ngSubmit)="onGuardar()">
+        
+        <!-- ID/Código -->
+        <div class="campo">
+          <label>ID *</label>
+          <input 
+            type="text" 
+            [(ngModel)]="turno.codigo" 
+            name="codigo"
+            placeholder="Ej: T1, T2, T3..."
+            required>
+        </div>
+
+        <!-- Fecha -->
+        <div class="campo">
+          <label>Fecha *</label>
+          <div class="input-con-icono">
+            <input 
+              type="date" 
+              [ngModel]="fechaString"
+              (ngModelChange)="onFechaChange($event)"
+              name="fecha"
+              required>
+            <span class="icono-calendario">📅</span>
+          </div>
+        </div>
+
+        <!-- Horas en grid -->
+        <div class="horas-grid">
+          <div class="campo">
+            <label>Hora inicio entrada *</label>
+            <input 
+              type="time" 
+              [(ngModel)]="turno.horaInicioEntrada" 
+              name="horaInicioEntrada"
+              required>
+          </div>
+
+          <div class="campo">
+            <label>Hora fin entrada *</label>
+            <input 
+              type="time" 
+              [(ngModel)]="turno.horaFinEntrada" 
+              name="horaFinEntrada"
+              required>
+          </div>
+
+          <div class="campo">
+            <label>Hora inicio prueba *</label>
+            <input 
+              type="time" 
+              [(ngModel)]="turno.horaInicioPrueba" 
+              name="horaInicioPrueba"
+              required>
+          </div>
+
+          <div class="campo">
+            <label>Hora fin prueba *</label>
+            <input 
+              type="time" 
+              [(ngModel)]="turno.horaFinPrueba" 
+              name="horaFinPrueba"
+              required>
+          </div>
+        </div>
+
+        <!-- Nivel y Grado -->
+        <div class="nivel-grado-section">
+          <div class="fila-nivel-grado">
+            <div class="campo campo-nivel">
+              <label>NIVEL *</label>
+              <select [(ngModel)]="nivelSeleccionado" (change)="onNivelChange()" name="nivel">
+                <option *ngFor="let nivel of niveles" [value]="nivel">
+                  {{ nivel.toUpperCase() }}
+                </option>
+              </select>
+            </div>
+
+            <div class="campo campo-grado">
+              <label>GRADO *</label>
+              <select [(ngModel)]="gradoSeleccionado" name="grado">
+                <option value="">Seleccione...</option>
+                <option *ngFor="let grado of gradosDisponibles" [value]="grado">
+                  {{ grado }}
+                </option>
+              </select>
+            </div>
+
+            <button 
+              type="button" 
+              class="btn-agregar" 
+              (click)="agregarNivelGrado()"
+              [disabled]="!gradoSeleccionado">
+              +
+            </button>
+          </div>
+        </div>
+
+        <!-- Lista de Grados y Niveles agregados -->
+        <div class="grados-agregados" *ngIf="nivelesGrados.length > 0">
+          <h4>Grados y Niveles</h4>
+          <div class="lista-tags">
+            <div *ngFor="let ng of nivelesGrados; let i = index" class="tag-nivel-grado">
+              <span>{{ ng.grado }} {{ ng.nivel }}</span>
+              <button type="button" class="btn-eliminar-tag" (click)="eliminarNivelGrado(i)">×</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Botón Guardar -->
+        <div class="acciones-form">
+          <button type="submit" class="btn-guardar">
+            <span class="icono">💾</span>
+            <span>Guardar</span>
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>

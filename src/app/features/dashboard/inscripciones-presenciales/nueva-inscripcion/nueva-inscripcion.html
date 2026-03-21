@@ -1,0 +1,132 @@
+<!-- PASO 1: COLEGIO -->
+<div *ngIf="pasoActual === 'colegio'" class="seleccion-colegio">
+  
+  <button class="btn-cerrar" (click)="cancelarInscripcion()">✕</button>
+  
+  <!-- MODO EDICIÓN: Colegio ya seleccionado -->
+  <div *ngIf="modoEdicion && colegioSeleccionado && !mostrarBusquedaColegios" class="colegio-actual">
+    <h2>Editar Inscripción</h2>
+    
+    <div class="colegio-seleccionado">
+      <h3>Colegio seleccionado:</h3>
+      <div class="colegio-card seleccionado">
+        <p><strong>CÓDIGO MODULAR:</strong> {{ colegioSeleccionado.CODIGOMODULAR }}</p>
+        <p><strong>NOMBRE:</strong> {{ colegioSeleccionado.IE }}</p>
+        <p><strong>NIVEL:</strong> {{ colegioSeleccionado.NIVEL }}</p>
+        <p><strong>GESTIÓN:</strong> {{ colegioSeleccionado.GESTION }} - {{ colegioSeleccionado.AREA }}</p>
+        <p><strong>DIRECCIÓN:</strong> {{ colegioSeleccionado.DIRECCION || colegioSeleccionado.CENTROPOBLADO }}</p>
+      </div>
+      
+      <div class="acciones-colegio">
+        <button class="btn-continuar" (click)="continuarDesdeColegio()">
+          ✓ Continuar con este colegio
+        </button>
+        <button class="btn-cambiar" (click)="iniciarCambioColegio()">
+          ↻ Cambiar de colegio
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BÚSQUEDA DE COLEGIOS -->
+  <div *ngIf="!modoEdicion || mostrarBusquedaColegios">
+    <h2>{{ modoEdicion ? 'Cambiar Colegio' : 'Nueva Inscripción' }}</h2>
+    
+    <div class="filtros">
+      <div class="filtro-item">
+        <label>DEPARTAMENTO</label>
+        <select [(ngModel)]="filtros.departamento" (change)="onDepartamentoChange()">
+          <option value="">Seleccione</option>
+          <option *ngFor="let dep of departamentos" [value]="dep">{{ dep }}</option>
+        </select>
+      </div>
+      
+      <div class="filtro-item">
+        <label>PROVINCIA</label>
+        <select [(ngModel)]="filtros.provincia" (change)="onProvinciaChange()" [disabled]="!filtros.departamento">
+          <option value="">Seleccione</option>
+          <option *ngFor="let prov of provincias" [value]="prov">{{ prov }}</option>
+        </select>
+      </div>
+      
+      <div class="filtro-item">
+        <label>DISTRITO</label>
+        <select [(ngModel)]="filtros.distrito" (change)="onDistritoChange()" [disabled]="!filtros.provincia">
+          <option value="">Seleccione</option>
+          <option *ngFor="let dist of distritos" [value]="dist">{{ dist }}</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="busqueda">
+      <label>NOMBRE, NÚMERO O CÓDIGO MOD.</label>
+      <input 
+        type="text" 
+        [(ngModel)]="filtros.busqueda" 
+        (input)="filtrar()" 
+        placeholder="Ej: warma kuyay">
+    </div>
+
+    <div class="lista-colegios">
+      <div 
+        *ngFor="let colegio of colegiosFiltrados" 
+        class="colegio-card">
+        <div class="colegio-info">
+          <p><strong>CÓDIGO MODULAR:</strong> {{ colegio.CODIGOMODULAR }}</p>
+          <p><strong>NOMBRE:</strong> {{ colegio.IE }}</p>
+          <p class="nivel"><strong>NIVEL:</strong> {{ colegio.NIVEL }}</p>
+          <p class="gestion"><strong>GESTIÓN:</strong> {{ colegio.GESTION }} - {{ colegio.AREA }}</p>
+          <p><strong>DIRECCIÓN:</strong> {{ colegio.DIRECCION || colegio.CENTROPOBLADO }}</p>
+        </div>
+        <button class="btn-seleccionar" (click)="seleccionarColegio(colegio)">
+          ✓ Seleccionar
+        </button>
+      </div>
+      
+      <div *ngIf="colegiosFiltrados.length === 0 && (filtros.departamento || filtros.busqueda)" class="sin-resultados">
+        No se encontraron colegios con esos criterios
+      </div>
+    </div>
+
+    <div *ngIf="modoEdicion && mostrarBusquedaColegios" class="acciones-cancelar">
+      <button class="btn-cancelar" (click)="cancelarCambioColegio()">
+        ← Cancelar cambio de colegio
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- PASO 2: PAGO -->
+<app-pago 
+  *ngIf="pasoActual === 'pago'"
+  [colegioSeleccionado]="colegioSeleccionado"
+  [datosEdicion]="datosPago"
+  [modoEdicion]="modoEdicion"
+  (volver)="volverDesdePagoAColegio()"
+  (confirmarPago)="onConfirmarPago($event)">
+</app-pago>
+
+<!-- PASO 3: ESTUDIANTES -->
+<app-registro-estudiante
+
+  *ngIf="pasoActual === 'estudiante'"
+  [colegio]="colegioSeleccionado"
+  [numeroEstudiante]="estudianteActual"
+  [totalEstudiantes]="datosPago?.cantidad || 1"
+  [estudianteEdicion]="estudiantesRegistrados[estudianteActual - 1] || null"
+  [modoEdicion]="modoEdicion"
+  (guardar)="onGuardarEstudiante($event)"
+  (cancelar)="cancelarInscripcion()"
+  (volver)="volverDesdeEstudianteAPago()"
+  (anterior)="onNavegarEstudiante('anterior')"
+  (siguiente)="onNavegarEstudiante('siguiente')">
+</app-registro-estudiante>
+
+<!-- PASO 4: RESUMEN -->
+<div *ngIf="pasoActual === 'resumen'" class="resumen">
+  <h2>✓ ¡Inscripción {{ modoEdicion ? 'Actualizada' : 'Completada' }}!</h2>
+  <p>Se ha {{ modoEdicion ? 'actualizado' : 'guardado' }} la inscripción correctamente.</p>
+  <button class="btn-volver-lista" (click)="volverALista()">
+    ← Volver a la lista de inscripciones
+  </button>
+</div>

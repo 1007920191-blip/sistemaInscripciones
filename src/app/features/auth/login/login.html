@@ -1,0 +1,32 @@
+<div class="login-box">
+  <h2>Inicio de sesión Administradores</h2>
+
+  <label>Correo</label>
+  <input type="email" [(ngModel)]="email" placeholder="tu@empresa.com">
+
+  <label>Contraseña</label>
+  <input type="password" [(ngModel)]="password" placeholder="Contraseña">
+
+  <button (click)="login()">Entrar</button>
+
+  <a (click)="openRecover()">¿Olvidaste tu contraseña?</a>
+</div>
+
+<!-- Ventana emergente -->
+<div class="modal" *ngIf="showRecover">
+  <div class="modal-content">
+    <h3>Recuperar contraseña</h3>
+    <input type="email" [(ngModel)]="email" placeholder="tu@empresa.com">
+    <button (click)="sendRecovery()">Enviar</button>
+    <button (click)="showRecover = false">Cancelar</button>
+  </div>
+</div>
+
+<!-- Mensaje centrado con botón Aceptar -->
+<div class="overlay" *ngIf="showSuccess">
+  <div class="message-box">
+    <h4>¡Recuperación enviada!</h4>
+    <p>Revisa tu correo (incluida la bandeja de spam).</p>
+    <button (click)="closeSuccess()">Aceptar</button>
+  </div>
+</div>

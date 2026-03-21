@@ -1,0 +1,159 @@
+.registro-container {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  max-width: 600px;
+  margin: 0 auto;
+  font-family: Arial, sans-serif;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  border-bottom: 2px solid #6c5ce7;
+  padding-bottom: 15px;
+}
+
+.header h2 {
+  color: #333;
+  margin: 0;
+  font-size: 1.3rem;
+  text-transform: uppercase;
+}
+
+.progreso {
+  background: #6c5ce7;
+  color: white;
+  padding: 5px 15px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+}
+
+.btn-cerrar {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.2rem;
+}
+
+.fila {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.campo {
+  flex: 1;
+  margin-bottom: 15px;
+}
+
+.campo label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  color: #666;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.campo input,
+.campo select {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-bottom: 2px solid #ddd;
+  background: #f8f9fa;
+  font-size: 1rem;
+  transition: border-color 0.3s;
+}
+
+.campo input:focus,
+.campo select:focus {
+  outline: none;
+  border-bottom-color: #6c5ce7;
+}
+
+.campo input.readonly {
+  background: #e9ecef;
+  cursor: not-allowed;
+}
+
+.info-colegio {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.info-colegio p {
+  margin: 5px 0;
+  font-size: 0.95rem;
+}
+
+.botones {
+  margin-top: 25px;
+  text-align: right;
+}
+.btn-volver {
+  background: #fdfdfd; 
+  color: rgb(27, 27, 27);
+  padding: 12px 30px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.btn-volver:hover {
+  background: #efeff0;
+}
+
+.btn-guardar {
+  background: #6c5ce7;
+  color: white;
+  padding: 12px 30px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.btn-guardar:hover {
+  background: #5a4fcf;
+}
+.navegacion-estudiantes {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.btn-nav {
+  background: #6c5ce7;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-nav:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.indicador {
+  font-weight: bold;
+  color: #333;
+}

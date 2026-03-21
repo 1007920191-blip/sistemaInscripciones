@@ -1,0 +1,74 @@
+<div class="pago-container">
+  <h2>Seleccione método de pago</h2>
+  
+  <button class="btn-cerrar" (click)="onVolver()">✕</button>
+
+  <!-- Método de pago -->
+  <div class="campo">
+    <label>Método de pago *</label>
+    <select [(ngModel)]="metodoPago">
+      <option value="">Seleccione...</option>
+      <option *ngFor="let metodo of metodosPago" [value]="metodo.id">
+        {{metodo.icono}} {{metodo.nombre}}
+      </option>
+    </select>
+  </div>
+
+  <!-- Datos del apoderado -->
+  <div class="fila-datos" *ngIf="metodoPago">
+    <div class="campo">
+      <label>Teléfono del apoderado</label>
+      <input type="tel" [(ngModel)]="telefonoApoderado" placeholder="Ej: 987654321">
+    </div>
+    
+    <div class="campo cantidad">
+      <label>Cantidad de estudiantes</label>
+      <div class="contador">
+        <button (click)="decrementar()">−</button>
+        <span>{{cantidadEstudiantes}}</span>
+        <button (click)="incrementar()">+</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recuadro de información según método -->
+  <div class="recuadro-pago" *ngIf="datosPago">
+    <h3>{{datosPago.titulo}}</h3>
+    
+    <!-- YAPE -->
+    <div *ngIf="metodoPago === 'yape'" class="info-pago">
+      <p><strong>Teléfono:</strong> {{datosPago.telefono}}</p>
+      <p><strong>A nombre de:</strong> {{datosPago.nombre}}</p>
+      <p><strong>Monto:</strong> S/. {{datosPago.monto | number:'1.2-2'}}</p>
+    </div>
+
+    <!-- TRANSFERENCIA -->
+    <div *ngIf="metodoPago === 'transferencia'" class="info-pago">
+      <p><strong>Número de cuenta:</strong> {{datosPago.cuenta}}</p>
+      <p><strong>CCI:</strong> {{datosPago.cci}}</p>
+      <p><strong>Entidad:</strong> {{datosPago.entidad}}</p>
+      <p><strong>A nombre de:</strong> {{datosPago.nombre}}</p>
+      <p><strong>Monto:</strong> S/. {{datosPago.monto | number:'1.2-2'}}</p>
+    </div>
+
+    <!-- EFECTIVO -->
+    <div *ngIf="metodoPago === 'efectivo'" class="info-pago">
+      <p><strong>Lugares de pago:</strong></p>
+      <ul>
+        <li *ngFor="let lugar of datosPago.lugares">{{lugar}}</li>
+      </ul>
+      <p><strong>A nombre de:</strong> {{datosPago.nombre}}</p>
+      <p><strong>Monto:</strong> S/. {{datosPago.monto | number:'1.2-2'}}</p>
+    </div>
+  </div>
+
+  <!-- Botones -->
+  <div class="botones">
+    <button class="btn-volver" (click)="onVolver()">
+      ← Volver
+    </button>
+    <button class="btn-siguiente" (click)="onConfirmar()" [disabled]="!metodoPago || !telefonoApoderado">
+      Siguiente →
+    </button>
+  </div>
+</div>
