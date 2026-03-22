@@ -1,4 +1,4 @@
-import { Component, OnInit, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { NuevaInscripcion } from '../nueva-inscripcion/nueva-inscripcion';
 import { InscripcionService } from '../../../../services/inscripcion';
@@ -23,21 +23,18 @@ export class Lista implements OnInit {
   @Output() inscripcionGuardada = new EventEmitter<void>();
 
   constructor(
-    private inscripcionService: InscripcionService,
-    private cdr: ChangeDetectorRef
+    private inscripcionService: InscripcionService
   ) {}
 
   async ngOnInit() {
     this.cargando = true;
     await this.cargarInscripciones();
     this.cargando = false;
-    this.cdr.detectChanges();
   }
 
   async cargarInscripciones() {
     const resultado = await this.inscripcionService.obtenerInscripciones();
     this.inscripciones = resultado;
-    this.cdr.detectChanges();
   }
 
   formatearFecha(fecha: any): string {
@@ -53,27 +50,20 @@ export class Lista implements OnInit {
     });
   }
 
-  // ✅ CORREGIDO: Agregar detectChanges
   async editarInscripcion(ins: Inscripcion) {
     console.log('Editando inscripción:', ins.id);
     
-    // Cargar estudiantes de subcolección
     this.estudiantesEditar = await this.inscripcionService.obtenerEstudiantes(ins.id!);
     console.log('Estudiantes cargados:', this.estudiantesEditar.length);
     
-    // Preparar datos de edición
     this.inscripcionEditar = ins;
     this.mostrarNuevaInscripcion = true;
-    
-    // ✅ FORZAR DETECCIÓN DE CAMBIOS
-    this.cdr.detectChanges();
   }
 
   irANueva() {
     this.inscripcionEditar = null;
     this.estudiantesEditar = [];
     this.mostrarNuevaInscripcion = true;
-    this.cdr.detectChanges();
   }
 
   async recargarInscripciones() {
@@ -81,13 +71,11 @@ export class Lista implements OnInit {
     this.estudiantesEditar = [];
     await this.cargarInscripciones();
     this.mostrarNuevaInscripcion = false;
-    this.cdr.detectChanges();
   }
 
   volverALista() {
     this.inscripcionEditar = null;
     this.estudiantesEditar = [];
     this.mostrarNuevaInscripcion = false;
-    this.cdr.detectChanges();
   }
 }

@@ -1,10 +1,8 @@
 <div class="lista-container" *ngIf="!mostrarNuevaInscripcion">
-  <!-- Mientras carga -->
   <div *ngIf="cargando" style="text-align: center; padding: 20px;">
     Cargando inscripciones...
   </div>
   
-  <!-- Contenido cuando NO está cargando -->
   <div *ngIf="!cargando">
     <h2>Inscripciones presenciales</h2>
     
@@ -14,14 +12,14 @@
 
     <table class="tabla-inscripciones" *ngIf="inscripciones.length > 0">
       <thead>
-        <tr>
+         <tr>
           <th>N°</th>
           <th>Estudiante</th>
           <th>Colegio</th>
           <th>Fecha</th>
           <th>Estado</th>
           <th>Acciones</th>
-        </tr>
+         </tr>
       </thead>
       <tbody>
         <tr *ngFor="let ins of inscripciones; let i = index">
