@@ -30,6 +30,7 @@ export class NuevaInscripcion implements OnInit {
     distrito: '',
     busqueda: ''
   };
+  private navegando = false;
   
   colegios: any[] = [];
   colegiosFiltrados: any[] = [];
@@ -222,15 +223,23 @@ export class NuevaInscripcion implements OnInit {
       this.estudiantesRegistrados.push(estudiante);
     }
     
-    // Verificar si hay más estudiantes por registrar
+    console.log('Guardado estudiante', this.estudianteActual, ':', estudiante);
+    console.log('Array actual:', this.estudiantesRegistrados);
+    
+    // ✅ VERIFICAR: Si estamos navegando, SOLO guardar y NO finalizar
+    if (this.navegando) {
+      this.navegando = false; // Resetear para la próxima vez
+      this.guardandoEstudiante = false;
+      return; // Solo guardamos, no avanzamos ni finalizamos
+    }
+    
+    // ✅ Si NO estamos navegando (viene del botón "Guardar y Continuar")
     if (this.estudianteActual < this.datosPago.cantidad) {
-      // ✅ HAY MÁS ESTUDIANTES: Avanzar al siguiente
+      // Hay más estudiantes: avanzar al siguiente
       this.estudianteActual++;
-      // NO cambiamos de paso, seguimos en 'estudiante'
-      // El componente se recicla con el nuevo @Input()
       this.guardandoEstudiante = false;
     } else {
-      // ✅ TODOS REGISTRADOS: Finalizar
+      // Es el último: finalizar inscripción
       this.guardandoEstudiante = false;
       await this.finalizarInscripcion();
     }
@@ -239,8 +248,8 @@ export class NuevaInscripcion implements OnInit {
   // ✅ NAVEGACIÓN ENTRE ESTUDIANTES (Anterior/Siguiente)
   onNavegarEstudiante(direccion: 'anterior' | 'siguiente') {
     // Primero guardar el estudiante actual en memoria (sin validar)
-    const estudianteActual = this.estudiantesRegistrados[this.estudianteActual - 1];
-    
+    //const estudianteActual = this.estudiantesRegistrados[this.estudianteActual - 1];
+    this.navegando = true;
     if (direccion === 'anterior' && this.estudianteActual > 1) {
       this.estudianteActual--;
     } else if (direccion === 'siguiente' && this.estudianteActual < this.datosPago.cantidad) {

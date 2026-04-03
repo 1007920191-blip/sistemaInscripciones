@@ -15,13 +15,13 @@
     ← Anterior
   </button>
   <span class="indicador">{{numeroEstudiante}} / {{totalEstudiantes}}</span>
-  <button 
-    type="button" 
-    class="btn-nav" 
-    [disabled]="numeroEstudiante === totalEstudiantes"
-    (click)="irSiguiente()">
-    Siguiente →
-  </button>
+   <button 
+        type="button" 
+        class="btn-nav" 
+        [disabled]="esUltimoEstudiante || procesando"
+        (click)="irSiguiente()">
+        Siguiente →
+      </button>
 </div>
 
   <form (ngSubmit)="onGuardar()">

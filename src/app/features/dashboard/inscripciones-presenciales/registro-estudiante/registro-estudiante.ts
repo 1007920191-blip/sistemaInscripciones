@@ -35,6 +35,7 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
   estudiante!: Estudiante;
   procesando = false;
 
+
   ngOnInit() {
     this.cargarEstudiante();
   }
@@ -95,26 +96,52 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
     return this.numeroEstudiante >= this.totalEstudiantes;
   }
 
-  onGuardar() {
-    if (this.validarFormulario()) {
-      this.guardar.emit({ ...this.estudiante });
-    }
+   onGuardar() {
+    if (!this.validarFormulario()) return;
+    
+    this.procesando = true;
+    this.guardar.emit({ ...this.estudiante });
+    // El padre decide si avanzar o finalizar
+  }
+  irSiguiente() {
+    if (this.esUltimoEstudiante) return;
+    
+    // ✅ Validar primero
+    if (!this.validarFormulario()) return;
+    
+    
+    // ✅ Emitir guardar (el padre guarda en el array)
+    this.guardar.emit({ ...this.estudiante });
+    
+    // ✅ Luego emitir siguiente para navegación
+    this.siguiente.emit();
   }
 
+  
+  irAnterior() {
+    // ✅ Guardar el estado actual (incluso si está incompleto, para no perder datos)
+    // Solo si hay algún dato escrito
+    if (this.hayDatosMinimos()) {
+      this.guardar.emit({ ...this.estudiante });
+    }
+    
+    this.anterior.emit();
+  }
+
+  // ✅ Verifica si hay datos mínimos para guardar
+  private hayDatosMinimos(): boolean {
+    return !!(this.estudiante.tipoDocumento || 
+              this.estudiante.numeroDocumento || 
+              this.estudiante.nombres || 
+              this.estudiante.apellidos ||
+              this.estudiante.grado);
+  }
   onCancelar() {
     this.cancelar.emit();
   }
 
   onVolver() {
     this.volver.emit();
-  }
-
-  irAnterior() {
-    this.anterior.emit();
-  }
-
-  irSiguiente() {
-    this.siguiente.emit();
   }
 
   validarFormulario(): boolean {
