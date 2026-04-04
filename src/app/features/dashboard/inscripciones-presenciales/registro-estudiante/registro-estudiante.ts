@@ -17,11 +17,13 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
   @Input() estudianteEdicion: Estudiante | null = null;
   @Input() modoEdicion = false;
 
-  @Output() guardar = new EventEmitter<Estudiante>();
+  // ✅ EVENTOS SEPARADOS Y CLAROS
+  @Output() guardar = new EventEmitter<Estudiante>();        // Solo guarda, el padre decide si avanzar
+  @Output() finalizar = new EventEmitter<Estudiante>();      // Guarda y cierra inscripción
+  @Output() navegarAnterior = new EventEmitter<Estudiante>(); // Guarda y navega atrás
+  @Output() navegarSiguiente = new EventEmitter<Estudiante>(); // Guarda y navega adelante
   @Output() cancelar = new EventEmitter<void>();
   @Output() volver = new EventEmitter<void>();
-  @Output() anterior = new EventEmitter<void>();
-  @Output() siguiente = new EventEmitter<void>();
 
   tiposDocumento = [
     { id: 'dni', nombre: 'DNI' },
@@ -35,15 +37,32 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
   estudiante!: Estudiante;
   procesando = false;
 
+  // ✅ DEBUG: Para mostrar en pantalla qué está pasando
+  debugInfo = {
+    numeroEstudiante: 0,
+    tieneDatosEdicion: false,
+    datosCargados: {} as any
+  };
 
   ngOnInit() {
+    console.log('[Hijo] ngOnInit - numero:', this.numeroEstudiante, 'edicion:', this.estudianteEdicion);
     this.cargarEstudiante();
   }
 
-  // ✅ DETECTAR CAMBIOS EN LOS INPUTS
   ngOnChanges(changes: SimpleChanges) {
-    // Si cambia el número de estudiante o los datos de edición, recargar
-    if (changes['numeroEstudiante'] || changes['estudianteEdicion']) {
+    console.log('[Hijo] ngOnChanges:', changes);
+    
+    if (changes['numeroEstudiante']) {
+      console.log('[Hijo] Cambió numeroEstudiante de', 
+        changes['numeroEstudiante'].previousValue, 
+        'a', 
+        changes['numeroEstudiante'].currentValue);
+      console.log('[Hijo] estudianteEdicion recibido:', this.estudianteEdicion);
+      this.cargarEstudiante();
+    }
+    
+    if (changes['estudianteEdicion'] && !changes['estudianteEdicion'].firstChange) {
+      console.log('[Hijo] Cambió estudianteEdicion:', this.estudianteEdicion);
       this.cargarEstudiante();
     }
   }
@@ -51,9 +70,10 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
   private cargarEstudiante() {
     this.procesando = false;
     
-    // ✅ Cargar datos si existen, si no crear vacío
+    // ✅ USAR TU CÓDIGO ORIGINAL (funciona igual)
     if (this.estudianteEdicion?.numeroDocumento) {
-      // ✅ IMPORTANTE: Crear copia nueva para evitar referencias compartidas
+      console.log('[Hijo] Cargando datos EXISTENTES del estudiante', this.numeroEstudiante);
+      
       this.estudiante = {
         tipoDocumento: this.estudianteEdicion.tipoDocumento,
         numeroDocumento: this.estudianteEdicion.numeroDocumento,
@@ -64,24 +84,35 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
         colegio: this.estudianteEdicion.colegio,
         fechaRegistro: this.estudianteEdicion.fechaRegistro
       };
+      
+      // Debug
+      this.debugInfo = {
+        numeroEstudiante: this.numeroEstudiante,
+        tieneDatosEdicion: true,
+        datosCargados: { ...this.estudiante }
+      };
+      
     } else {
-      this.estudiante = this.crearEstudianteVacio();
-      this.estudiante.nivel = this.colegio?.NIVEL || '';
-      this.estudiante.colegio = this.colegio;
+      console.log('[Hijo] Creando estudiante VACÍO', this.numeroEstudiante);
+      
+      this.estudiante = {
+        tipoDocumento: '',
+        numeroDocumento: '',
+        nombres: '',
+        apellidos: '',
+        nivel: this.colegio?.NIVEL || '',
+        grado: '',
+        colegio: this.colegio,
+        fechaRegistro: new Date()
+      };
+      
+      // Debug
+      this.debugInfo = {
+        numeroEstudiante: this.numeroEstudiante,
+        tieneDatosEdicion: false,
+        datosCargados: {}
+      };
     }
-  }
-
-  private crearEstudianteVacio(): Estudiante {
-    return {
-      tipoDocumento: '',
-      numeroDocumento: '',
-      nombres: '',
-      apellidos: '',
-      nivel: '',
-      grado: '',
-      colegio: null,
-      fechaRegistro: new Date()
-    };
   }
 
   get gradosDisponibles(): string[] {
@@ -96,46 +127,47 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
     return this.numeroEstudiante >= this.totalEstudiantes;
   }
 
-   onGuardar() {
+  get esPrimeroEstudiante(): boolean {
+    return this.numeroEstudiante <= 1;
+  }
+
+  // ✅ ANTERIOR: Guarda sin validar y emite navegación
+  irAnterior() {
+    console.log('[Hijo] Botón ANTERIOR clickeado');
+    if (this.esPrimeroEstudiante) return;
+    
+    this.navegarAnterior.emit({ ...this.estudiante });
+  }
+
+  // ✅ SIGUIENTE: Valida, guarda y emite navegación
+  irSiguiente() {
+    console.log('[Hijo] Botón SIGUIENTE clickeado');
+    if (this.esUltimoEstudiante) return;
+    
+    if (!this.validarFormulario()) return;
+    
+    this.navegarSiguiente.emit({ ...this.estudiante });
+  }
+
+  // ✅ BOTÓN SUBMIT: Decide entre guardar/continuar o finalizar
+  onGuardar() {
+    console.log('[Hijo] Botón SUBMIT clickeado, esUltimo:', this.esUltimoEstudiante);
+    
     if (!this.validarFormulario()) return;
     
     this.procesando = true;
-    this.guardar.emit({ ...this.estudiante });
-    // El padre decide si avanzar o finalizar
-  }
-  irSiguiente() {
-    if (this.esUltimoEstudiante) return;
     
-    // ✅ Validar primero
-    if (!this.validarFormulario()) return;
-    
-    
-    // ✅ Emitir guardar (el padre guarda en el array)
-    this.guardar.emit({ ...this.estudiante });
-    
-    // ✅ Luego emitir siguiente para navegación
-    this.siguiente.emit();
-  }
-
-  
-  irAnterior() {
-    // ✅ Guardar el estado actual (incluso si está incompleto, para no perder datos)
-    // Solo si hay algún dato escrito
-    if (this.hayDatosMinimos()) {
+    if (this.esUltimoEstudiante) {
+      console.log('[Hijo] Emitiendo FINALIZAR');
+      this.finalizar.emit({ ...this.estudiante });
+      // No resetear procesando aquí, el padre cierra la ventana
+    } else {
+      console.log('[Hijo] Emitiendo GUARDAR (continuar)');
       this.guardar.emit({ ...this.estudiante });
+      // El padre avanzará y el componente se reciclará, procesando se resetea en cargarEstudiante
     }
-    
-    this.anterior.emit();
   }
 
-  // ✅ Verifica si hay datos mínimos para guardar
-  private hayDatosMinimos(): boolean {
-    return !!(this.estudiante.tipoDocumento || 
-              this.estudiante.numeroDocumento || 
-              this.estudiante.nombres || 
-              this.estudiante.apellidos ||
-              this.estudiante.grado);
-  }
   onCancelar() {
     this.cancelar.emit();
   }

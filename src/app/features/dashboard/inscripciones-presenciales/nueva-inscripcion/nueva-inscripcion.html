@@ -108,18 +108,18 @@
 
 <!-- PASO 3: ESTUDIANTES -->
 <app-registro-estudiante
-
   *ngIf="pasoActual === 'estudiante'"
   [colegio]="colegioSeleccionado"
   [numeroEstudiante]="estudianteActual"
   [totalEstudiantes]="datosPago?.cantidad || 1"
   [estudianteEdicion]="estudiantesRegistrados[estudianteActual - 1] || null"
   [modoEdicion]="modoEdicion"
+  (navegarAnterior)="onNavegarAnterior($event)"
+  (navegarSiguiente)="onNavegarSiguiente($event)"
   (guardar)="onGuardarEstudiante($event)"
+  (finalizar)="onFinalizar($event)"
   (cancelar)="cancelarInscripcion()"
-  (volver)="volverDesdeEstudianteAPago()"
-  (anterior)="onNavegarEstudiante('anterior')"
-  (siguiente)="onNavegarEstudiante('siguiente')">
+  (volver)="volverDesdeEstudianteAPago()">
 </app-registro-estudiante>
 
 <!-- PASO 4: RESUMEN -->
