@@ -1,0 +1,292 @@
+<!-- features/dashboard/turnos/turno-aulas/turno-aulas.html -->
+<div class="modal-overlay" (click)="onCerrar()">
+  <div class="modal-content turno-aulas-modal" (click)="$event.stopPropagation()">
+    
+    <!-- Header -->
+    <div class="modal-header">
+      <h2>GESTIONAR AULAS DEL TURNO {{ turno.codigo }}</h2>
+      <button class="btn-cerrar" (click)="onCerrar()">×</button>
+    </div>
+
+    <!-- Filtros superiores -->
+    <div class="filtros-container">
+      <div class="filtro-grado">
+        <label>GRADO *</label>
+        <select [(ngModel)]="gradoSeleccionado" (change)="onGradoChange()" class="select-grado">
+          <option *ngFor="let grado of gradosDelTurno" [value]="grado">
+            {{ grado.toUpperCase() }} {{ turno.nivel.toUpperCase() }}
+          </option>
+        </select>
+      </div>
+
+      <button 
+        class="btn-agregar-aula" 
+  (click)="abrirModalAsignar()"
+  [disabled]="cargandoModal"
+  type="button">
+  <span *ngIf="cargandoModal">⏳</span>
+  <span *ngIf="!cargandoModal">+</span>
+  {{ cargandoModal ? 'Cargando...' : 'Agregar Aula' }}
+      </button>
+    </div>
+
+    <!-- Buscador -->
+    <div class="buscador-container">
+      <label>BUSCAR:</label>
+      <div class="input-busqueda">
+        <input 
+          type="text" 
+          [(ngModel)]="busqueda" 
+          (input)="filtrarAulas()"
+          placeholder="Buscar por código, pabellón...">
+        <span class="icono-buscar">🔍</span>
+      </div>
+    </div>
+
+    <!-- Tabla de aulas asignadas -->
+    <div class="tabla-container">
+      <table class="tabla-aulas">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>INSCRITOS</th>
+            <th>CAPACIDAD</th>
+            <th>GRADO</th>
+            <th>NIVEL</th>
+            <th>ACCIONES</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let aula of aulasPaginadas">
+            <td class="codigo">{{ aula.codigo }}</td>
+            <td class="inscritos">
+              <span class="badge-inscritos" [class.lleno]="aula.inscritos >= aula.capacidad">
+                {{ aula.inscritos }}
+              </span>
+            </td>
+            <td>{{ aula.capacidad }}</td>
+            <td>{{ aula.grado.toUpperCase() }}</td>
+            <td>{{ aula.nivel.toUpperCase() }}</td>
+            <td class="acciones">
+              <button 
+                class="btn-accion btn-editar" 
+                (click)="abrirModalEditar(aula)"
+                title="Editar"
+                type="button">
+                ✏️
+              </button>
+              <button 
+                class="btn-accion btn-ver" 
+                title="Ver detalles"
+                type="button">
+                📋
+              </button>
+              <button 
+                class="btn-accion btn-eliminar" 
+                (click)="eliminarAsignacion(aula)"
+                title="Eliminar"
+                type="button">
+                🗑️
+              </button>
+            </td>
+          </tr>
+          
+          <tr *ngIf="aulasFiltradas.length === 0" class="fila-vacia">
+            <td colspan="6" class="mensaje-vacio">
+              No hay aulas asignadas a este grado. Haga clic en "Agregar Aula" para crear una.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Paginación -->
+    <div class="paginacion">
+      <span class="info-pagina">
+        {{ (paginaActual - 1) * itemsPorPagina + 1 }} - 
+        {{ Math.min(paginaActual * itemsPorPagina, aulasFiltradas.length) }} de {{ aulasFiltradas.length }}
+      </span>
+      
+      <div class="items-por-pagina">
+        <label>Items por página</label>
+        <select [(ngModel)]="itemsPorPagina" (change)="onItemsPorPaginaChange($event)">
+          <option value="4">4</option>
+          <option value="8">8</option>
+          <option value="12">12</option>
+          <option value="20">20</option>
+        </select>
+      </div>
+      
+      <div class="navegacion">
+        <button 
+          class="btn-nav" 
+          [disabled]="paginaActual === 1"
+          (click)="cambiarPagina('anterior')"
+          type="button">
+          ‹
+        </button>
+        <button 
+          class="btn-nav" 
+          [disabled]="paginaActual === totalPaginas"
+          (click)="cambiarPagina('siguiente')"
+          type="button">
+          ›
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal Asignar Aula - ESTILO CENTRADO -->
+<div class="modal-overlay modal-asignar" *ngIf="mostrarModalAsignar" (click)="cerrarModalAsignar()">
+  <div class="modal-content modal-form" (click)="$event.stopPropagation()">
+    
+    <div class="header">
+      <h2>ASIGNAR AULA</h2>
+      <button class="btn-cerrar" (click)="cerrarModalAsignar()" type="button">×</button>
+    </div>
+
+    <div class="form-container">
+      <div class="campo campo-full">
+        <label>SELECCIONE UN AULA *</label>
+        <select [(ngModel)]="aulaSeleccionadaId" (change)="onAulaSeleccionadaChange()" class="select-aula">
+          <option value="">Seleccione...</option>
+          <option *ngFor="let aula of aulasDisponibles" [value]="aula.id">
+            {{ aula.codigo }} - Capacidad: {{ aula.capacidad }} - Pabellón {{ aula.pabellon }}
+          </option>
+        </select>
+      </div>
+
+      <!-- Preview del aula seleccionada -->
+      <div class="info-colegio" *ngIf="aulaParaAsignar">
+        <h4>Datos del Aula</h4>
+        <div class="fila">
+          <div class="campo">
+            <label>ID</label>
+            <input type="text" [value]="aulaParaAsignar.codigo" readonly class="readonly">
+          </div>
+          <div class="campo">
+            <label>CAPACIDAD</label>
+            <input type="text" [value]="aulaParaAsignar.capacidad" readonly class="readonly">
+          </div>
+        </div>
+        <div class="fila">
+          <div class="campo">
+            <label>PABELLÓN</label>
+            <input type="text" [value]="aulaParaAsignar.pabellon" readonly class="readonly">
+          </div>
+          <div class="campo">
+            <label>PISO</label>
+            <input type="text" [value]="aulaParaAsignar.piso" readonly class="readonly">
+          </div>
+        </div>
+        <div class="fila">
+          <div class="campo">
+            <label>GRADO</label>
+            <input type="text" [value]="gradoSeleccionado" readonly class="readonly">
+          </div>
+          <div class="campo">
+            <label>NIVEL</label>
+            <input type="text" [value]="turno.nivel" readonly class="readonly">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="botones">
+      <button 
+        class="btn-guardar" 
+        (click)="confirmarAsignacion()" 
+        [disabled]="!aulaSeleccionadaId || cargando"
+        type="button">
+        <span *ngIf="cargando">⏳</span>
+        <span *ngIf="!cargando">💾</span>
+        {{ cargando ? 'Guardando...' : 'Guardar' }}
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal Editar - ESTILO CENTRADO COMO LA ÚLTIMA FOTO -->
+<div class="modal-overlay modal-editar" *ngIf="mostrarModalEditar" (click)="cerrarModalEditar()">
+  <div class="modal-content modal-form" (click)="$event.stopPropagation()">
+    
+    <div class="header">
+      <h2>DATOS DE LA ASIGNACIÓN</h2>
+      <button class="btn-cerrar" (click)="cerrarModalEditar()" type="button">×</button>
+    </div>
+
+    <div class="form-container">
+      <!-- Fila 1: ID y Local -->
+      <div class="fila">
+        <div class="campo">
+          <label>ID *</label>
+          <input type="text" [(ngModel)]="aulaEditando.codigo" readonly class="readonly">
+        </div>
+        <div class="campo">
+          <label>LOCAL *</label>
+          <input type="text" [(ngModel)]="aulaEditando.local">
+        </div>
+      </div>
+
+      <!-- Fila 2: Grado y Nivel -->
+      <div class="fila">
+        <div class="campo">
+          <label>GRADO *</label>
+          <input type="text" [(ngModel)]="aulaEditando.grado" readonly class="readonly">
+        </div>
+        <div class="campo">
+          <label>NIVEL *</label>
+          <input type="text" [(ngModel)]="aulaEditando.nivel" readonly class="readonly">
+        </div>
+      </div>
+
+      <!-- Fila 3: Capacidad, Inscritos, Pabellón -->
+      <div class="fila">
+        <div class="campo">
+          <label>CAPACIDAD *</label>
+          <input type="number" [(ngModel)]="aulaEditando.capacidad" min="1">
+        </div>
+        <div class="campo">
+          <label>INSCRITOS *</label>
+          <input type="number" [(ngModel)]="aulaEditando.inscritos" min="0" [max]="aulaEditando.capacidad" readonly class="readonly">
+        </div>
+        <div class="campo">
+          <label>PABELLÓN *</label>
+          <input type="text" [(ngModel)]="aulaEditando.pabellon">
+        </div>
+      </div>
+
+      <!-- Fila 4: Piso, Puerta, Sede -->
+      <div class="fila">
+        <div class="campo">
+          <label>PISO *</label>
+          <input type="number" [(ngModel)]="aulaEditando.piso" min="1">
+        </div>
+        <div class="campo">
+          <label>PUERTA DE ACCESO *</label>
+          <input type="text" [(ngModel)]="aulaEditando.puertaAcceso">
+        </div>
+        <div class="campo">
+          <label>SEDE *</label>
+          <input type="text" [(ngModel)]="aulaEditando.sede">
+        </div>
+      </div>
+    </div>
+
+    <div class="botones">
+      <button 
+        class="btn-guardar" 
+        (click)="guardarEdicion()" 
+        [disabled]="cargando"
+        type="button">
+        <span *ngIf="cargando">⏳</span>
+        <span *ngIf="!cargando">💾</span>
+        {{ cargando ? 'Guardando...' : 'Guardar' }}
+      </button>
+    </div>
+
+  </div>
+</div>

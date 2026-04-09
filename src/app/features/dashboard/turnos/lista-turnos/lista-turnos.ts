@@ -3,11 +3,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TurnoService } from '../../../../services/turno.service';
 import { Turno } from '../../../../models/turno.model';
+import { TurnoAulasComponent } from '../turno-aulas/turno-aulas';
 
 @Component({
   selector: 'app-lista-turnos',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TurnoAulasComponent],
   templateUrl: './lista-turnos.html',
   styleUrls: ['./lista-turnos.css']
 })
@@ -20,6 +21,10 @@ export class ListaTurnos implements OnInit {
   paginaActual = 1;
   totalItems = 0;
   Math = Math;
+
+  //Estado para el modal de aulas
+  mostrarModalAulas: boolean = false;
+  turnoSeleccionado?: Turno;
 
   constructor(private turnoService: TurnoService) {}
 
@@ -73,6 +78,19 @@ export class ListaTurnos implements OnInit {
 
   onEditarTurno(turno: Turno) {
     this.editarTurno.emit(turno);
+  }
+
+  onVerAulas(turno: Turno) {
+    this.turnoSeleccionado = turno;
+    this.mostrarModalAulas = true;
+  }
+  onCerrarModalAulas() {
+    this.mostrarModalAulas = false;
+    this.turnoSeleccionado = undefined;
+  }
+  onGuardarModalAulas() {
+    // Opcional: recargar datos del turno si se necesita
+    console.log('Cambios guardados en aulas del turno');
   }
 
   async onEliminarTurno(turno: Turno) {

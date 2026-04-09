@@ -64,7 +64,8 @@
             <button class="btn-accion btn-editar" (click)="onEditarTurno(turno)" title="Editar">
               ✏️
             </button>
-            <button class="btn-accion btn-ver" title="Ver detalles">
+            <!-- BOTÓN VERDE CORREGIDO - AGREGADO (click)="onVerAulas(turno)" -->
+            <button class="btn-accion btn-ver" (click)="onVerAulas(turno)" title="Ver y asignar aulas">
               🏫
             </button>
             <button class="btn-accion btn-eliminar" (click)="onEliminarTurno(turno)" title="Eliminar">
@@ -116,3 +117,11 @@
     </div>
   </div>
 </div>
+
+<!-- MODAL DE AULAS DEL TURNO - AGREGAR ESTO AL FINAL DEL ARCHIVO -->
+<app-turno-aulas 
+  *ngIf="mostrarModalAulas && turnoSeleccionado"
+  [turno]="turnoSeleccionado"
+  (cerrar)="onCerrarModalAulas()"
+  (guardar)="onGuardarModalAulas()">
+</app-turno-aulas>

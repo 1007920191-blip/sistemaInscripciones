@@ -6,6 +6,7 @@ import { ListaO } from './inscripciones-online/lista/lista';
 import { NuevaInscripcion } from './inscripciones-presenciales/nueva-inscripcion/nueva-inscripcion';
 import { ListaTurnos } from './turnos/lista-turnos/lista-turnos';
 import { TurnoForm } from './turnos/turno-form/turno-form';
+
 import { Turno } from '../../models/turno.model';
 import { ListaAulasComponent } from './aulas/lista-aulas/lista-aulas';
 import { AulaFormComponent } from './aulas/aula-form/aula-form';
