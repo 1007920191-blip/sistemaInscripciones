@@ -16,7 +16,8 @@
     "module": "preserve",
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "rootDir": "./src" 
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

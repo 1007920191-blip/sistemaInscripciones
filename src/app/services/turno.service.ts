@@ -38,6 +38,7 @@ export class TurnoService {
       
       let fecha = data['fecha'];
       let fechaCreacion = data['fechaCreacion'];
+      let fechaActualizacion = data['fechaActualizacion'];
       
       if (fecha && typeof fecha.toDate === 'function') {
         fecha = fecha.toDate();
@@ -45,12 +46,25 @@ export class TurnoService {
       if (fechaCreacion && typeof fechaCreacion.toDate === 'function') {
         fechaCreacion = fechaCreacion.toDate();
       }
+      if (fechaActualizacion && typeof fechaActualizacion.toDate === 'function') {
+        fechaActualizacion = fechaActualizacion.toDate();
+      }
       
+      // ← CAMBIO CLAVE: Mapear explícitamente nivelesGrados
       return {
         id: doc.id,
-        ...data,
-        fecha,
-        fechaCreacion
+        codigo: data['codigo'],
+        fecha: fecha,
+        horaInicioEntrada: data['horaInicioEntrada'],
+        horaFinEntrada: data['horaFinEntrada'],
+        horaInicioPrueba: data['horaInicioPrueba'],
+        horaFinPrueba: data['horaFinPrueba'],
+        nivel: data['nivel'],
+        grados: data['grados'] || [],
+        nivelesGrados: data['nivelesGrados'] || [],  // ← ESTO FALTABA
+        estado: data['estado'],
+        fechaCreacion: fechaCreacion,
+        fechaActualizacion: fechaActualizacion
       } as Turno;
     });
   }

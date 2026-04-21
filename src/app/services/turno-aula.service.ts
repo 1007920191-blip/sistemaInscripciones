@@ -27,14 +27,14 @@ export class TurnoAulaService {
   constructor(private aulaService: AulaService) {}
 
   // Obtener todas las aulas asignadas a un turno específico
-  async obtenerAulasPorTurno(turnoId: string): Promise<AulaTurnoDisplay[]> {
+  async obtenerAulasPorTurno(turnoCodigo: string): Promise<AulaTurnoDisplay[]> {
     console.log('=== obtenerAulasPorTurno ===');
-    console.log('Buscando aulas para turnoId:', turnoId);
+    console.log('Buscando aulas para turnoId:', turnoCodigo);
     
     try {
       const q = query(
         this.turnosEdicionRef,
-        where('turnoId', '==', turnoId)
+        where('turnoId', '==', turnoCodigo)
       );
       
       console.log('Ejecutando query...');
@@ -72,16 +72,23 @@ export class TurnoAulaService {
   }
 
   // Obtener aulas disponibles (las que no están asignadas a este turno)
-  async obtenerAulasDisponibles(turnoId: string): Promise<Aula[]> {
+  async obtenerAulasDisponibles(turnoCodigo: string): Promise<Aula[]> {
+    console.log('=== obtenerAulasDisponibles ===');
+    console.log('Turno codigo:', turnoCodigo);
+    
     const todasLasAulas = await this.aulaService.getAulas();
-    const aulasAsignadas = await this.obtenerAulasPorTurno(turnoId);
+    const aulasAsignadas = await this.obtenerAulasPorTurno(turnoCodigo);
     const aulasAsignadasIds = aulasAsignadas.map(a => a.aulaId);
+    
+    console.log('Aulas ya asignadas IDs:', aulasAsignadasIds);
     
     return todasLasAulas.filter(aula => !aulasAsignadasIds.includes(aula.id!));
   }
 
   // Asignar un aula a un turno
   async asignarAulaATurno(data: TurnoAulaAsignada): Promise<string> {
+    console.log('=== asignarAulaATurno ===');
+    console.log('Guardando con turnoId:', data.turnoId);
     try {
       console.log('Guardando en turnosedicion:', data);
       

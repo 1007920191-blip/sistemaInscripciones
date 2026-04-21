@@ -27,7 +27,8 @@
       </tr>
     </thead>
     <tbody>
-      <tr *ngFor="let aula of aulasFiltradas">
+      <!-- ← CAMBIO: Usar aulasPaginadas en lugar de aulasFiltradas -->
+      <tr *ngFor="let aula of aulasPaginadas">
         <td>{{ aula.codigo }}</td>
         <td>{{ aula.capacidad }}</td>
         <td>{{ aula.local }}</td>
@@ -39,6 +40,46 @@
           <button class="btn-eliminar" (click)="eliminarAula(aula)">🗑️</button>
         </td>
       </tr>
+      
+      <!-- Fila vacía -->
+      <tr *ngIf="aulasPaginadas.length === 0" class="fila-vacia">
+        <td colspan="7" class="mensaje-vacio">
+          No hay aulas registradas.
+        </td>
+      </tr>
     </tbody>
   </table>
+
+  <!-- ← NUEVO: Paginación igual que turnos -->
+  <div class="paginacion" *ngIf="totalItems > 0">
+    <span class="info-pagina">
+      {{ (paginaActual - 1) * itemsPorPagina + 1 }} - 
+      {{ Math.min(paginaActual * itemsPorPagina, totalItems) }} de {{ totalItems }}
+    </span>
+    
+    <div class="items-por-pagina">
+      <label>items por página</label>
+      <select [(ngModel)]="itemsPorPagina" (change)="onItemsPorPaginaChange($event)">
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="15">15</option>
+        <option value="25">25</option>
+      </select>
+    </div>
+    
+    <div class="navegacion">
+      <button 
+        class="btn-nav" 
+        [disabled]="paginaActual === 1"
+        (click)="cambiarPagina('anterior')">
+        ‹
+      </button>
+      <button 
+        class="btn-nav" 
+        [disabled]="paginaActual === totalPaginas"
+        (click)="cambiarPagina('siguiente')">
+        ›
+      </button>
+    </div>
+  </div>
 </div>

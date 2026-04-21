@@ -89,9 +89,9 @@ export class TurnoAulasComponent implements OnInit {
     this.cargando = true;
     this.cdr.detectChanges(); // Forzar actualización
     try {
-      console.log('Cargando aulas para turno:', this.turno.id, 'grado:', this.gradoSeleccionado);
+      console.log('Cargando aulas para turno:', this.turno.codigo, 'grado:', this.gradoSeleccionado);
       
-      const todasLasAulas = await this.turnoAulaService.obtenerAulasPorTurno(this.turno.id!);
+      const todasLasAulas = await this.turnoAulaService.obtenerAulasPorTurno(this.turno.codigo);
       console.log('Todas las aulas del turno:', todasLasAulas);
       
       // Filtrar por el grado seleccionado
@@ -171,8 +171,8 @@ export class TurnoAulasComponent implements OnInit {
     this.cdr.detectChanges(); // <-- FORZAR ACTUALIZACIÓN INMEDIATA
     
     try {
-      console.log('Obteniendo aulas disponibles para turno:', this.turno.id);
-      this.aulasDisponibles = await this.turnoAulaService.obtenerAulasDisponibles(this.turno.id!);
+      console.log('Obteniendo aulas disponibles para turno:', this.turno.codigo);
+      this.aulasDisponibles = await this.turnoAulaService.obtenerAulasDisponibles(this.turno.codigo);
       
       console.log('Aulas disponibles:', this.aulasDisponibles.length);
       
@@ -234,7 +234,7 @@ export class TurnoAulasComponent implements OnInit {
       }
 
       const data: TurnoAulaAsignada = {
-        turnoId: this.turno.id!,
+        turnoId: this.turno.codigo,
         aulaId: aula.id!,
         codigoAula: aula.codigo,
         grado: this.gradoSeleccionado,

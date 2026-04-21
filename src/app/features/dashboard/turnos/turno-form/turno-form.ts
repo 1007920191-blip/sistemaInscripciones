@@ -16,19 +16,15 @@ export class TurnoForm implements OnInit {
   @Output() cancelar = new EventEmitter<void>();
   @Input() turnoEditar?: Turno;
 
-  // Opciones
   niveles = NIVELES;
   gradosPorNivel = GRADOS_POR_NIVEL;
   gradosDisponibles: readonly string[] = [];
   
-  // Niveles y grados seleccionados para agregar
   nivelSeleccionado: 'Primaria' | 'Secundaria' = 'Primaria';
   gradoSeleccionado: string = '';
   
-  // Lista de niveles/grados agregados
   nivelesGrados: NivelGrado[] = [];
 
-  // Datos del formulario
   turno: Partial<Turno> = {
     codigo: '',
     fecha: new Date(),
@@ -40,26 +36,45 @@ export class TurnoForm implements OnInit {
     grados: []
   };
 
-  // Fecha formateada para el input date
   fechaString: string = '';
 
   constructor(private turnoService: TurnoService) {}
 
   ngOnInit() {
+    console.log('=== ngOnInit ===');
     this.actualizarGradosDisponibles();
     
     if (this.turnoEditar) {
+       console.log('turnoEditar completo:', this.turnoEditar);
+    console.log('turnoEditar.nivelesGrados:', this.turnoEditar.nivelesGrados);
+    console.log('turnoEditar.nivel:', this.turnoEditar.nivel);
+    console.log('turnoEditar.grados:', this.turnoEditar.grados);
       // Modo edición
-      this.turno = { ...this.turnoEditar };
+      this.turno = { 
+        ...this.turnoEditar,
+        codigo: this.turnoEditar.codigo 
+      };
+      
       this.fechaString = this.formatearFechaParaInput(this.turnoEditar.fecha);
       
-      // Reconstruir nivelesGrados desde los grados guardados
-      this.nivelesGrados = this.turnoEditar.grados.map(grado => ({
-        nivel: this.turnoEditar!.nivel,
-        grado
-      }));
+      // ← CAMBIO CLAVE: Usar nivelesGrados si existe, sino reconstruir
+      if (this.turnoEditar.nivelesGrados && this.turnoEditar.nivelesGrados.length > 0) {
+        this.nivelesGrados = [...this.turnoEditar.nivelesGrados];
+      } else {
+        // Fallback para datos antiguos
+        this.nivelesGrados = this.turnoEditar.grados.map(grado => ({
+          nivel: this.turnoEditar!.nivel,
+          grado
+        }));
+      }
+      
+      // Actualizar selector al primer nivel
+      if (this.nivelesGrados.length > 0) {
+        this.nivelSeleccionado = this.nivelesGrados[0].nivel;
+        this.actualizarGradosDisponibles();
+      }
+      
     } else {
-      // Modo creación - fecha por defecto hoy
       this.fechaString = this.formatearFechaParaInput(new Date());
     }
   }
@@ -84,7 +99,6 @@ export class TurnoForm implements OnInit {
   agregarNivelGrado() {
     if (!this.gradoSeleccionado) return;
     
-    // Verificar si ya existe
     const existe = this.nivelesGrados.some(
       ng => ng.nivel === this.nivelSeleccionado && ng.grado === this.gradoSeleccionado
     );
@@ -114,28 +128,27 @@ export class TurnoForm implements OnInit {
       return;
     }
     
-    // Tomar el nivel del primer elemento (todos deben ser del mismo nivel en un turno)
-    // o permitir mixtos según necesidad
     const nivelesUnicos = [...new Set(this.nivelesGrados.map(ng => ng.nivel))];
     
+    // Para compatibilidad con tabla/listado existente
     if (nivelesUnicos.length === 1) {
       this.turno.nivel = nivelesUnicos[0];
+    } else {
+      this.turno.nivel = this.nivelesGrados[0].nivel;
     }
     
     this.turno.grados = this.nivelesGrados.map(ng => ng.grado);
   }
 
   onFechaChange(event: any) {
-  // Manejar tanto evento del input como valor directo
-  const valor = event?.target?.value ?? event;
-  this.fechaString = valor;
-  if (valor) {
-    this.turno.fecha = new Date(valor);
+    const valor = event?.target?.value ?? event;
+    this.fechaString = valor;
+    if (valor) {
+      this.turno.fecha = new Date(valor);
+    }
   }
-}
 
   async onGuardar() {
-    // Validaciones
     if (!this.turno.codigo?.trim()) {
       alert('El código es obligatorio');
       return;
@@ -152,40 +165,49 @@ export class TurnoForm implements OnInit {
       return;
     }
 
-    this.actualizarTurnoDesdeNivelesGrados();
+    const codigoFinal = this.turno.codigo.trim();
 
     try {
+      const datosTurno = {
+        ...this.turno,
+        codigo: codigoFinal,
+        nivelesGrados: this.nivelesGrados,           // ← Guardar estructura completa
+        grados: this.nivelesGrados.map(ng => ng.grado),
+        nivel: this.nivelesGrados[0]?.nivel || 'Primaria'
+      };
+
       if (this.turnoEditar?.id) {
-        // Actualizar existente
-        await this.turnoService.actualizarTurno(this.turnoEditar.id, this.turno);
+        await this.turnoService.actualizarTurno(this.turnoEditar.id, datosTurno);
       } else {
-        // Crear nuevo
-        await this.turnoService.guardarTurno(this.turno as Turno);
+        await this.turnoService.guardarTurno(datosTurno as Turno);
       }
+      
       this.resetFormulario();
       this.guardar.emit();
+      
     } catch (error) {
       console.error('Error al guardar turno:', error);
       alert('Error al guardar el turno');
     }
   }
+  
   resetFormulario() {
-  this.turno = {
-    codigo: '',
-    fecha: new Date(),
-    horaInicioEntrada: '',
-    horaFinEntrada: '',
-    horaInicioPrueba: '',
-    horaFinPrueba: '',
-    nivel: 'Primaria',
-    grados: []
-  };
-  this.fechaString = this.formatearFechaParaInput(new Date());
-  this.nivelesGrados = [];
-  this.nivelSeleccionado = 'Primaria';
-  this.gradoSeleccionado = '';
-  this.actualizarGradosDisponibles();
-}
+    this.turno = {
+      codigo: '',
+      fecha: new Date(),
+      horaInicioEntrada: '',
+      horaFinEntrada: '',
+      horaInicioPrueba: '',
+      horaFinPrueba: '',
+      nivel: 'Primaria',
+      grados: []
+    };
+    this.fechaString = this.formatearFechaParaInput(new Date());
+    this.nivelesGrados = [];
+    this.nivelSeleccionado = 'Primaria';
+    this.gradoSeleccionado = '';
+    this.actualizarGradosDisponibles();
+  }
 
   onCancelar() {
     this.cancelar.emit();

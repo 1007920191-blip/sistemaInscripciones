@@ -30,12 +30,22 @@
         <tr *ngFor="let turno of turnosPaginados; let i = index">
           <td class="codigo">{{ turno.codigo }}</td>
           <td class="grados">
-            <div class="grados-lista">
-              <span *ngFor="let grado of turno.grados" class="grado-tag">
-                {{ grado }} {{ turno.nivel.toUpperCase() }}
-              </span>
-            </div>
-          </td>
+  <div class="grados-lista">
+    <!-- ✅ NUEVO: Usar nivelesGrados si existe -->
+    <ng-container *ngIf="turno.nivelesGrados && turno.nivelesGrados.length > 0">
+      <span *ngFor="let ng of turno.nivelesGrados" class="grado-tag">
+        {{ ng.grado }} {{ ng.nivel.toUpperCase() }}
+      </span>
+    </ng-container>
+    
+    <!-- Fallback para turnos antiguos sin nivelesGrados -->
+    <ng-container *ngIf="!turno.nivelesGrados || turno.nivelesGrados.length === 0">
+      <span *ngFor="let grado of turno.grados" class="grado-tag">
+        {{ grado }} {{ turno.nivel.toUpperCase() }}
+      </span>
+    </ng-container>
+  </div>
+</td>
           <td class="hora">
             <div class="fecha-hora">
               <span class="fecha">{{ formatearFecha(turno.fecha) }}</span>

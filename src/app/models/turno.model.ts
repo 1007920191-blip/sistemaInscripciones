@@ -1,15 +1,17 @@
 export interface Turno {
   id?: string;
   codigo: string;
-  fecha: Date;           // Fecha del día del examen
+  fecha: Date;
   horaInicioEntrada: string;
   horaFinEntrada: string;
   horaInicioPrueba: string;
   horaFinPrueba: string;
-  nivel: 'Primaria' | 'Secundaria';
-  grados: string[];      // Array de grados asignados a este turno
+  nivel: 'Primaria' | 'Secundaria';        // Compatibilidad
+  grados: string[];                        // Compatibilidad
+  nivelesGrados?: NivelGrado[];           // ← NUEVO: Guardar pares nivel-grado
   estado?: 'activo' | 'inactivo';
   fechaCreacion?: Date;
+  fechaActualizacion?: Date;
 }
 
 export interface NivelGrado {
@@ -17,7 +19,6 @@ export interface NivelGrado {
   grado: string;
 }
 
-// Opciones disponibles
 export const NIVELES = ['Primaria', 'Secundaria'] as const;
 
 export const GRADOS_POR_NIVEL = {

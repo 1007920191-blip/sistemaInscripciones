@@ -65,3 +65,74 @@
 
 .btn-editar { background: #ffd700; }
 .btn-eliminar { background: #dc3545; color: white; }
+/* Paginación */
+.paginacion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background: #f8f9fa;
+  border-top: 1px solid #e0e0e0;
+  margin-top: 10px;
+}
+
+.info-pagina {
+  color: #666;
+  font-size: 14px;
+}
+
+.items-por-pagina {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.items-por-pagina label {
+  color: #666;
+  font-size: 14px;
+}
+
+.items-por-pagina select {
+  padding: 5px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+}
+
+.navegacion {
+  display: flex;
+  gap: 5px;
+}
+
+.btn-nav {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.btn-nav:hover:not(:disabled) {
+  background: #f0f0f0;
+}
+
+.btn-nav:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fila-vacia {
+  text-align: center;
+}
+
+.mensaje-vacio {
+  padding: 40px;
+  color: #999;
+  font-style: italic;
+}

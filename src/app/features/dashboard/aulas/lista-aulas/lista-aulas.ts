@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AulaService } from '../../../../services/aula.service';
 import { Aula } from '../../../../models/aula.model';
-import { AulaFormComponent } from '../aula-form/aula-form';
 
 @Component({
   selector: 'app-lista-aulas',
@@ -22,46 +21,97 @@ export class ListaAulasComponent implements OnInit {
   @Input() aulaEditar?: Aula;
   @Input() recargar: boolean = false;
   
-  async ngOnChanges(changes: SimpleChanges) {
-  if (changes['recargar'] && changes['recargar'].currentValue === true) {
-    await this.cargarDatos();
-  }
-}
-  
   aulas: Aula[] = [];
   aulasFiltradas: Aula[] = [];
   busqueda: string = '';
 
+  // ← NUEVO: Paginación
+  itemsPorPagina = this.obtenerItemsPorPagina();
+  paginaActual = 1;
+  Math = Math;
+
   constructor(private aulaService: AulaService) {}
 
+  async ngOnChanges(changes: SimpleChanges) {
+    if (changes['recargar'] && changes['recargar'].currentValue === true) {
+      await this.cargarDatos();
+    }
+  }
+  
   async ngOnInit() {
     await this.cargarDatos();
   }
 
   async cargarDatos() {
-  try {
-    this.aulas = await this.aulaService.getAulas();
-    console.log("Aulas cargadas:", this.aulas);
-
-    this.aulasFiltradas = [...this.aulas];
-
-  } catch (error) {
-    console.error("Error cargando aulas:", error);
+    try {
+      this.aulas = await this.aulaService.getAulas();
+      console.log("Aulas cargadas:", this.aulas);
+      this.filtrarAulas(); // ← Aplicar filtro y paginación
+    } catch (error) {
+      console.error("Error cargando aulas:", error);
+    }
   }
-}
+
   async recargarDatos() {
     await this.cargarDatos();
   }
 
+  // ← NUEVO: Guardar en localStorage
+  private guardarItemsPorPagina() {
+    localStorage.setItem('aulas_itemsPorPagina', this.itemsPorPagina.toString());
+  }
+
+  // ← NUEVO: Obtener de localStorage
+  private obtenerItemsPorPagina(): number {
+    const guardado = localStorage.getItem('aulas_itemsPorPagina');
+    return guardado ? parseInt(guardado) : 10; // Default 10 para aulas
+  }
+
   filtrarAulas() {
+    let filtradas: Aula[];
+    
     if (!this.busqueda.trim()) {
-      this.aulasFiltradas = [...this.aulas];
+      filtradas = [...this.aulas];
     } else {
       const termino = this.busqueda.toLowerCase();
-      this.aulasFiltradas = this.aulas.filter(aula => 
-        aula.codigo.toLowerCase().includes(termino)
+      filtradas = this.aulas.filter(aula => 
+        aula.codigo.toLowerCase().includes(termino) ||
+        aula.pabellon?.toLowerCase().includes(termino) ||
+        aula.local?.toLowerCase().includes(termino)
       );
     }
+    
+    this.aulasFiltradas = filtradas;
+    this.paginaActual = 1; // Reset a página 1 al filtrar
+  }
+
+  // ← NUEVO: Getters para paginación
+  get totalItems(): number {
+    return this.aulasFiltradas.length;
+  }
+
+  get totalPaginas(): number {
+    return Math.ceil(this.totalItems / this.itemsPorPagina) || 1;
+  }
+
+  get aulasPaginadas(): Aula[] {
+    const inicio = (this.paginaActual - 1) * this.itemsPorPagina;
+    const fin = inicio + this.itemsPorPagina;
+    return this.aulasFiltradas.slice(inicio, fin);
+  }
+
+  cambiarPagina(direccion: 'anterior' | 'siguiente') {
+    if (direccion === 'anterior' && this.paginaActual > 1) {
+      this.paginaActual--;
+    } else if (direccion === 'siguiente' && this.paginaActual < this.totalPaginas) {
+      this.paginaActual++;
+    }
+  }
+
+  onItemsPorPaginaChange(event: any) {
+    this.itemsPorPagina = parseInt(event.target.value);
+    this.guardarItemsPorPagina();
+    this.paginaActual = 1;
   }
 
   nuevaAula() {
@@ -75,7 +125,7 @@ export class ListaAulasComponent implements OnInit {
   async eliminarAula(aula: Aula) {
     if (aula.id && confirm(`¿Eliminar el aula ${aula.codigo}?`)) {
       await this.aulaService.deleteAula(aula.id);
-      await this.cargarDatos(); // Recargar después de eliminar
+      await this.cargarDatos();
     }
   }
 
