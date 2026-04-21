@@ -22,8 +22,9 @@
          </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let ins of inscripciones; let i = index">
-          <td>{{ i + 1 }}</td>
+        <!-- ← CAMBIO: Usar inscripcionesPaginadas -->
+        <tr *ngFor="let ins of inscripcionesPaginadas; let i = index">
+          <td>{{ getNumeroCorrelativo(i) }}</td>
           <td>
             {{ ins.estudiantes[0]?.nombres }} {{ ins.estudiantes[0]?.apellidos }}
             <span *ngIf="ins.cantidadEstudiantes > 1">
@@ -33,7 +34,20 @@
           <td>{{ ins.colegio?.IE }}</td>
           <td>{{ formatearFecha(ins.fechaInscripcion) }}</td>
           <td>{{ ins.estado }}</td>
-          <td>
+          
+          <!-- ← NUEVO: Columna de acciones con 3 botones -->
+          <td class="acciones">
+            <!-- Botón Lista - Genera PDF -->
+            <button class="btn-lista" (click)="verLista(ins)" title="Descargar lista PDF">
+              Lista
+            </button>
+            
+            <!-- Botón Credenciales - Icono -->
+            <button class="btn-credenciales" (click)="verCredenciales(ins)" title="Ver credenciales">
+              🪪
+            </button>
+            
+            <!-- Botón Editar existente -->
             <button class="btn-editar" (click)="editarInscripcion(ins)">
               Editar
             </button>
@@ -44,6 +58,39 @@
     
     <div *ngIf="inscripciones.length === 0" style="text-align: center; padding: 20px;">
       No hay inscripciones registradas
+    </div>
+
+    <!-- ← NUEVO: Paginación -->
+    <div class="paginacion" *ngIf="totalItems > 0">
+      <span class="info-pagina">
+        {{ (paginaActual - 1) * itemsPorPagina + 1 }} - 
+        {{ Math.min(paginaActual * itemsPorPagina, totalItems) }} de {{ totalItems }}
+      </span>
+      
+      <div class="items-por-pagina">
+        <label>items por página</label>
+        <select [(ngModel)]="itemsPorPagina" (change)="onItemsPorPaginaChange($event)">
+          <option value="5">5</option>
+          <option value="10">10</option>
+          <option value="15">15</option>
+          <option value="25">25</option>
+        </select>
+      </div>
+      
+      <div class="navegacion">
+        <button 
+          class="btn-nav" 
+          [disabled]="paginaActual === 1"
+          (click)="cambiarPagina('anterior')">
+          ‹
+        </button>
+        <button 
+          class="btn-nav" 
+          [disabled]="paginaActual === totalPaginas"
+          (click)="cambiarPagina('siguiente')">
+          ›
+        </button>
+      </div>
     </div>
   </div>
 </div>
