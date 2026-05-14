@@ -112,7 +112,11 @@
   [colegio]="colegioSeleccionado"
   [numeroEstudiante]="estudianteActual"
   [totalEstudiantes]="datosPago?.cantidad || 1"
-  [estudianteEdicion]="estudiantesRegistrados[estudianteActual - 1] || null"
+  [estudianteEdicion]="
+  estudiantesRegistrados.length > 0
+    ? estudiantesRegistrados[estudianteActual - 1]
+    : null
+"
   [modoEdicion]="modoEdicion"
   (navegarAnterior)="onNavegarAnterior($event)"
   (navegarSiguiente)="onNavegarSiguiente($event)"
@@ -122,7 +126,65 @@
   (volver)="volverDesdeEstudianteAPago()">
 </app-registro-estudiante>
 
-<!-- PASO 4: RESUMEN -->
+<!-- PASO 4: PREVIEW DE ASIGNACIÓN DE AULAS -->
+<div *ngIf="pasoActual === 'preview'" class="preview-asignacion">
+  <h2>📋 Asignación de Aulas</h2>
+  
+  <div class="modo-indicador" [class.contingencia]="modoAsignacionActual === 'contingencia'">
+    <span *ngIf="modoAsignacionActual === 'normal'" class="badge-normal">
+      🟢 Fase Normal - Abriendo aulas progresivamente (90% capacidad)
+    </span>
+    <span *ngIf="modoAsignacionActual === 'contingencia'" class="badge-contingencia">
+      🔴 Fase Contingencia - Usando reserva (100% capacidad)
+    </span>
+  </div>
+
+  <table class="tabla-preview">
+    <thead>
+      <tr>
+        <th>N°</th>
+        <th>Estudiante</th>
+        <th>Grado</th>
+        <th>Turno</th>
+        <th>Aula Asignada</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let preview of previewAsignaciones; let i = index" 
+          [class.fallido]="!preview.sugerencia.exito">
+        <td>{{ i + 1 }}</td>
+        <td>{{ preview.estudiante.nombres }} {{ preview.estudiante.apellidos }}</td>
+        <td>{{ preview.estudiante.grado }} {{ preview.estudiante.nivel }}</td>
+        <td>{{ turnosPorEstudiante.get(i)?.codigo || '—' }}</td>
+        <td>
+          <span *ngIf="preview.sugerencia.exito" class="aula-asignada">
+            {{ preview.sugerencia.codigoAula || 'Nueva aula' }}
+          </span>
+          <span *ngIf="!preview.sugerencia.exito" class="sin-aula">—</span>
+        </td>
+        <td>
+          <span *ngIf="preview.sugerencia.exito" class="estado-ok">✓ {{ preview.sugerencia.mensaje }}</span>
+          <span *ngIf="!preview.sugerencia.exito" class="estado-error">✗ {{ preview.sugerencia.mensaje }}</span>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="acciones-preview">
+    <button class="btn-volver" (click)="volverDesdePreview()" [disabled]="finalizando">
+      ← Volver y editar
+    </button>
+    <button class="btn-confirmar" 
+            (click)="confirmarDesdePreview()" 
+            [disabled]="finalizando || !previewAsignaciones.some(p => p.sugerencia.exito)">
+      <span *ngIf="!finalizando">✓ Confirmar y Guardar</span>
+      <span *ngIf="finalizando">Guardando...</span>
+    </button>
+  </div>
+</div>
+
+<!-- PASO 5: RESUMEN (solo para edición o si hay error) -->
 <div *ngIf="pasoActual === 'resumen'" class="resumen">
   <h2>✓ ¡Inscripción {{ modoEdicion ? 'Actualizada' : 'Completada' }}!</h2>
   <p>Se ha {{ modoEdicion ? 'actualizado' : 'guardado' }} la inscripción correctamente.</p>

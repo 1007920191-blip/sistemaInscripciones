@@ -159,8 +159,9 @@ export class Lista implements OnInit {
     const rowHeight = 10;
     
     // Configurar columnas: N°, Nombres, DNI, Colegio, Grado, Nivel, Fecha
-    const headers = ['N°', 'Nombres y Apellidos', 'DNI', 'Colegio', 'Grado', 'Nivel', 'Fecha'];
-    const colWidths = [10, 55, 25, 45, 20, 25, 25];
+    const headers = ['N°', 'Nombres y Apellidos', 'DNI', 'Colegio', 'Grado', 'Nivel', 'Aula', 'Fecha'];
+const colWidths = [8, 50, 22, 40, 18, 20, 20, 22];
+
     const colPositions: number[] = [];
     
     // Calcular posiciones de columnas
@@ -214,6 +215,7 @@ export class Lista implements OnInit {
       const colegio = ins.colegio?.IE || 'N/A';
       const grado = est.grado || 'N/A';
       const nivel = est.nivel || 'N/A';
+      const aula = est.codigoAula || '—';
       const fecha = this.formatearFechaPDF(ins.fechaInscripcion);
       
       doc.text(`${index + 1}`, colPositions[0] + 2, currentY);
@@ -222,7 +224,8 @@ export class Lista implements OnInit {
       doc.text(colegio.substring(0, 25), colPositions[3] + 2, currentY);
       doc.text(grado, colPositions[4] + 2, currentY);
       doc.text(nivel, colPositions[5] + 2, currentY);
-      doc.text(fecha, colPositions[6] + 2, currentY);
+      doc.text(aula, colPositions[6] + 2, currentY);  // ← NUEVO
+doc.text(fecha, colPositions[7] + 2, currentY);  // ← cambiar índice
       
       // Línea de borde inferior
       doc.setDrawColor(220, 220, 220);

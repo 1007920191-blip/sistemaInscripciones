@@ -8,6 +8,9 @@ export interface Estudiante {
   grado: string;
   colegio: any;
   fechaRegistro: Date;
+
+  aulaAsignadaId?: string;
+  codigoAula?: string;
 }
 
 export interface Inscripcion {
@@ -20,4 +23,18 @@ export interface Inscripcion {
   estudiantes: Estudiante[];
   fechaInscripcion: Date;
   estado: 'pendiente' | 'completada' | 'cancelada';
+
+  turnoId: string;
+  turnoCodigo: string;
+  
+  // NUEVO: Resumen de asignaciones
+  asignacionesAula?: AsignacionAulaResumen[];
+}
+export interface AsignacionAulaResumen {
+  estudianteIndex: number;
+  estudianteNombre: string;
+  aulaId: string;
+  codigoAula: string;
+  grado: string;
+  nivel: string;
 }

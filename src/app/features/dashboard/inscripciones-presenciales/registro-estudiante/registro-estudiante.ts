@@ -52,7 +52,8 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
   ngOnChanges(changes: SimpleChanges) {
     console.log('[Hijo] ngOnChanges:', changes);
     
-    if (changes['numeroEstudiante']) {
+    if (changes['numeroEstudiante'] &&
+  !changes['numeroEstudiante'].firstChange) {
       console.log('[Hijo] Cambió numeroEstudiante de', 
         changes['numeroEstudiante'].previousValue, 
         'a', 

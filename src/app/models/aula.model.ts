@@ -6,4 +6,5 @@ export interface Aula {
   pabellon: string;
   piso: number;
   puertaAcceso: string;
+  sede?: string;
 }

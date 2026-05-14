@@ -22,8 +22,11 @@
     <app-lista-online *ngIf="section === 'inscripciones-online'"></app-lista-online>
     
     <!-- Nueva inscripción -->
-    <app-nueva-inscripcion *ngIf="section === 'nueva-inscripcion'"></app-nueva-inscripcion>
-
+   <app-nueva-inscripcion 
+  *ngIf="section === 'nueva-inscripcion'"
+  [turnoActual]="turnoParaInscripcion!"
+  (volverLista)="section = 'inscripciones-presenciales'">
+</app-nueva-inscripcion>
     <!-- AULAS - Lista -->
     <app-lista-aulas 
       *ngIf="section === 'aulas'" 

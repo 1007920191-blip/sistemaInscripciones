@@ -193,3 +193,138 @@ h2 {
   font-size: 16px;
   margin-top: 20px;
 }
+/* Agregar al final de nueva-inscripcion.css */
+
+/* Agregar al final de nueva-inscripcion.css */
+
+.preview-asignacion {
+  padding: 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.preview-asignacion h2 {
+  color: #333;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.modo-indicador {
+  margin-bottom: 20px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.badge-normal {
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 8px 16px;
+  border-radius: 20px;
+  display: inline-block;
+}
+
+.badge-contingencia {
+  background: #ffebee;
+  color: #c62828;
+  padding: 8px 16px;
+  border-radius: 20px;
+  display: inline-block;
+}
+
+.tabla-preview {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.tabla-preview th,
+.tabla-preview td {
+  padding: 14px 12px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.tabla-preview th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #495057;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.tabla-preview tr:hover {
+  background: #f8f9fa;
+}
+
+.tabla-preview tr.fallido {
+  background: #fff5f5;
+}
+
+.aula-asignada {
+  color: #2e7d32;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.sin-aula {
+  color: #999;
+}
+
+.estado-ok {
+  color: #2e7d32;
+  font-weight: 500;
+}
+
+.estado-error {
+  color: #c62828;
+  font-weight: 500;
+}
+
+.acciones-preview {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-top: 30px;
+}
+
+.btn-volver {
+  padding: 12px 24px;
+  border: 2px solid #dee2e6;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-volver:hover {
+  background: #f8f9fa;
+}
+
+.btn-confirmar {
+  padding: 12px 32px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.btn-confirmar:hover:not(:disabled) {
+  background: #218838;
+  transform: translateY(-1px);
+}
+
+.btn-confirmar:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}

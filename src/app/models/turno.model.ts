@@ -1,3 +1,5 @@
+export type ModoAsignacion = 'normal' | 'contingencia';
+
 export interface Turno {
   id?: string;
   codigo: string;
@@ -10,6 +12,11 @@ export interface Turno {
   grados: string[];                        // Compatibilidad
   nivelesGrados?: NivelGrado[];           // ← NUEVO: Guardar pares nivel-grado
   estado?: 'activo' | 'inactivo';
+  // Control de fases
+  modoAsignacion?: ModoAsignacion;
+  fechaCierreInscripcion?: Date;
+  cierreManual?: boolean | null;
+  
   fechaCreacion?: Date;
   fechaActualizacion?: Date;
 }
@@ -40,7 +47,11 @@ export interface TurnoAulaAsignada {
   piso: number;
   puertaAcceso: string;
   sede: string;              // ANDAHUAYLAS
+  // NUEVO: Para restricción 50% por colegio
+  porColegio?: Record<string, number>;
+
   fechaCreacion?: Date;
+  fechaActualizacion?: Date;
 }
 
 // Interfaz para mostrar en la tabla del modal

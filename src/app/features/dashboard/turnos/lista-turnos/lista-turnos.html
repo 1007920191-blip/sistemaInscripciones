@@ -1,4 +1,7 @@
 <div class="turnos-container">
+  <!-- Botón temporal de migración (quitar después de usar) -->
+  
+
   <!-- Botones superiores -->
   <div class="acciones-superiores">
     <button class="btn-nuevo-turno" (click)="nuevoTurno()">
@@ -28,24 +31,31 @@
       </thead>
       <tbody>
         <tr *ngFor="let turno of turnosPaginados; let i = index">
-          <td class="codigo">{{ turno.codigo }}</td>
+          <td class="codigo">
+            {{ turno.codigo }}
+            <span 
+              class="modo-badge" 
+              [class.modo-normal]="getModoActual(turno) === 'normal'"
+              [class.modo-contingencia]="getModoActual(turno) === 'contingencia'"
+              style="display: block; margin-top: 4px; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
+              {{ getModoActual(turno) === 'normal' ? '🟢 Normal' : '🔴 Contingencia' }}
+            </span>
+          </td>
           <td class="grados">
-  <div class="grados-lista">
-    <!-- ✅ NUEVO: Usar nivelesGrados si existe -->
-    <ng-container *ngIf="turno.nivelesGrados && turno.nivelesGrados.length > 0">
-      <span *ngFor="let ng of turno.nivelesGrados" class="grado-tag">
-        {{ ng.grado }} {{ ng.nivel.toUpperCase() }}
-      </span>
-    </ng-container>
-    
-    <!-- Fallback para turnos antiguos sin nivelesGrados -->
-    <ng-container *ngIf="!turno.nivelesGrados || turno.nivelesGrados.length === 0">
-      <span *ngFor="let grado of turno.grados" class="grado-tag">
-        {{ grado }} {{ turno.nivel.toUpperCase() }}
-      </span>
-    </ng-container>
-  </div>
-</td>
+            <div class="grados-lista">
+              <ng-container *ngIf="turno.nivelesGrados && turno.nivelesGrados.length > 0">
+                <span *ngFor="let ng of turno.nivelesGrados" class="grado-tag">
+                  {{ ng.grado }} {{ ng.nivel.toUpperCase() }}
+                </span>
+              </ng-container>
+              
+              <ng-container *ngIf="!turno.nivelesGrados || turno.nivelesGrados.length === 0">
+                <span *ngFor="let grado of turno.grados" class="grado-tag">
+                  {{ grado }} {{ turno.nivel.toUpperCase() }}
+                </span>
+              </ng-container>
+            </div>
+          </td>
           <td class="hora">
             <div class="fecha-hora">
               <span class="fecha">{{ formatearFecha(turno.fecha) }}</span>
@@ -74,17 +84,25 @@
             <button class="btn-accion btn-editar" (click)="onEditarTurno(turno)" title="Editar">
               ✏️
             </button>
-            <!-- BOTÓN VERDE CORREGIDO - AGREGADO (click)="onVerAulas(turno)" -->
+            
+            <button 
+              class="btn-accion btn-modo" 
+              (click)="toggleModoTurno(turno, $event)" 
+              [title]="getModoActual(turno) === 'normal' ? 'Cerrar inscripciones' : 'Reabrir inscripciones'"
+              [style.background]="getModoActual(turno) === 'normal' ? '#ff9800' : '#4caf50'">
+              {{ getModoActual(turno) === 'normal' ? '🔒' : '🔓' }}
+            </button>
+            
             <button class="btn-accion btn-ver" (click)="onVerAulas(turno)" title="Ver y asignar aulas">
               🏫
             </button>
+            
             <button class="btn-accion btn-eliminar" (click)="onEliminarTurno(turno)" title="Eliminar">
               🗑️
             </button>
           </td>
         </tr>
         
-        <!-- Fila vacía cuando no hay datos -->
         <tr *ngIf="turnos.length === 0" class="fila-vacia">
           <td colspan="7" class="mensaje-vacio">
             No hay turnos registrados. Haga clic en "Nuevo Turno" para crear uno.
@@ -128,7 +146,6 @@
   </div>
 </div>
 
-<!-- MODAL DE AULAS DEL TURNO - AGREGAR ESTO AL FINAL DEL ARCHIVO -->
 <app-turno-aulas 
   *ngIf="mostrarModalAulas && turnoSeleccionado"
   [turno]="turnoSeleccionado"

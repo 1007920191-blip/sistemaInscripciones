@@ -35,6 +35,13 @@ export class DashboardComponent {
   section = 'inscripciones-presenciales';
   turnoEnEdicion?: Turno;
   aulaEnEdicion?: Aula;  // <-- AÑADIDO
+  turnoParaInscripcion?: Turno;
+
+// Método para ir a nueva inscripción con turno seleccionado
+irANuevaInscripcion(turno: Turno) {
+  this.turnoParaInscripcion = turno;
+  this.section = 'nueva-inscripcion';
+}
 
   constructor(private router: Router) {}
 

@@ -6,8 +6,14 @@ import { PagoComponent } from '../pago/pago';
 import { RegistroEstudianteComponent } from '../registro-estudiante/registro-estudiante';
 import { InscripcionService } from '../../../../services/inscripcion';
 import { Inscripcion, Estudiante } from '../../../../models/inscripcion.model';
+import { Turno } from '../../../../models/turno.model';
 
-type PasoInscripcion = 'colegio' | 'pago' | 'estudiante' | 'resumen';
+import { AsignacionPreviewService, PreviewAsignacion } from '../../../../services/asignacion-preview.service';
+import { AsignacionService, ResultadoAsignacion } from '../../../../services/asignacion.service';
+import { TurnoGestionService } from '../../../../services/turno-gestion.service';
+import { TurnoService } from '../../../../services/turno.service';
+
+type PasoInscripcion = 'colegio' | 'pago' | 'estudiante' | 'preview' | 'resumen';
 
 @Component({
   selector: 'app-nueva-inscripcion',
@@ -22,6 +28,7 @@ type PasoInscripcion = 'colegio' | 'pago' | 'estudiante' | 'resumen';
   styleUrls: ['./nueva-inscripcion.css']
 })
 export class NuevaInscripcion implements OnInit {
+  @Input() turnoActual: any; 
   departamentos = ['APURIMAC', 'AYACUCHO', 'CUSCO'];
   
   filtros = {
@@ -30,8 +37,6 @@ export class NuevaInscripcion implements OnInit {
     distrito: '',
     busqueda: ''
   };
-  
-  // 🔴 ELIMINADA: private navegando = false;
   
   colegios: any[] = [];
   colegiosFiltrados: any[] = [];
@@ -49,7 +54,10 @@ export class NuevaInscripcion implements OnInit {
   estudianteActual: number = 1;
   inscripcionId: string = '';
   
-  // ✅ BANDERAS SEPARADAS
+  // Preview de asignación
+  previewAsignaciones: PreviewAsignacion[] = [];
+  modoAsignacionActual: 'normal' | 'contingencia' = 'normal';
+  
   guardando = false;
   finalizando = false;
   
@@ -61,7 +69,16 @@ export class NuevaInscripcion implements OnInit {
   @Input() estudiantesEditar: Estudiante[] = [];
   modoEdicion = false;
 
-  constructor(private inscripcionService: InscripcionService) {}
+  // Cache de turnos encontrados por estudiante
+  turnosPorEstudiante: Map<number, Turno> = new Map();
+
+  constructor(
+    private inscripcionService: InscripcionService,
+    private previewService: AsignacionPreviewService,
+    private asignacionService: AsignacionService,
+    private turnoGestion: TurnoGestionService,
+    private turnoService: TurnoService
+  ) {}
 
   ngOnInit() {
     this.colegios = colegiosData as any[];
@@ -76,7 +93,6 @@ export class NuevaInscripcion implements OnInit {
     this.modoEdicion = true;
     this.inscripcionId = this.inscripcionEditar!.id || '';
     this.mostrarBusquedaColegios = false;
-    
     this.colegioSeleccionado = this.inscripcionEditar!.colegio;
     
     this.datosPago = {
@@ -91,7 +107,7 @@ export class NuevaInscripcion implements OnInit {
     this.pasoActual = 'colegio';
   }
 
-  // ============ MÉTODOS DE COLEGIO (sin cambios) ============
+  // ============ MÉTODOS DE COLEGIO ============
 
   iniciarCambioColegio() {
     this.mostrarBusquedaColegios = true;
@@ -179,7 +195,7 @@ export class NuevaInscripcion implements OnInit {
     }
   }
 
-  // ============ MÉTODOS DE PAGO (sin cambios) ============
+  // ============ MÉTODOS DE PAGO ============
 
   volverDesdePagoAColegio() {
     this.pasoActual = 'colegio';
@@ -196,76 +212,56 @@ export class NuevaInscripcion implements OnInit {
     this.pasoActual = 'estudiante';
   }
 
-  // ============ MÉTODOS DE ESTUDIANTES - CORREGIDOS ============
+  // ============ MÉTODOS DE ESTUDIANTES ============
 
   volverDesdeEstudianteAPago() {
     this.pasoActual = 'pago';
   }
 
-  // ✅ NAVEGAR ANTERIOR: Guarda y retrocede
   onNavegarAnterior(estudiante: Estudiante) {
-    console.log('[Padre] onNavegarAnterior llamado');
-    
     if (this.guardando || this.finalizando) return;
     this.guardando = true;
     
-    // 1. GUARDAR en posición actual
     const index = this.estudianteActual - 1;
     this.guardarEnArray(estudiante, index);
-    console.log(`[Padre] Guardado en posición ${index}:`, estudiante);
     
-    // 2. RETROCEDER
     if (this.estudianteActual > 1) {
       this.estudianteActual--;
-      console.log(`[Padre] Retrocediendo a estudiante ${this.estudianteActual}`);
     }
     
     this.guardando = false;
   }
 
-  // ✅ NAVEGAR SIGUIENTE: Guarda y avanza (SECUENCIAL)
   onNavegarSiguiente(estudiante: Estudiante) {
-    console.log('[Padre] onNavegarSiguiente llamado');
-    
     if (this.guardando || this.finalizando) return;
     this.guardando = true;
     
-    // 1. GUARDAR en posición actual
     const index = this.estudianteActual - 1;
     this.guardarEnArray(estudiante, index);
-    console.log(`[Padre] Guardado en posición ${index}:`, estudiante);
     
-    // 2. AVANZAR 1 (no saltar)
     if (this.estudianteActual < this.datosPago.cantidad) {
       this.estudianteActual++;
-      console.log(`[Padre] Avanzando a estudiante ${this.estudianteActual}`);
     }
     
     this.guardando = false;
   }
 
-  // ✅ GUARDAR Y CONTINUAR: Guarda y avanza automáticamente
   onGuardarEstudiante(estudiante: Estudiante) {
-    console.log('[Padre] onGuardarEstudiante (continuar) llamado');
-    
     if (this.guardando || this.finalizando) return;
     this.guardando = true;
     
-    // 1. GUARDAR
     const index = this.estudianteActual - 1;
     this.guardarEnArray(estudiante, index);
-    console.log(`[Padre] Guardado en posición ${index}:`, estudiante);
     
-    // 2. AVANZAR automáticamente
     if (this.estudianteActual < this.datosPago.cantidad) {
       this.estudianteActual++;
-      console.log(`[Padre] Continuando a estudiante ${this.estudianteActual}`);
     }
     
     this.guardando = false;
   }
 
-  // ✅ FINALIZAR: Guarda y CIERRA (primer click)
+  // ============ FINALIZAR CON PREVIEW ============
+
   async onFinalizar(estudiante: Estudiante) {
     console.log('[Padre] onFinalizar llamado');
     
@@ -280,79 +276,283 @@ export class NuevaInscripcion implements OnInit {
       const index = this.estudianteActual - 1;
       this.guardarEnArray(estudiante, index);
       console.log(`[Padre] Último estudiante guardado en posición ${index}`);
-      console.log('[Padre] Array completo:', this.estudiantesRegistrados);
       
-      // 2. Guardar en BD
-      await this.ejecutarFinalizacion();
+      // 2. GENERAR PREVIEW DE ASIGNACIÓN
+      await this.generarPreview();
       
     } catch (error) {
       console.error('[Padre] Error:', error);
+      alert('Error al preparar asignación. Intente nuevamente.');
+      this.finalizando = false;
+    }
+  }
+
+  // ============ ASIGNACIÓN AUTOMÁTICA POR GRADO ============
+
+  /**
+   * Normaliza grado de "3° Primaria" → "Tercero"
+   */
+  private normalizarGrado(grado: string): string {
+    const lower = grado.toLowerCase().trim();
+    const numeroMatch = lower.match(/(\d+)/);
+    const numero = numeroMatch ? numeroMatch[1] : '';
+    
+    const mapaNumeros: Record<string, string> = {
+      '1': 'Primero', '2': 'Segundo', '3': 'Tercero',
+      '4': 'Cuarto', '5': 'Quinto', '6': 'Sexto'
+    };
+    
+    return mapaNumeros[numero] || grado;
+  }
+
+  /**
+   * Busca turno que contenga el grado/nivel del estudiante
+   */
+  async obtenerTurnoParaEstudiante(estudiante: Estudiante): Promise<Turno | null> {
+    const turnos = await this.turnoService.obtenerTurnos();
+    
+    const gradoNormalizado = this.normalizarGrado(estudiante.grado);
+    const nivelNormalizado = estudiante.nivel.toUpperCase();
+    
+    for (const turno of turnos) {
+      // Buscar en nivelesGrados (formato nuevo)
+      if (turno.nivelesGrados && turno.nivelesGrados.length > 0) {
+        const encontrado = turno.nivelesGrados.find(ng => {
+          const ngGrado = ng.grado.toLowerCase().trim();
+          const ngNivel = ng.nivel.toUpperCase();
+          return ngGrado.includes(gradoNormalizado.toLowerCase()) && ngNivel === nivelNormalizado;
+        });
+        if (encontrado) return turno;
+      }
+      
+      // Fallback: buscar en grados (formato antiguo)
+      if (turno.grados?.some(g => {
+        const gLower = g.toLowerCase();
+        return gLower.includes(gradoNormalizado.toLowerCase());
+      })) {
+        if (turno.nivel?.toUpperCase() === nivelNormalizado) return turno;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Genera preview de asignación para TODOS los estudiantes
+   */
+  async generarPreview() {
+    if (!this.colegioSeleccionado) {
+      alert('Error: No hay colegio seleccionado');
+      this.finalizando = false;
+      return;
+    }
+
+    if (this.estudiantesRegistrados.length === 0) {
+      alert('Error: No hay estudiantes registrados');
+      this.finalizando = false;
+      return;
+    }
+
+    this.guardando = true;
+    this.previewAsignaciones = [];
+    this.turnosPorEstudiante.clear();
+
+    try {
+      // Procesar cada estudiante individualmente
+      for (let i = 0; i < this.estudiantesRegistrados.length; i++) {
+        const estudiante = this.estudiantesRegistrados[i];
+        
+        // Buscar turno para este estudiante específico
+        const turno = await this.obtenerTurnoParaEstudiante(estudiante);
+        
+        if (!turno) {
+          this.previewAsignaciones.push({
+            estudiante,
+            modo: 'normal',
+            sugerencia: {
+              mensaje: `No hay turno configurado para ${estudiante.grado} ${estudiante.nivel}`,
+              exito: false,
+              espacioDisponible: 0,
+              inscritosActuales: 0,
+              capacidad: 30
+            }
+          });
+          continue;
+        }
+
+        // Guardar turno encontrado
+        this.turnosPorEstudiante.set(i, turno);
+
+        // Determinar modo del turno
+        const modo = await this.turnoGestion.determinarModoActual(turno);
+
+        // Generar preview para este estudiante en su turno
+        const preview = await this.previewService.generarPreviewParaEstudiante(
+          turno,
+          estudiante,
+          this.colegioSeleccionado.CODIGOMODULAR,
+          modo
+        );
+
+        this.previewAsignaciones.push(preview);
+      }
+
+      // Determinar modo global
+      const primerExito = this.previewAsignaciones.find(p => p.sugerencia.exito);
+      if (primerExito) {
+        this.modoAsignacionActual = primerExito.modo;
+      }
+
+      this.pasoActual = 'preview';
+      this.finalizando = false;
+      
+    } catch (error) {
+      console.error('Error en preview:', error);
+      alert('Error al generar vista previa de asignación');
+      this.finalizando = false;
+    } finally {
+      this.guardando = false;
+    }
+  }
+
+  // ============ CONFIRMAR DESDE PREVIEW ============
+
+  async confirmarDesdePreview() {
+    console.log('[Padre] confirmarDesdePreview llamado');
+    
+    if (this.finalizando) return;
+    this.finalizando = true;
+    
+    try {
+      await this.ejecutarFinalizacionConAsignacion();
+    } catch (error) {
+      console.error('Error:', error);
       alert('Error al guardar. Intente nuevamente.');
       this.finalizando = false;
     }
   }
 
-  private guardarEnArray(estudiante: Estudiante, index: number) {
-    if (index < this.estudiantesRegistrados.length) {
-      this.estudiantesRegistrados[index] = { ...estudiante };
-    } else {
-      this.estudiantesRegistrados.push({ ...estudiante });
-    }
+  volverDesdePreview() {
+    this.pasoActual = 'estudiante';
+    this.previewAsignaciones = [];
+    this.turnosPorEstudiante.clear();
   }
 
-  private async ejecutarFinalizacion() {
-    const inscripcionData = {
+  // ============ GUARDAR CON ASIGNACIÓN REAL ============
+
+  private async ejecutarFinalizacionConAsignacion() {
+    const inscripcionData: Partial<Inscripcion> = {
       colegio: this.colegioSeleccionado,
       metodoPago: this.datosPago.metodo,
       cantidadEstudiantes: this.datosPago.cantidad,
       montoTotal: this.datosPago.monto,
       telefonoApoderado: this.datosPago.telefono,
       estudiantes: [...this.estudiantesRegistrados],
-      estado: 'completada'
+      estado: 'completada',
+      turnoId: '',
+      turnoCodigo: '',
+      asignacionesAula: []
     };
 
-    try {
-    // 1. Guardar en BD
+    // 1. Guardar inscripción base
+    let inscripcionId: string;
     if (this.modoEdicion) {
       await this.inscripcionService.actualizarInscripcion(this.inscripcionId, inscripcionData);
+      inscripcionId = this.inscripcionId;
       await this.inscripcionService.eliminarEstudiantes(this.inscripcionId);
-      for (const est of this.estudiantesRegistrados) {
-        await this.inscripcionService.guardarEstudiante(est, this.inscripcionId);
-      }
     } else {
-      this.inscripcionId = await this.inscripcionService.guardarInscripcion(inscripcionData as Inscripcion);
-      for (const est of this.estudiantesRegistrados) {
-        await this.inscripcionService.guardarEstudiante(est, this.inscripcionId);
-      }
+      inscripcionId = await this.inscripcionService.guardarInscripcion(inscripcionData as Inscripcion);
     }
 
-    console.log('[Padre] Guardado exitoso, cerrando...');
+    // 2. ASIGNAR CADA ESTUDIANTE A SU TURNO/AULA
+    const asignacionesAula: any[] = [];
+    const fallidos: string[] = [];
+
+    for (let i = 0; i < this.estudiantesRegistrados.length; i++) {
+      const estudiante = this.estudiantesRegistrados[i];
+      const turno = this.turnosPorEstudiante.get(i);
+
+      if (!turno) {
+        fallidos.push(`${estudiante.nombres} ${estudiante.apellidos}: No hay turno para ${estudiante.grado}`);
+        await this.inscripcionService.guardarEstudiante(estudiante, inscripcionId);
+        continue;
+      }
+
+      // Actualizar turnoId de la inscripción (usar el del primer estudiante con turno)
+      if (!inscripcionData.turnoId) {
+        inscripcionData.turnoId = turno.id!;
+        inscripcionData.turnoCodigo = turno.codigo;
+      }
+
+      try {
+        // Asignar estudiante a aula en su turno
+        const resultado = await this.asignacionService.asignarEstudiantes(
+          turno,
+          [estudiante],
+          this.colegioSeleccionado.CODIGOMODULAR,
+          this.modoAsignacionActual
+        );
+
+        if (resultado.exito && resultado.asignaciones.length > 0) {
+          const asig = resultado.asignaciones[0];
+          
+          estudiante.aulaAsignadaId = asig.aulaId;
+          estudiante.codigoAula = asig.codigoAula;
+
+          asignacionesAula.push({
+            estudianteIndex: i,
+            estudianteNombre: `${estudiante.nombres} ${estudiante.apellidos}`,
+            aulaId: asig.aulaId,
+            codigoAula: asig.codigoAula,
+            grado: estudiante.grado,
+            nivel: estudiante.nivel,
+            turnoCodigo: turno.codigo
+          });
+        } else if (resultado.fallidos.length > 0) {
+          fallidos.push(`${estudiante.nombres}: ${resultado.fallidos[0].razon}`);
+        }
+
+      } catch (error: any) {
+        fallidos.push(`${estudiante.nombres}: ${error.message}`);
+      }
+
+      // Guardar estudiante (con o sin aula)
+      await this.inscripcionService.guardarEstudiante(estudiante, inscripcionId);
+    }
+
+    // 3. Actualizar inscripción con asignaciones
+    await this.inscripcionService.actualizarInscripcion(inscripcionId, {
+      turnoId: inscripcionData.turnoId || '',
+      turnoCodigo: inscripcionData.turnoCodigo || '',
+      asignacionesAula: asignacionesAula
+    });
+
+    // 4. MOSTRAR RESULTADO Y CERRAR (sin alert duplicado)
+    console.log('Guardado exitoso, cerrando...');
     
-    // 2. ✅ CERRAR INMEDIATAMENTE (antes del alert)
+    // Emitir eventos para cerrar
     this.inscripcionGuardada.emit();
     this.cerrarModal.emit();
     
-    // 3. Alert opcional (no bloquea el cierre porque ya emitimos)
-    setTimeout(() => {
-      alert(`¡Inscripción ${this.modoEdicion ? 'actualizada' : 'guardada'} exitosamente!`);
-    }, 0);
-
-  } catch (error) {
-    console.error('[Padre] Error:', error);
-    alert('Error al guardar. Intente nuevamente.');
-    this.finalizando = false;
+    // Resetear estado
+    this.resetearTodo();
   }
-}
 
-// ✅ NUEVO MÉTODO: Centraliza el cierre
-private cerrarVentana() {
-  console.log('[Padre] Cerrando ventana...');
-  this.inscripcionGuardada.emit();
-  this.cerrarModal.emit();
-  // No resetear finalizando porque el componente se destruye
-}
+  // ============ MÉTODOS AUXILIARES ============
 
-  // ============ CANCELAR / VOLVER ============
+  private guardarEnArray(estudiante: Estudiante, index: number) {
+
+  // ✅ COPIA PROFUNDA
+  const copia = structuredClone(estudiante);
+
+  if (index < this.estudiantesRegistrados.length) {
+    this.estudiantesRegistrados[index] = copia;
+  } else {
+    this.estudiantesRegistrados.push(copia);
+  }
+
+  console.log('Estudiantes guardados:', this.estudiantesRegistrados);
+}
 
   cancelarInscripcion() {
     if (confirm('¿Está seguro de cancelar? Se perderán todos los datos ingresados.')) {
@@ -373,6 +573,8 @@ private cerrarVentana() {
     this.modoEdicion = false;
     this.guardando = false;
     this.finalizando = false;
+    this.previewAsignaciones = [];
+    this.turnosPorEstudiante.clear();
     this.limpiarFiltros();
   }
 
