@@ -21,6 +21,12 @@ export class Lista implements OnInit {
   inscripcionEditar: Inscripcion | null = null;
   estudiantesEditar: Estudiante[] = [];
   
+  // Modal Lista
+  mostrarModalLista = false;
+  inscripcionParaLista: Inscripcion | null = null;
+  estudiantesParaLista: Estudiante[] = [];
+  cargandoLista = false;
+  
   // Paginación
   itemsPorPagina = this.obtenerItemsPorPagina();
   paginaActual = 1;
@@ -114,24 +120,45 @@ export class Lista implements OnInit {
   }
 
   // ============================================
-  // BOTÓN LISTA - Generar PDF
+  // BOTÓN LISTA - Abrir Modal
   // ============================================
   async verLista(ins: Inscripcion) {
-    console.log('Generando PDF para inscripción:', ins.id);
+    console.log('Abriendo lista para inscripción:', ins.id);
+    this.cargandoLista = true;
+    this.inscripcionParaLista = ins;
+    this.mostrarModalLista = true;
     
-    // Obtener estudiantes actualizados
-    let estudiantes: Estudiante[] = [];
     try {
-      estudiantes = await this.inscripcionService.obtenerEstudiantes(ins.id!);
+      this.estudiantesParaLista = await this.inscripcionService.obtenerEstudiantes(ins.id!);
+      if (!this.estudiantesParaLista || this.estudiantesParaLista.length === 0) {
+        // Fallback a los estudiantes en el doc (si los hubiera)
+        this.estudiantesParaLista = ins.estudiantes || [];
+      }
     } catch (error) {
       console.error('Error obteniendo estudiantes:', error);
-      estudiantes = ins.estudiantes || [];
+      this.estudiantesParaLista = ins.estudiantes || [];
+    } finally {
+      this.cargandoLista = false;
     }
+  }
 
-    if (!estudiantes || estudiantes.length === 0) {
-      alert('No hay estudiantes para mostrar en esta inscripción');
+  cerrarModalLista() {
+    this.mostrarModalLista = false;
+    this.inscripcionParaLista = null;
+    this.estudiantesParaLista = [];
+  }
+
+  // ============================================
+  // GENERAR PDF (Desde el Modal)
+  // ============================================
+  descargarPDF() {
+    if (!this.inscripcionParaLista || this.estudiantesParaLista.length === 0) {
+      alert('No hay datos para generar el PDF');
       return;
     }
+    
+    const ins = this.inscripcionParaLista;
+    const estudiantes = this.estudiantesParaLista;
 
     // Crear documento PDF
     const doc = new jsPDF();
@@ -224,8 +251,8 @@ const colWidths = [8, 50, 22, 40, 18, 20, 20, 22];
       doc.text(colegio.substring(0, 25), colPositions[3] + 2, currentY);
       doc.text(grado, colPositions[4] + 2, currentY);
       doc.text(nivel, colPositions[5] + 2, currentY);
-      doc.text(aula, colPositions[6] + 2, currentY);  // ← NUEVO
-doc.text(fecha, colPositions[7] + 2, currentY);  // ← cambiar índice
+      doc.text(aula, colPositions[6] + 2, currentY);
+      doc.text(fecha, colPositions[7] + 2, currentY);
       
       // Línea de borde inferior
       doc.setDrawColor(220, 220, 220);

@@ -177,7 +177,7 @@
     </button>
     <button class="btn-confirmar" 
             (click)="confirmarDesdePreview()" 
-            [disabled]="finalizando || !previewAsignaciones.some(p => p.sugerencia.exito)">
+            [disabled]="finalizando || !tieneAsignacionesExitosas()">
       <span *ngIf="!finalizando">✓ Confirmar y Guardar</span>
       <span *ngIf="finalizando">Guardando...</span>
     </button>

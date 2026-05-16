@@ -58,7 +58,7 @@ export interface TurnoAulaAsignada {
 export interface AulaTurnoDisplay {
   id: string;                // ID del documento en turnosedicion
   aulaId: string;            // ID del aula original
-  codigo: string;            // B1, A1, etc.
+  codigoAula: string;        // B1, A1, etc.
   inscritos: number;
   capacidad: number;
   grado: string;

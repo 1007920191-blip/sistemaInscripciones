@@ -1,4 +1,4 @@
-import { Component, OnInit, Output, EventEmitter, Input } from '@angular/core';
+import { Component, OnInit, Output, EventEmitter, Input, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import colegiosData from '../../../../../assets/data/colegios.json';
@@ -77,7 +77,8 @@ export class NuevaInscripcion implements OnInit {
     private previewService: AsignacionPreviewService,
     private asignacionService: AsignacionService,
     private turnoGestion: TurnoGestionService,
-    private turnoService: TurnoService
+    private turnoService: TurnoService,
+    private ngZone: NgZone
   ) {}
 
   ngOnInit() {
@@ -282,8 +283,10 @@ export class NuevaInscripcion implements OnInit {
       
     } catch (error) {
       console.error('[Padre] Error:', error);
-      alert('Error al preparar asignación. Intente nuevamente.');
-      this.finalizando = false;
+      this.ngZone.run(() => {
+        alert('Error al preparar asignación. Intente nuevamente.');
+        this.finalizando = false;
+      });
     }
   }
 
@@ -399,19 +402,23 @@ export class NuevaInscripcion implements OnInit {
 
       // Determinar modo global
       const primerExito = this.previewAsignaciones.find(p => p.sugerencia.exito);
-      if (primerExito) {
-        this.modoAsignacionActual = primerExito.modo;
-      }
-
-      this.pasoActual = 'preview';
-      this.finalizando = false;
+      
+      this.ngZone.run(() => {
+        if (primerExito) {
+          this.modoAsignacionActual = primerExito.modo;
+        }
+        this.pasoActual = 'preview';
+        this.finalizando = false;
+        this.guardando = false;
+      });
       
     } catch (error) {
       console.error('Error en preview:', error);
-      alert('Error al generar vista previa de asignación');
-      this.finalizando = false;
-    } finally {
-      this.guardando = false;
+      this.ngZone.run(() => {
+        alert('Error al generar vista previa de asignación');
+        this.finalizando = false;
+        this.guardando = false;
+      });
     }
   }
 
@@ -427,8 +434,10 @@ export class NuevaInscripcion implements OnInit {
       await this.ejecutarFinalizacionConAsignacion();
     } catch (error) {
       console.error('Error:', error);
-      alert('Error al guardar. Intente nuevamente.');
-      this.finalizando = false;
+      this.ngZone.run(() => {
+        alert('Error al guardar. Intente nuevamente.');
+        this.finalizando = false;
+      });
     }
   }
 
@@ -457,6 +466,15 @@ export class NuevaInscripcion implements OnInit {
     // 1. Guardar inscripción base
     let inscripcionId: string;
     if (this.modoEdicion) {
+      // Liberar las vacantes previas
+      if (this.inscripcionEditar?.asignacionesAula && this.inscripcionEditar.colegio?.CODIGOMODULAR) {
+        const asignacionesALiberar = this.inscripcionEditar.asignacionesAula.map((a: any) => ({
+          aulaId: a.aulaId,
+          colegioId: this.inscripcionEditar!.colegio.CODIGOMODULAR
+        }));
+        await this.asignacionService.liberarEstudiantes(asignacionesALiberar);
+      }
+
       await this.inscripcionService.actualizarInscripcion(this.inscripcionId, inscripcionData);
       inscripcionId = this.inscripcionId;
       await this.inscripcionService.eliminarEstudiantes(this.inscripcionId);
@@ -499,6 +517,8 @@ export class NuevaInscripcion implements OnInit {
           estudiante.aulaAsignadaId = asig.aulaId;
           estudiante.codigoAula = asig.codigoAula;
 
+          console.log('Asignación creada:', asig);
+
           asignacionesAula.push({
             estudianteIndex: i,
             estudianteNombre: `${estudiante.nombres} ${estudiante.apellidos}`,
@@ -508,6 +528,9 @@ export class NuevaInscripcion implements OnInit {
             nivel: estudiante.nivel,
             turnoCodigo: turno.codigo
           });
+
+          console.log('Array asignacionesAula:', asignacionesAula);
+          
         } else if (resultado.fallidos.length > 0) {
           fallidos.push(`${estudiante.nombres}: ${resultado.fallidos[0].razon}`);
         }
@@ -527,15 +550,19 @@ export class NuevaInscripcion implements OnInit {
       asignacionesAula: asignacionesAula
     });
 
-    // 4. MOSTRAR RESULTADO Y CERRAR (sin alert duplicado)
+    // 4. MOSTRAR RESULTADO Y CERRAR
     console.log('Guardado exitoso, cerrando...');
     
-    // Emitir eventos para cerrar
-    this.inscripcionGuardada.emit();
-    this.cerrarModal.emit();
-    
-    // Resetear estado
-    this.resetearTodo();
+    // Ejecutar la redirección y cierre dentro de la zona de Angular
+    this.ngZone.run(() => {
+      // Emitir eventos para cerrar y redirigir
+      this.inscripcionGuardada.emit();
+      this.cerrarModal.emit();
+      this.volverLista.emit();
+      
+      // Resetear estado
+      this.resetearTodo();
+    });
   }
 
   // ============ MÉTODOS AUXILIARES ============
@@ -552,6 +579,12 @@ export class NuevaInscripcion implements OnInit {
   }
 
   console.log('Estudiantes guardados:', this.estudiantesRegistrados);
+}
+
+tieneAsignacionesExitosas(): boolean {
+  return this.previewAsignaciones?.some(
+    p => p?.sugerencia?.exito
+  ) ?? false;
 }
 
   cancelarInscripcion() {

@@ -102,3 +102,68 @@
   (volverLista)="volverALista()"
   (inscripcionGuardada)="recargarInscripciones()">
 </app-nueva-inscripcion>
+
+<!-- Modal de Lista de Estudiantes -->
+<div class="modal-overlay" *ngIf="mostrarModalLista" (click)="cerrarModalLista()">
+  <div class="modal-content modal-lista" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>LISTA DE ESTUDIANTES ASIGNADOS</h2>
+      <button class="btn-cerrar" (click)="cerrarModalLista()">×</button>
+    </div>
+
+    <div class="modal-body" *ngIf="cargandoLista">
+      <div class="cargando-container">
+        <span class="spinner">⏳</span> Cargando datos de estudiantes...
+      </div>
+    </div>
+
+    <div class="modal-body" *ngIf="!cargandoLista">
+      <div class="info-resumen" *ngIf="inscripcionParaLista">
+        <div class="info-item">
+          <strong>ID Inscripción:</strong> {{ inscripcionParaLista.id }}
+        </div>
+        <div class="info-item">
+          <strong>Colegio:</strong> {{ inscripcionParaLista.colegio?.IE }}
+        </div>
+        <div class="info-item">
+          <strong>Total Estudiantes:</strong> {{ estudiantesParaLista.length }}
+        </div>
+      </div>
+
+      <div class="tabla-container-modal">
+        <table class="tabla-estudiantes">
+          <thead>
+            <tr>
+              <th>N°</th>
+              <th>Nombres y Apellidos</th>
+              <th>DNI</th>
+              <th>Grado</th>
+              <th>Nivel</th>
+              <th>Aula Asignada</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let est of estudiantesParaLista; let i = index">
+              <td>{{ i + 1 }}</td>
+              <td>{{ est.nombres }} {{ est.apellidos }}</td>
+              <td>{{ est.numeroDocumento }}</td>
+              <td>{{ est.grado }}</td>
+              <td>{{ est.nivel }}</td>
+              <td>
+                <span class="badge-aula" *ngIf="est.codigoAula">{{ est.codigoAula }}</span>
+                <span class="badge-sin-aula" *ngIf="!est.codigoAula">Sin aula</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-secundario" (click)="cerrarModalLista()">Cerrar</button>
+      <button class="btn-primario" (click)="descargarPDF()" [disabled]="cargandoLista || estudiantesParaLista.length === 0">
+        📄 Descargar PDF
+      </button>
+    </div>
+  </div>
+</div>

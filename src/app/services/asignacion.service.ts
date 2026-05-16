@@ -72,7 +72,7 @@ export class AsignacionService {
 
     // Obtener aulas actuales
     const aulasRef = collection(db, 'turnosedicion');
-    const q = query(aulasRef, where('turnoId', '==', turno.codigo));
+    const q = query(aulasRef, where('turnoId', '==', turno.id!));
     const aulasSnap = await getDocs(q);
     
     const aulasDocs = aulasSnap.docs.map(d => ({
@@ -108,7 +108,7 @@ export class AsignacionService {
 }
 
           if (modo === 'normal') {
-            return await this.asignarNormal(transaction, aulasDelGrado, estudiante, colegioId, aulasDocs.length, turno.codigo);
+            return await this.asignarNormal(transaction, aulasDelGrado, estudiante, colegioId, aulasDocs.length, turno.id!);
           } else {
             return await this.asignarContingencia(transaction, aulasDelGrado, estudiante, colegioId);
           }
@@ -133,6 +133,64 @@ export class AsignacionService {
   }
 
   // ============================================================
+  // LIBERAR ESTUDIANTES (con transacción Firestore)
+  // ============================================================
+  async liberarEstudiantes(
+    asignaciones: { aulaId: string; colegioId: string }[]
+  ): Promise<void> {
+    if (!asignaciones || asignaciones.length === 0) return;
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const aulaDocs = new Map<string, any>();
+        for (const asig of asignaciones) {
+          if (!aulaDocs.has(asig.aulaId)) {
+            const ref = doc(db, 'turnosedicion', asig.aulaId);
+            const snap = await transaction.get(ref);
+            if (snap.exists()) {
+              aulaDocs.set(asig.aulaId, { ref, data: snap.data() });
+            }
+          }
+        }
+
+        const aRestar = new Map<string, { total: number, porColegio: Record<string, number> }>();
+        for (const asig of asignaciones) {
+          if (!aRestar.has(asig.aulaId)) {
+            aRestar.set(asig.aulaId, { total: 0, porColegio: {} });
+          }
+          const stats = aRestar.get(asig.aulaId)!;
+          stats.total++;
+          stats.porColegio[asig.colegioId] = (stats.porColegio[asig.colegioId] || 0) + 1;
+        }
+
+        for (const [aulaId, stats] of aRestar.entries()) {
+          const aulaInfo = aulaDocs.get(aulaId);
+          if (aulaInfo) {
+            const currentInscritos = aulaInfo.data.inscritos || 0;
+            const currentPorColegio = aulaInfo.data.porColegio || {};
+            
+            const nuevosInscritos = Math.max(0, currentInscritos - stats.total);
+            const nuevosPorColegio = { ...currentPorColegio };
+            
+            for (const [colId, cant] of Object.entries(stats.porColegio)) {
+              nuevosPorColegio[colId] = Math.max(0, (nuevosPorColegio[colId] || 0) - cant);
+            }
+
+            transaction.update(aulaInfo.ref, {
+              inscritos: nuevosInscritos,
+              porColegio: nuevosPorColegio,
+              fechaActualizacion: Timestamp.now()
+            });
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error al liberar estudiantes:', error);
+      throw new Error('No se pudo liberar a los estudiantes anteriores.');
+    }
+  }
+
+  // ============================================================
   // LÓGICA NORMAL
   // ============================================================
   private async asignarNormal(
@@ -141,7 +199,7 @@ export class AsignacionService {
     estudiante: Estudiante,
     colegioId: string,
     totalAulasTurno: number,
-    turnoCodigo: string
+    turnoId: string
   ): Promise<{ exito: boolean; aulaId?: string; codigoAula?: string; mensaje?: string }> {
     
     const CAPACIDAD = 30;
@@ -198,7 +256,7 @@ export class AsignacionService {
 
     // Buscar aula física disponible
     const aulasFisicasSnap = await getDocs(collection(db, 'aulas'));
-    const asignadasSnap = await getDocs(query(collection(db, 'turnosedicion'), where('turnoId', '==', turnoCodigo)));
+    const asignadasSnap = await getDocs(query(collection(db, 'turnosedicion'), where('turnoId', '==', turnoId)));
     const idsAsignados = new Set(asignadasSnap.docs.map(d => d.data()['aulaId']));
 
     const aulaFisica = aulasFisicasSnap.docs.find(d => !idsAsignados.has(d.id));
@@ -210,7 +268,7 @@ export class AsignacionService {
     const nuevoDocRef = doc(collection(db, 'turnosedicion'));
     
     transaction.set(nuevoDocRef, {
-      turnoId: turnoCodigo,
+      turnoId: turnoId,
       aulaId: aulaFisica.id,
       codigoAula: fisicaData.codigo,
       grado: estudiante.grado,

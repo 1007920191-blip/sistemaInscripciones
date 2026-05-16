@@ -21,12 +21,12 @@
 
       <button 
         class="btn-agregar-aula" 
-  (click)="abrirModalAsignar()"
-  [disabled]="cargandoModal"
-  type="button">
-  <span *ngIf="cargandoModal">⏳</span>
-  <span *ngIf="!cargandoModal">+</span>
-  {{ cargandoModal ? 'Cargando...' : 'Agregar Aula' }}
+        (click)="abrirModalAsignar()"
+        [disabled]="cargandoModal"
+        type="button">
+        <span *ngIf="cargandoModal">⏳</span>
+        <span *ngIf="!cargandoModal">+</span>
+        {{ cargandoModal ? 'Cargando...' : 'Agregar Aula' }}
       </button>
     </div>
 
@@ -51,22 +51,34 @@
             <th>ID</th>
             <th>INSCRITOS</th>
             <th>CAPACIDAD</th>
+            <th>VACANTES</th>
             <th>GRADO</th>
             <th>NIVEL</th>
+            <th>ESTADO</th>
             <th>ACCIONES</th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let aula of aulasPaginadas">
-            <td class="codigo">{{ aula.codigo }}</td>
+            <td class="codigo">{{ aula.codigoAula }}</td>
             <td class="inscritos">
               <span class="badge-inscritos" [class.lleno]="aula.inscritos >= aula.capacidad">
                 {{ aula.inscritos }}
               </span>
             </td>
             <td>{{ aula.capacidad }}</td>
+            <td class="vacantes">
+              <span class="badge-vacantes" [class.agotadas]="aula.capacidad - aula.inscritos <= 0">
+                {{ Math.max(0, aula.capacidad - aula.inscritos) }}
+              </span>
+            </td>
             <td>{{ aula.grado.toUpperCase() }}</td>
             <td>{{ aula.nivel.toUpperCase() }}</td>
+            <td>
+              <span class="badge-estado" [class.lleno]="aula.inscritos >= aula.capacidad">
+                {{ aula.inscritos >= aula.capacidad ? 'Llena' : 'Disponible' }}
+              </span>
+            </td>
             <td class="acciones">
               <button 
                 class="btn-accion btn-editar" 
@@ -92,7 +104,7 @@
           </tr>
           
           <tr *ngIf="aulasFiltradas.length === 0" class="fila-vacia">
-            <td colspan="6" class="mensaje-vacio">
+            <td colspan="8" class="mensaje-vacio">
               No hay aulas asignadas a este grado. Haga clic en "Agregar Aula" para crear una.
             </td>
           </tr>
@@ -128,6 +140,7 @@
         <button 
           class="btn-nav" 
           [disabled]="paginaActual === totalPaginas"
+          (click)="cambiarPagina('siguiente')"
           (click)="cambiarPagina('siguiente')"
           type="button">
           ›
@@ -223,7 +236,7 @@
       <div class="fila">
         <div class="campo">
           <label>ID *</label>
-          <input type="text" [(ngModel)]="aulaEditando.codigo" readonly class="readonly">
+          <input type="text" [(ngModel)]="aulaEditando.codigoAula" readonly class="readonly">
         </div>
         <div class="campo">
           <label>LOCAL *</label>
