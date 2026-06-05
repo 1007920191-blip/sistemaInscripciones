@@ -29,6 +29,10 @@ export interface Inscripcion {
   
   // NUEVO: Resumen de asignaciones
   asignacionesAula?: AsignacionAulaResumen[];
+
+  // Optimización de consultas y multiusuario
+  fechaTexto?: string;
+  usuarioId?: string;
 }
 export interface AsignacionAulaResumen {
   estudianteIndex: number;

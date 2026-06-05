@@ -14,7 +14,8 @@ import {
   query,
   Unsubscribe
 } from '@angular/fire/firestore';
-
+import { getAuth } from 'firebase/auth';
+import { firebaseApp } from '../firebase-config';
 import { Inscripcion, Estudiante } from '../models/inscripcion.model';
 
 @Injectable({
@@ -29,9 +30,19 @@ export class InscripcionService {
   }
 
   async guardarInscripcion(inscripcion: Inscripcion): Promise<string> {
+    const hoy = new Date();
+    const anio = hoy.getFullYear();
+    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+    const dia = String(hoy.getDate()).padStart(2, '0');
+    const fechaTexto = `${anio}-${mes}-${dia}`;
+
+    const auth = getAuth(firebaseApp);
+    const usuarioId = auth.currentUser?.uid || '';
 
     const docRef = await addDoc(this.inscripcionesRef, {
       ...inscripcion,
+      fechaTexto,
+      usuarioId,
       fechaInscripcion: Timestamp.now()
     });
 
@@ -87,6 +98,98 @@ export class InscripcionService {
 
       return fechaB - fechaA;
     });
+  }
+
+  async obtenerInscripcionesFiltradas(fechaTexto: string, usuarioId: string, verTodos: boolean = false): Promise<Inscripcion[]> {
+    try {
+      let q;
+      if (verTodos) {
+        // Modo histórico: carga TODA la colección sin filtro de usuarioId.
+        // Esto es necesario para compatibilidad con documentos anteriores que
+        // no tienen el campo usuarioId (creados antes de la migración).
+        // El filtrado por fecha y por usuario se aplica en el cliente (lista.ts).
+        q = this.inscripcionesRef;
+      } else {
+        // Modo normal: filtra por fechaTexto exacto Y usuarioId.
+        // Solo funciona con documentos que tengan ambos campos (creados recientemente).
+        q = query(
+          this.inscripcionesRef,
+          where('fechaTexto', '==', fechaTexto),
+          where('usuarioId', '==', usuarioId)
+        );
+      }
+      
+      const snapshot = await getDocs(q);
+      const inscripciones = snapshot.docs.map(docSnap => {
+        const data = docSnap.data() as any;
+        let fechaInscripcion = data.fechaInscripcion;
+        if (fechaInscripcion && typeof fechaInscripcion.toDate === 'function') {
+          fechaInscripcion = fechaInscripcion.toDate();
+        }
+        return {
+          id: docSnap.id,
+          ...data,
+          fechaInscripcion
+        } as Inscripcion;
+      });
+
+      return inscripciones.sort((a, b) => {
+        const fechaA = a.fechaInscripcion?.getTime?.() || 0;
+        const fechaB = b.fechaInscripcion?.getTime?.() || 0;
+        return fechaB - fechaA;
+      });
+    } catch (error) {
+      console.error('Error al obtener inscripciones filtradas:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Búsqueda híbrida: filtra en memoria la lista ya cargada desde Firestore.
+   * NO usa collectionGroup ni índices compuestos.
+   * Busca en: colegio (IE y código modular), cualquier campo de estudiante
+   * embebido en el doc (array estudiantes[] si existe), y campos de texto
+   * directos del doc. Soporta mayúsculas/minúsculas, tildes y coincidencias parciales.
+   */
+  filtrarInscripcionesLocal(inscripciones: Inscripcion[], termino: string): Inscripcion[] {
+    const term = this.normalizarTexto(termino.trim());
+    if (!term) return inscripciones;
+
+    return inscripciones.filter(ins => {
+      const data = ins as any;
+
+      // 1. Colegio (campo directo del documento raiz)
+      const colegio  = this.normalizarTexto(ins.colegio?.IE || '');
+      const modular  = this.normalizarTexto(ins.colegio?.CODIGOMODULAR || ins.colegio?.codigoModular || '');
+      if (colegio.includes(term) || modular.includes(term)) return true;
+
+      // 2. Campos de texto planos del documento raíz (ej. nombreContacto, observaciones)
+      const camposDirectos = [
+        data.nombreContacto, data.observaciones,
+        data.turnoId, data.turnoCodigo, data.estado
+      ].filter(Boolean);
+      if (camposDirectos.some(c => this.normalizarTexto(String(c)).includes(term))) return true;
+
+      // 3. Array de estudiantes embebido en el documento (si existe)
+      const estudiantes: any[] = ins.estudiantes || data.estudiantes || [];
+      if (estudiantes.length > 0) {
+        return estudiantes.some(est => {
+          const nombres   = this.normalizarTexto(est.nombres   || est.nombre   || '');
+          const apellidos = this.normalizarTexto(est.apellidos || est.apellido || '');
+          const dni       = this.normalizarTexto(est.numeroDocumento || est.dni || '');
+          return nombres.includes(term) || apellidos.includes(term) || dni.includes(term);
+        });
+      }
+
+      return false;
+    });
+  }
+
+  private normalizarTexto(texto: string): string {
+    return texto
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, ''); // elimina tildes
   }
 
   async obtenerEstudiantes(

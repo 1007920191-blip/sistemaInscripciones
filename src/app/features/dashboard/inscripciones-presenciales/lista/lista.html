@@ -6,9 +6,48 @@
   <div *ngIf="!cargando">
     <h2>Inscripciones presenciales</h2>
     
-    <button class="btn-nueva" (click)="irANueva()">
-      + Nueva inscripción
-    </button>
+    <div class="header-acciones">
+      <button class="btn-nueva" (click)="irANueva()">
+        + Nueva inscripción
+      </button>
+      
+      <div class="filtros-container">
+        <!-- Buscador -->
+        <div class="search-box">
+          <input 
+            type="text" 
+            [(ngModel)]="terminoBusqueda" 
+            placeholder="Buscar por DNI, Nombres, IE o Cód. Modular..." 
+            (keyup.enter)="onFiltrar()"
+            class="input-search">
+          <button class="btn-buscar" (click)="onFiltrar()" title="Buscar">🔍</button>
+          <button class="btn-limpiar" *ngIf="terminoBusqueda" (click)="limpiarBusqueda()" title="Limpiar búsqueda">✕</button>
+        </div>
+
+        <!-- Selector de fecha -->
+        <div class="filter-item date-filter">
+          <label for="fechaFiltro">Fecha:</label>
+          <input 
+            id="fechaFiltro"
+            type="date" 
+            [(ngModel)]="fechaSeleccionada" 
+            (change)="onFiltrar()"
+            class="input-date">
+        </div>
+
+        <!-- Toggle Ver Todos -->
+        <div class="filter-item toggle-filter">
+          <label class="switch-container">
+            <input 
+              type="checkbox" 
+              [(ngModel)]="verTodos" 
+              (change)="onFiltrar()">
+            <span class="slider round"></span>
+          </label>
+          <span class="toggle-label" (click)="verTodos = !verTodos; onFiltrar()">Ver Históricos</span>
+        </div>
+      </div>
+    </div>
 
     <table class="tabla-inscripciones" *ngIf="inscripciones.length > 0">
       <thead>
@@ -134,16 +173,31 @@
         <table class="tabla-estudiantes">
           <thead>
             <tr>
-              <th>N°</th>
+              <th style="width: 40px; text-align: center;">
+                <input 
+                  type="checkbox" 
+                  [checked]="esTodosSeleccionados()" 
+                  (change)="toggleSeleccionarTodos()"
+                  title="Seleccionar / deseleccionar todos">
+              </th>
+              <th style="width: 50px;">N°</th>
               <th>Nombres y Apellidos</th>
               <th>DNI</th>
               <th>Grado</th>
               <th>Nivel</th>
               <th>Aula Asignada</th>
+              <th style="width: 130px; text-align: center;">Acciones</th>
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let est of estudiantesParaLista; let i = index">
+            <tr *ngFor="let est of estudiantesParaLista; let i = index" [class.seleccionado]="esEstudianteSeleccionado(est.numeroDocumento)">
+              <td style="text-align: center;">
+                <input 
+                  type="checkbox" 
+                  [checked]="esEstudianteSeleccionado(est.numeroDocumento)" 
+                  (change)="toggleSeleccionarEstudiante(est.numeroDocumento)"
+                  *ngIf="est.numeroDocumento">
+              </td>
               <td>{{ i + 1 }}</td>
               <td>{{ est.nombres }} {{ est.apellidos }}</td>
               <td>{{ est.numeroDocumento }}</td>
@@ -153,6 +207,11 @@
                 <span class="badge-aula" *ngIf="est.codigoAula">{{ est.codigoAula }}</span>
                 <span class="badge-sin-aula" *ngIf="!est.codigoAula">Sin aula</span>
               </td>
+              <td style="text-align: center;">
+                <button class="btn-credencial-indiv" (click)="descargarCredencialIndividual(est)" title="Generar credencial individual">
+                  🪪 Imprimir
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -160,10 +219,30 @@
     </div>
 
     <div class="modal-footer">
-      <button class="btn-secundario" (click)="cerrarModalLista()">Cerrar</button>
-      <button class="btn-primario" (click)="descargarPDF()" [disabled]="cargandoLista || estudiantesParaLista.length === 0">
-        📄 Descargar PDF
-      </button>
+      <div class="footer-izq">
+        <span class="seleccionados-count" *ngIf="estudiantesSeleccionados.size > 0">
+          <strong>{{ estudiantesSeleccionados.size }}</strong> estudiantes seleccionados
+        </span>
+      </div>
+      <div class="footer-der">
+        <button class="btn-secundario" (click)="cerrarModalLista()">Cerrar</button>
+        
+        <button 
+          class="btn-pdf-lista" 
+          (click)="descargarPDF()" 
+          [disabled]="cargandoLista || estudiantesParaLista.length === 0"
+          title="Descargar lista de estudiantes en formato tabla">
+          📄 Descargar Lista PDF
+        </button>
+        
+        <button 
+          class="btn-pdf-credenciales" 
+          (click)="descargarCredencialesGrupales()" 
+          [disabled]="cargandoLista || estudiantesSeleccionados.size === 0"
+          title="Generar credenciales tipo tiras de los seleccionados">
+          🪪 Imprimir Credenciales
+        </button>
+      </div>
     </div>
   </div>
 </div>

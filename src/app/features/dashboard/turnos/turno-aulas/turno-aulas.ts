@@ -195,10 +195,14 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
       }
     }
 
-    // Actualizar las aulas con el conteo real
+    // Actualizar las aulas con el conteo real.
+    // asignacion.aulaId = ID del aula original (colección Aulas)
+    // aula.aulaId       = ID del aula original (campo en turnosedicion)
+    // aula.id           = ID del documento en turnosedicion (NO coincide con asignacion.aulaId)
     const aulasActualizadas = this.todasLasAulasActuales.map(aula => ({
   ...aula,
-  inscritos: conteoPorAula.get(aula.id) || 0
+  inscritos: (conteoPorAula.get(aula.aulaId) || 0) +
+             (conteoPorAula.get(aula.id) || 0)
 }));
 
     // Filtrar por el grado seleccionado con trim y case-insensitive
