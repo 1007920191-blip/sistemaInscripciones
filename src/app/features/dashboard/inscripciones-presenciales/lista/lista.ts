@@ -70,18 +70,36 @@ export class Lista implements OnInit {
     try {
       const auth = getAuth(firebaseApp);
       const uidActual = auth.currentUser?.uid || '';
+      const tieneBusqueda = !!this.terminoBusqueda.trim();
 
-      // 1. Firestore filtra SOLO por fecha y usuarioId (sin índices complejos)
-      let resultado: Inscripcion[] = await this.inscripcionService.obtenerInscripcionesFiltradas(
+      // Búsqueda global (sin fecha) vs Búsqueda por fecha exacta
+      // - Si hay búsqueda: ignoramos fecha en Firestore (ignorarFecha = true).
+      // - Si no hay búsqueda: filtramos por fecha (ignorarFecha = false).
+      let rawDocs: Inscripcion[] = await this.inscripcionService.obtenerInscripcionesFiltradas(
         this.fechaSeleccionada,
         uidActual,
-        this.verTodos
+        this.verTodos,
+        tieneBusqueda
       );
 
-      // Si está en modo histórico (verTodos = true), filtramos por la fecha seleccionada en el cliente
-      // de forma compatible con registros con fechaTexto y con fechaInscripcion (Date/Timestamp)
-      if (this.verTodos) {
-        resultado = resultado.filter(ins => {
+      console.log('=== LOGS DETALLADOS DE BÚSQUEDA Y FILTROS ===');
+      console.log('UsuarioId autenticado actual:', uidActual);
+      console.log('Fecha seleccionada en interfaz:', this.fechaSeleccionada);
+      console.log('¿Existe término de búsqueda?:', tieneBusqueda ? `Sí ("${this.terminoBusqueda}")` : 'No');
+      console.log('¿Buscador trabaja sobre la colección completa permitida?:', tieneBusqueda ? 'SÍ (Colección completa filtrada únicamente por usuarioId si no es modo histórico)' : 'NO (Solo sobre los registros de la fecha seleccionada)');
+      console.log('1. Cantidad de registros cargados desde Firestore:', rawDocs.length);
+
+      // Imprimir la estructura de los primeros documentos para ver sus campos raíz (diagnóstico)
+      if (rawDocs.length > 0) {
+        console.log('Estructura muestra del primer documento:', JSON.stringify(rawDocs[0]));
+        console.log('Campos raíz del primer documento:', Object.keys(rawDocs[0]));
+      }
+
+      // Aplicar filtro de fecha en cliente (Solo si NO hay búsqueda activa y estamos en modo histórico)
+      let despuesFecha = [...rawDocs];
+      let descartadosFecha = 0;
+      if (!tieneBusqueda && this.verTodos) {
+        despuesFecha = rawDocs.filter(ins => {
           if (ins.fechaTexto) {
             return ins.fechaTexto === this.fechaSeleccionada;
           }
@@ -95,13 +113,35 @@ export class Lista implements OnInit {
           }
           return false;
         });
+        descartadosFecha = rawDocs.length - despuesFecha.length;
+      } else if (tieneBusqueda) {
+        // Al haber búsqueda activa, se omite el filtro de fecha completamente para localizar el registro
+        descartadosFecha = 0;
+      } else {
+        // Modo normal sin búsqueda: Firestore ya aplicó el filtro de fecha
+        descartadosFecha = 0;
       }
+      console.log('2. Cantidad de registros descartados por filtro de fecha:', descartadosFecha);
+      console.log('3. Cantidad de registros restantes después del filtro de fecha:', despuesFecha.length);
 
-      // 2. Filtro flexible LOCAL en memoria: nombre, colegio, DNI, código modular
-      // Instantáneo, sin índices Firestore, sin lecturas extra
-      if (this.terminoBusqueda.trim()) {
-        resultado = this.inscripcionService.filtrarInscripcionesLocal(resultado, this.terminoBusqueda);
+      // Filtro de usuario en cliente
+      let despuesUsuario = [...despuesFecha];
+      let descartadosUsuario = 0;
+      // Nota: Si verTodos = false, Firestore ya limitó los registros al usuarioId del usuario autenticado actual.
+      // Si verTodos = true (Histórico/Todos), mostramos todos los registros sin filtro de usuario.
+      console.log('4. Cantidad de registros descartados por filtro de usuario:', descartadosUsuario);
+      console.log('5. Cantidad de registros restantes después del filtro de usuario:', despuesUsuario.length);
+
+      // Filtro de búsqueda por texto
+      let resultado = [...despuesUsuario];
+      let descartadosBusqueda = 0;
+      if (tieneBusqueda) {
+        resultado = this.inscripcionService.filtrarInscripcionesLocal(despuesUsuario, this.terminoBusqueda);
+        descartadosBusqueda = despuesUsuario.length - resultado.length;
       }
+      console.log('6. Cantidad de registros descartados por búsqueda de texto:', descartadosBusqueda);
+      console.log('7. Cantidad de registros finales en la lista:', resultado.length);
+      console.log('============================================');
 
       this.inscripciones = resultado;
       this.paginaActual = 1;
@@ -109,7 +149,6 @@ export class Lista implements OnInit {
       console.error('Error al cargar inscripciones:', error);
       this.inscripciones = [];
     } finally {
-      // Siempre liberar loading aunque Firestore falle
       this.cargando = false;
     }
   }

@@ -115,38 +115,62 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private actualizarGradosDelTurno() {
+    let rawGrados: string[] = [];
 
-  if (
-    this.turno.nivelesGrados &&
-    this.turno.nivelesGrados.length > 0
-  ) {
+    if (this.turno.nivelesGrados && this.turno.nivelesGrados.length > 0) {
+      rawGrados = this.turno.nivelesGrados.map(ng => {
+        const g = (ng.grado || '').trim();
+        const n = (ng.nivel || '').trim();
+        
+        // Si el grado ya contiene el nivel, no lo concatenamos de nuevo
+        if (n && g.toUpperCase().includes(n.toUpperCase())) {
+          return g;
+        }
+        // Si el grado ya tiene "PRIMARIA" o "SECUNDARIA" (cualquier variación), retornamos g
+        if (g.toUpperCase().includes('PRIMARIA') || g.toUpperCase().includes('SECUNDARIA')) {
+          return g;
+        }
+        return n ? `${g} ${this.capitalizar(n)}` : g;
+      });
+    } else {
+      rawGrados = (this.turno.grados || []).map(g => {
+        const gradeStr = (g || '').trim();
+        const levelStr = (this.turno.nivel || '').trim();
+        
+        if (levelStr && gradeStr.toUpperCase().includes(levelStr.toUpperCase())) {
+          return gradeStr;
+        }
+        if (gradeStr.toUpperCase().includes('PRIMARIA') || gradeStr.toUpperCase().includes('SECUNDARIA')) {
+          return gradeStr;
+        }
+        return levelStr ? `${gradeStr} ${this.capitalizar(levelStr)}` : gradeStr;
+      });
+    }
 
-    this.gradosDelTurno = [
-      ...new Set(
-        this.turno.nivelesGrados.map(ng =>
-          `${ng.grado} ${ng.nivel}`
-        )
-      )
-    ];
+    // Limpiar duplicados y guardar en gradosDelTurno
+    this.gradosDelTurno = [...new Set(rawGrados)].map(g => g.trim());
 
-  } else {
+    // Validación preventiva de cadenas anómalas
+    this.gradosDelTurno.forEach(g => {
+      const upper = g.toUpperCase();
+      if (
+        (upper.includes('PRIMARIA') && upper.includes('SECUNDARIA')) ||
+        upper.includes('SECUNDARIA PRIMARIA') ||
+        upper.includes('PRIMARIA SECUNDARIA')
+      ) {
+        console.warn(`[WARNING PREVENTIVO] Se detectó una cadena de grado anómala: "${g}" en el turno:`, this.turno);
+      }
+    });
 
-    this.gradosDelTurno = [
-      ...new Set(
-        (this.turno.grados || []).map(g =>
-          `${g} ${this.turno.nivel || ''}`
-        )
-      )
-    ];
+    if (!this.gradosDelTurno.includes(this.gradoSeleccionado)) {
+      this.gradoSeleccionado = this.gradosDelTurno[0] || '';
+    }
   }
 
-  if (
-    !this.gradosDelTurno.includes(this.gradoSeleccionado)
-  ) {
-    this.gradoSeleccionado =
-      this.gradosDelTurno[0] || '';
+  private capitalizar(str: string): string {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
   }
-}
 
   async cargarAulasAsignadas() {
     if (!this.turno || !this.turno.id) return;

@@ -14,7 +14,7 @@
         <label>GRADO *</label>
         <select [(ngModel)]="gradoSeleccionado" (change)="onGradoChange()" class="select-grado">
           <option *ngFor="let grado of gradosDelTurno" [value]="grado">
-            {{ grado.toUpperCase() }} {{ turno.nivel.toUpperCase() }}
+            {{ grado.toUpperCase() }}
           </option>
         </select>
       </div>

@@ -100,18 +100,23 @@ export class InscripcionService {
     });
   }
 
-  async obtenerInscripcionesFiltradas(fechaTexto: string, usuarioId: string, verTodos: boolean = false): Promise<Inscripcion[]> {
+  async obtenerInscripcionesFiltradas(fechaTexto: string, usuarioId: string, verTodos: boolean = false, ignorarFecha: boolean = false): Promise<Inscripcion[]> {
     try {
       let q;
       if (verTodos) {
-        // Modo histórico: carga TODA la colección sin filtro de usuarioId.
-        // Esto es necesario para compatibilidad con documentos anteriores que
-        // no tienen el campo usuarioId (creados antes de la migración).
-        // El filtrado por fecha y por usuario se aplica en el cliente (lista.ts).
+        // Modo histórico: carga TODA la colección sin filtro de usuarioId ni fechaTexto en Firestore.
+        // El filtrado de fecha se realiza localmente en el componente para dar soporte a
+        // documentos viejos sin fechaTexto.
         q = this.inscripcionesRef;
+      } else if (ignorarFecha) {
+        // Modo normal con búsqueda global: se ignorará el filtro de fechaTexto en Firestore
+        // cargando todas las inscripciones del usuario actual para posibilitar búsquedas globales.
+        q = query(
+          this.inscripcionesRef,
+          where('usuarioId', '==', usuarioId)
+        );
       } else {
-        // Modo normal: filtra por fechaTexto exacto Y usuarioId.
-        // Solo funciona con documentos que tengan ambos campos (creados recientemente).
+        // Modo normal por fecha: filtra por fechaTexto exacto Y usuarioId.
         q = query(
           this.inscripcionesRef,
           where('fechaTexto', '==', fechaTexto),
@@ -170,7 +175,13 @@ export class InscripcionService {
       ].filter(Boolean);
       if (camposDirectos.some(c => this.normalizarTexto(String(c)).includes(term))) return true;
 
-      // 3. Array de estudiantes embebido en el documento (si existe)
+      // 3. Campos del estudiante a nivel raíz (si existen directamente en el documento raíz)
+      const nombresRaiz = this.normalizarTexto(data.nombres || data.nombre || '');
+      const apellidosRaiz = this.normalizarTexto(data.apellidos || data.apellido || '');
+      const dniRaiz = this.normalizarTexto(data.numeroDocumento || data.dni || data.documento || '');
+      if (nombresRaiz.includes(term) || apellidosRaiz.includes(term) || dniRaiz.includes(term)) return true;
+
+      // 4. Array de estudiantes embebido en el documento (si existe)
       const estudiantes: any[] = ins.estudiantes || data.estudiantes || [];
       if (estudiantes.length > 0) {
         return estudiantes.some(est => {
