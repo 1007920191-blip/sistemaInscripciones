@@ -7,6 +7,7 @@ import { InscripcionService } from '../../../../services/inscripcion';
 import { ConfiguracionService } from '../../../../services/configuracion';
 import { Inscripcion, Estudiante } from '../../../../models/inscripcion.model';
 import { getAuth } from 'firebase/auth';
+import { getFirestore, doc as firestoreDoc, getDoc } from 'firebase/firestore';
 import { firebaseApp } from '../../../../firebase-config';
 
 @Component({
@@ -415,7 +416,7 @@ export class Lista implements OnInit {
   }
 
   // ============================================
-  // GENERACIÓN DE CREDENCIALES PDF (4 por página A4, tiras verticales)
+  // GENERACIÓN DE CREDENCIALES PDF (Media Hoja A4, Máx 4 por pág, 1 sola columna)
   // ============================================
   async generarCredencialesPDF(estudiantesAImprimir: Estudiante[]) {
     if (!estudiantesAImprimir || estudiantesAImprimir.length === 0) {
@@ -423,10 +424,41 @@ export class Lista implements OnInit {
       return;
     }
 
+    // 0. Validaciones Obligatorias
+    const datosFaltantes = estudiantesAImprimir.some(est => 
+      !est.codigoAula || !this.inscripcionParaLista?.turnoCodigo || !est.grado || !est.nivel
+    );
+
+    if (datosFaltantes) {
+      alert('Error: No se puede generar la credencial. Verifique que todos los estudiantes seleccionados tengan Aula, Turno, Grado y Nivel asignados y guardados en el sistema.');
+      return;
+    }
+
     this.cargandoLista = true;
     try {
+      // 0.5 Obtener Información de Turno y Aulas desde Firestore
+      const db = getFirestore(firebaseApp);
+      let turnoInfo: any = null;
+      if (this.inscripcionParaLista?.turnoId) {
+        const turnoRef = firestoreDoc(db, 'turnos', this.inscripcionParaLista.turnoId);
+        const turnoSnap = await getDoc(turnoRef);
+        if (turnoSnap.exists()) {
+          turnoInfo = turnoSnap.data();
+        }
+      }
+
+      const aulaCache = new Map<string, any>();
+      for (const est of estudiantesAImprimir) {
+        if (est.aulaAsignadaId && !aulaCache.has(est.aulaAsignadaId)) {
+          const aulaRef = firestoreDoc(db, 'turnosedicion', est.aulaAsignadaId);
+          const aulaSnap = await getDoc(aulaRef);
+          if (aulaSnap.exists()) {
+            aulaCache.set(est.aulaAsignadaId, aulaSnap.data());
+          }
+        }
+      }
+
       // 1. Obtener configuración general del sistema
-      // Si falla (Firestore o red), se usan valores por defecto — el PDF continúa igual
       let config: any = null;
       try {
         config = await this.configuracionService.obtenerConfiguracion();
@@ -437,24 +469,24 @@ export class Lista implements OnInit {
       const edicion = config?.edicion || new Date().getFullYear().toString();
       const eslogan = config?.eslogan || 'Edición Especial';
       
-      // 2. Cargar imágenes (cada una tiene timeout 5s y fallback silencioso ante 402/403/CORS)
+      // 2. Cargar imágenes
       const [logoIzquierdoB64, logoDerechoB64, fondoCredencialB64] = await Promise.all([
         this.cargarImagenBase64(config?.logoIzquierdo || ''),
         this.cargarImagenBase64(config?.logoDerecho || ''),
         this.cargarImagenBase64(config?.fondoCredencial || '')
       ]);
 
-      // 3. Crear jsPDF A4 Vertical
+      // 3. Crear jsPDF para media hoja A4 vertical (105mm ancho x 297mm alto)
       const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: 'a4'
+        format: [105, 297]
       });
 
-      const stripWidth = 47;
-      const stripHeight = 287;
-      const spacing = 2.66;
-      const startY = 5;
+      const stripWidth = 95; // Usar el máximo ancho posible dejando 5mm de margen a cada lado
+      const stripHeight = 71; // Aumentado ligeramente para acomodar más info
+      const spacing = 2; // Espacio entre credenciales reducido para encajar 4
+      const startY = 3;
       const startX = 5;
 
       const totalEstudiantes = estudiantesAImprimir.length;
@@ -463,12 +495,21 @@ export class Lista implements OnInit {
         const est = estudiantesAImprimir[index];
         const posEnPagina = index % 4;
         
+        // Paginación automática tras 4 credenciales
         if (index > 0 && posEnPagina === 0) {
           doc.addPage();
         }
 
-        const x = startX + posEnPagina * (stripWidth + spacing);
-        const y = startY;
+        const x = startX; // Una sola columna
+        const y = startY + posEnPagina * (stripHeight + spacing);
+
+        const aulaInfo = est.aulaAsignadaId ? aulaCache.get(est.aulaAsignadaId) : null;
+        const sedeVal = aulaInfo?.local || aulaInfo?.sede || '—';
+        const pabellonVal = aulaInfo?.pabellon || '—';
+        const pisoVal = aulaInfo?.piso || '—';
+        const puertaVal = aulaInfo?.puertaAcceso || '—';
+        const ingresoVal = turnoInfo?.horaInicioEntrada || '—';
+        const examenVal = turnoInfo?.horaInicioPrueba || '—';
 
         // Borde y Fondo de Credencial
         if (fondoCredencialB64) {
@@ -479,181 +520,203 @@ export class Lista implements OnInit {
           doc.setLineWidth(0.8);
           doc.roundedRect(x, y, stripWidth, stripHeight, 3, 3, 'FD');
 
+          // Header azul
           doc.setFillColor(0, 92, 191);
-          doc.rect(x + 0.4, y + 0.4, stripWidth - 0.8, 22, 'F');
+          doc.rect(x + 0.4, y + 0.4, stripWidth - 0.8, 16, 'F');
           
+          // Pie rojo
           doc.setFillColor(220, 53, 69);
           doc.rect(x + 0.4, y + stripHeight - 6.4, stripWidth - 0.8, 6, 'F');
         }
 
         // Logos de Cabecera
         if (logoIzquierdoB64) {
-          doc.addImage(logoIzquierdoB64, 'PNG', x + 3, y + 4, 10, 10);
+          doc.addImage(logoIzquierdoB64, 'PNG', x + 3, y + 2, 12, 12);
         } else {
           doc.setFillColor(255, 255, 255, 0.2);
-          doc.circle(x + 8, y + 9, 5, 'F');
+          doc.circle(x + 9, y + 8, 6, 'F');
         }
 
         if (logoDerechoB64) {
-          doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 13, y + 4, 10, 10);
+          doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 15, y + 2, 12, 12);
         } else {
           doc.setFillColor(255, 255, 255, 0.2);
-          doc.circle(x + stripWidth - 8, y + 9, 5, 'F');
+          doc.circle(x + stripWidth - 9, y + 8, 6, 'F');
         }
 
         // Texto Cabecera
         doc.setTextColor(255, 255, 255);
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(6.5);
-        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 8, { align: 'center', maxWidth: 22 });
+        doc.setFontSize(8.5);
+        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 7, { align: 'center', maxWidth: stripWidth - 32 });
         
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(4.5);
-        doc.text(`${eslogan} - EDICIÓN ${edicion}`, x + stripWidth / 2, y + 16, { align: 'center', maxWidth: 22 });
+        doc.setFontSize(6);
+        doc.text(`${eslogan} - EDICIÓN ${edicion}`, x + stripWidth / 2, y + 12, { align: 'center', maxWidth: stripWidth - 32 });
 
-        // Tarjeta Blanca de Datos
+        // Tarjeta Blanca de Datos (Zona principal)
         const rectX = x + 3;
-        const rectY = y + 26;
+        const rectY = y + 17;
         const rectW = stripWidth - 6; 
-        const rectH = 135;
+        const rectH = 47;
 
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(220, 224, 230);
         doc.setLineWidth(0.3);
-        doc.roundedRect(rectX, rectY, rectW, rectH, 3, 3, 'FD');
+        doc.roundedRect(rectX, rectY, rectW, rectH, 2, 2, 'FD');
 
+        // Título Credencial
         doc.setTextColor(0, 92, 191);
         doc.setFontSize(8.5);
         doc.setFont('Helvetica', 'bold');
-        doc.text('CREDENCIAL OFICIAL', rectX + rectW / 2, rectY + 6, { align: 'center' });
+        doc.text('CREDENCIAL OFICIAL', rectX + rectW / 2, rectY + 4.5, { align: 'center' });
 
         doc.setDrawColor(230, 235, 240);
-        doc.line(rectX + 4, rectY + 9, rectX + rectW - 4, rectY + 9);
+        doc.line(rectX + 4, rectY + 6.5, rectX + rectW - 4, rectY + 6.5);
 
         // Estudiante
         doc.setTextColor(100, 110, 120);
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(5.5);
-        doc.text('ESTUDIANTE:', rectX + 4, rectY + 14);
+        doc.text('ESTUDIANTE:', rectX + 4, rectY + 10);
 
         doc.setTextColor(33, 37, 41);
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(8);
+        doc.setFontSize(8.5);
         const nomCompleto = `${est.nombres || ''} ${est.apellidos || ''}`.trim().toUpperCase();
-        doc.text(nomCompleto, rectX + 4, rectY + 19, { maxWidth: rectW - 8 });
+        doc.text(nomCompleto, rectX + 4, rectY + 14, { maxWidth: rectW - 28 });
 
         // DNI
         doc.setTextColor(100, 110, 120);
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5.5);
-        doc.text('DNI / DOCUMENTO DE IDENTIDAD:', rectX + 4, rectY + 31);
+        doc.setFontSize(5);
+        doc.text('DNI / DOC:', rectX + 4, rectY + 18);
         
         doc.setTextColor(33, 37, 41);
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.text(est.numeroDocumento || '—', rectX + 4, rectY + 36);
+        doc.setFontSize(7);
+        doc.text(est.numeroDocumento || '—', rectX + 4, rectY + 21.5);
 
         // Colegio
         doc.setTextColor(100, 110, 120);
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5.5);
-        doc.text('INSTITUCIÓN EDUCATIVA:', rectX + 4, rectY + 44);
+        doc.setFontSize(5);
+        doc.text('INSTITUCIÓN EDUCATIVA:', rectX + 24, rectY + 18);
 
         doc.setTextColor(33, 37, 41);
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(7.5);
+        doc.setFontSize(7);
         const colNombre = (est.colegio?.IE || this.inscripcionParaLista?.colegio?.IE || 'N/A').toUpperCase();
-        doc.text(colNombre, rectX + 4, rectY + 49, { maxWidth: rectW - 8 });
+        doc.text(colNombre, rectX + 24, rectY + 21.5, { maxWidth: rectW - 48 });
 
         // Grado y Nivel
         doc.setTextColor(100, 110, 120);
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5.5);
-        doc.text('GRADO Y NIVEL:', rectX + 4, rectY + 62);
+        doc.setFontSize(5);
+        doc.text('GRADO Y NIVEL:', rectX + 4, rectY + 26.5);
 
         doc.setTextColor(33, 37, 41);
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(7.5);
+        doc.setFontSize(7);
         const gradNivel = `${est.grado || '—'} - ${est.nivel || '—'}`.toUpperCase();
-        doc.text(gradNivel, rectX + 4, rectY + 67, { maxWidth: rectW - 8 });
+        doc.text(gradNivel, rectX + 4, rectY + 30, { maxWidth: rectW - 28 });
 
-        doc.setDrawColor(230, 235, 240);
-        doc.line(rectX + 4, rectY + 74, rectX + rectW - 4, rectY + 74);
+        // Separador logístico
+        doc.setDrawColor(240, 240, 240);
+        doc.line(rectX + 4, rectY + 33, rectX + rectW - 24, rectY + 33);
 
-        // Asignación de Aula y Turno
-        const badgeY = rectY + 78;
-        const badgeW = 16;
-        const badgeH = 13;
+        // SEDE
+        doc.setTextColor(100, 110, 120);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(5);
+        doc.text('SEDE:', rectX + 4, rectY + 36.5);
+        doc.setTextColor(33, 37, 41);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.text(sedeVal.toUpperCase(), rectX + 12, rectY + 36.5, { maxWidth: rectW - 38 });
 
+        // Puerta, Pabellon, Piso
+        doc.setTextColor(100, 110, 120);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(5);
+        doc.text('PUERTA:', rectX + 4, rectY + 41);
+        doc.setTextColor(33, 37, 41);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.text(String(puertaVal), rectX + 15, rectY + 41);
+
+        doc.setTextColor(100, 110, 120);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(5);
+        doc.text('PABELLÓN:', rectX + 24, rectY + 41);
+        doc.setTextColor(33, 37, 41);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.text(String(pabellonVal), rectX + 38, rectY + 41);
+
+        doc.setTextColor(100, 110, 120);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(5);
+        doc.text('PISO:', rectX + 46, rectY + 41);
+        doc.setTextColor(33, 37, 41);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.text(String(pisoVal), rectX + 53, rectY + 41);
+
+        // Horarios
+        doc.setTextColor(100, 110, 120);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(5);
+        doc.text('INGRESO:', rectX + 4, rectY + 45.5);
+        doc.setTextColor(33, 37, 41);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.text(String(ingresoVal), rectX + 16, rectY + 45.5);
+
+        doc.setTextColor(100, 110, 120);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(5);
+        doc.text('EXAMEN:', rectX + 32, rectY + 45.5);
+        doc.setTextColor(33, 37, 41);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.text(String(examenVal), rectX + 43, rectY + 45.5);
+
+        // ===================================
+        // Asignación de Aula y Turno (Badges en la derecha)
+        // ===================================
+        const badgeX = rectX + rectW - 22; // A la derecha
+        
+        // AULA
+        const badgeY1 = rectY + 12;
         doc.setFillColor(0, 92, 191); 
-        doc.roundedRect(rectX + 3, badgeY, badgeW, badgeH, 1, 1, 'F');
-        
+        doc.roundedRect(badgeX, badgeY1, 18, 14, 1, 1, 'F');
         doc.setTextColor(255, 255, 255);
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(4.5);
-        doc.text('AULA', rectX + 3 + badgeW / 2, badgeY + 4, { align: 'center' });
-        
+        doc.setFontSize(5);
+        doc.text('AULA', badgeX + 9, badgeY1 + 5, { align: 'center' });
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.text(est.codigoAula || 'PEND', rectX + 3 + badgeW / 2, badgeY + 10, { align: 'center' });
+        doc.setFontSize(9);
+        doc.text(est.codigoAula || 'PEND', badgeX + 9, badgeY1 + 11, { align: 'center' });
 
+        // TURNO
+        const badgeY2 = rectY + 29;
         doc.setFillColor(40, 167, 69); 
-        doc.roundedRect(rectX + 22, badgeY, badgeW, badgeH, 1, 1, 'F');
-
+        doc.roundedRect(badgeX, badgeY2, 18, 14, 1, 1, 'F');
         doc.setTextColor(255, 255, 255);
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(4.5);
-        doc.text('TURNO', rectX + 22 + badgeW / 2, badgeY + 4, { align: 'center' });
-
+        doc.setFontSize(5);
+        doc.text('TURNO', badgeX + 9, badgeY2 + 5, { align: 'center' });
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(7.5);
+        doc.setFontSize(9);
         const turnoCod = this.inscripcionParaLista?.turnoCodigo || 'T—';
-        doc.text(turnoCod, rectX + 22 + badgeW / 2, badgeY + 10, { align: 'center' });
+        doc.text(turnoCod, badgeX + 9, badgeY2 + 11, { align: 'center' });
 
-        // Mensaje Aula
-        doc.setTextColor(220, 53, 69);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(5);
-        doc.text('¡REVISA TU AULA Y MESA ASIGNADA!', rectX + rectW / 2, rectY + 98, { align: 'center' });
-
-        // Código de barras vectorial
-        const barcodeX = rectX + 4;
-        const barcodeY = rectY + 104;
-        const barcodeW = rectW - 8;
-        const barcodeH = 14;
-
-        doc.setDrawColor(210, 215, 220);
-        doc.setLineWidth(0.2);
-        doc.rect(barcodeX - 2, barcodeY - 2, barcodeW + 4, barcodeH + 5);
-
-        doc.setDrawColor(0, 0, 0);
-        let currX = barcodeX;
-        const dniText = est.numeroDocumento || '00000000';
-        const numDNI = dniText.replace(/\D/g, '');
-        const seedPattern = numDNI.split('').map(x => parseInt(x) % 3 + 1);
-        while(seedPattern.length < 16) {
-          seedPattern.push(2);
-        }
-        seedPattern.forEach((w, k) => {
-          doc.setLineWidth(w * 0.4);
-          doc.line(currX, barcodeY, currX, barcodeY + barcodeH);
-          currX += w * 0.6 + 0.4;
-        });
-
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(4.5);
-        doc.setTextColor(80, 90, 100);
-        doc.text(`*${dniText}*`, rectX + rectW / 2, barcodeY + barcodeH + 2.2, { align: 'center' });
-
-        doc.setFont('Helvetica', 'italic');
-        doc.setFontSize(4);
-        doc.text('Presentar esta credencial impresa obligatoriamente el día del evento.', rectX + rectW / 2, rectY + 127, { align: 'center', maxWidth: rectW - 6 });
-
-        // Pie de Credencial
+        // Pie de Credencial (Indicación Institucional)
         doc.setTextColor(255, 255, 255);
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(5);
-        doc.text('ORGANIZACIÓN DEL CONCURSO DE MATEMÁTICA', x + stripWidth / 2, y + stripHeight - 2.5, { align: 'center' });
+        doc.setFontSize(6);
+        doc.text('PRESENTAR ESTA CREDENCIAL IMPRESA EL DÍA DEL EVENTO', x + stripWidth / 2, y + stripHeight - 2.5, { align: 'center' });
       }
 
       const ieNombre = (this.inscripcionParaLista?.colegio?.IE || 'Credenciales').replace(/\s+/g, '_');
