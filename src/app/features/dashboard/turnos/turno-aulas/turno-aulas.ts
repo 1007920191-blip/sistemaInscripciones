@@ -7,6 +7,8 @@ import { AulaService } from '../../../../services/aula.service';
 import { Turno, AulaTurnoDisplay, TurnoAulaAsignada } from '../../../../models/turno.model';
 import { Aula } from '../../../../models/aula.model';
 import { InscripcionService } from '../../../../services/inscripcion';
+import { ConfiguracionService } from '../../../../services/configuracion';
+import { jsPDF } from 'jspdf';
 
 @Component({
   selector: 'app-turno-aulas',
@@ -99,6 +101,7 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
     private turnoAulaService: TurnoAulaService,
     private aulaService: AulaService,
     private inscripcionService: InscripcionService,
+    private configuracionService: ConfiguracionService,
     private ngZone: NgZone
   ) {}
 
@@ -377,7 +380,224 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
 
   cerrarModalEditar() {
     this.mostrarModalEditar = false;
-    this.resetAulaEditando();
+  }
+
+  // ============================================
+  // GENERAR LISTA DE INSCRITOS (PDF)
+  // ============================================
+  async generarListaPDF(aula: AulaTurnoDisplay) {
+    if (!aula.inscritos || aula.inscritos === 0) {
+      alert('No existen inscritos asignados a esta aula para generar la lista.');
+      return;
+    }
+
+    this.cargando = true;
+    try {
+      // 1. Cargar Configuración
+      let config: any = null;
+      try {
+        config = await this.configuracionService.obtenerConfiguracion();
+      } catch (e) {
+        console.warn('No se pudo cargar la configuración para el PDF');
+      }
+
+      const nombreConcurso = config?.nombreConcurso || 'CONCURSO NACIONAL';
+      const edicion = config?.edicion || new Date().getFullYear().toString();
+      const eslogan = config?.eslogan || '';
+      
+      const [logoIzquierdoB64, logoDerechoB64] = await Promise.all([
+        this.cargarImagenBase64(config?.logoIzquierdo || ''),
+        this.cargarImagenBase64(config?.logoDerecho || '')
+      ]);
+
+      // 2. Extraer estudiantes validando inscripcionesActuales
+      const inscripcionesRelacionadas = this.inscripcionesActuales.filter(ins => 
+        ins.asignacionesAula?.some((asig: any) => asig.aulaId === aula.aulaId || asig.aulaId === aula.id)
+      );
+
+      const estudiantesFinales: any[] = [];
+      
+      for (const ins of inscripcionesRelacionadas) {
+        if (ins.id) {
+          const estudiantes = await this.inscripcionService.obtenerEstudiantes(ins.id);
+          for (const est of estudiantes) {
+            if (est.aulaAsignadaId === aula.aulaId || est.aulaAsignadaId === aula.id) {
+              
+              if (est.grado?.trim().toUpperCase() !== aula.grado?.trim().toUpperCase() || 
+                  est.nivel?.trim().toUpperCase() !== aula.nivel?.trim().toUpperCase()) {
+                console.warn(`[WARNING] Estudiante asignado incorrectamente al aula: ${est.numeroDocumento}`);
+              }
+              
+              estudiantesFinales.push({
+                ...est,
+                colegioObj: est.colegio || ins.colegio
+              });
+            }
+          }
+        }
+      }
+
+      // Ordenar alfabéticamente por apellidos
+      estudiantesFinales.sort((a, b) => {
+        const nomA = `${a.apellidos || ''} ${a.nombres || ''}`.trim().toLowerCase();
+        const nomB = `${b.apellidos || ''} ${b.nombres || ''}`.trim().toLowerCase();
+        return nomA.localeCompare(nomB);
+      });
+
+      // 3. Generar PDF
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      const drawHeader = () => {
+        // Logos
+        if (logoIzquierdoB64) {
+          doc.addImage(logoIzquierdoB64, 'PNG', 15, 10, 18, 18);
+        }
+        if (logoDerechoB64) {
+          doc.addImage(logoDerechoB64, 'PNG', pageWidth - 33, 10, 18, 18);
+        }
+
+        doc.setTextColor(33, 37, 41);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.text(nombreConcurso.toUpperCase(), pageWidth / 2, 16, { align: 'center' });
+        
+        doc.setFontSize(9);
+        doc.text(`${eslogan} - ${edicion}`.toUpperCase(), pageWidth / 2, 22, { align: 'center' });
+        
+        doc.setFontSize(9);
+        doc.text(`SEDE: ${aula.sede || this.SEDE_DEFAULT}`, pageWidth / 2, 28, { align: 'center' });
+
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text('LISTA DE INSCRITOS', pageWidth / 2, 38, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.text(`TURNO: ${this.turno.codigo}`, 20, 50);
+        doc.text(`AULA: ${aula.codigoAula}`, 80, 50);
+        doc.text(`GRADO: ${aula.grado.toUpperCase()} ${aula.nivel.toUpperCase()}`, 140, 50);
+
+        doc.setFillColor(240, 240, 240);
+        doc.rect(15, 55, pageWidth - 30, 8, 'F');
+        doc.setDrawColor(0, 0, 0);
+        doc.rect(15, 55, pageWidth - 30, 8, 'S');
+
+        doc.setFontSize(9);
+        doc.text('N°', 17, 60);
+        doc.text('DNI', 28, 60);
+        doc.text('APELLIDOS Y NOMBRES', 52, 60);
+        doc.text('GRADO', 142, 60);
+        doc.text('NIVEL', 167, 60);
+        doc.text('IE', 197, 60);
+        doc.text('GESTIÓN', 262, 60);
+      };
+
+      const rowHeight = 7;
+      let currentY = 63;
+      let studentIndex = 0;
+      
+      drawHeader();
+
+      estudiantesFinales.forEach((est) => {
+        if (currentY > 190) {
+          doc.addPage();
+          currentY = 63;
+          drawHeader();
+        }
+
+        const num = (studentIndex + 1).toString();
+        const dni = est.numeroDocumento || '—';
+        const nombres = `${est.apellidos || ''} ${est.nombres || ''}`.trim().toUpperCase();
+        const grado = est.grado?.toUpperCase() || '—';
+        const nivel = est.nivel?.toUpperCase() || '—';
+        const ie = (est.colegioObj?.IE || '—').toUpperCase();
+        const gestion = (est.colegioObj?.GESTION || est.colegioObj?.gestion || '—').toUpperCase();
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        
+        doc.rect(15, currentY, pageWidth - 30, rowHeight, 'S');
+        
+        doc.line(26, currentY, 26, currentY + rowHeight);
+        doc.line(50, currentY, 50, currentY + rowHeight);
+        doc.line(140, currentY, 140, currentY + rowHeight);
+        doc.line(165, currentY, 165, currentY + rowHeight);
+        doc.line(195, currentY, 195, currentY + rowHeight);
+        doc.line(260, currentY, 260, currentY + rowHeight);
+
+        doc.text(num, 17, currentY + 5);
+        doc.text(dni, 28, currentY + 5);
+        doc.text(nombres.substring(0, 50), 52, currentY + 5);
+        doc.text(grado.substring(0, 15), 142, currentY + 5);
+        doc.text(nivel.substring(0, 15), 167, currentY + 5);
+        doc.text(ie.substring(0, 40), 197, currentY + 5);
+        doc.text(gestion.substring(0, 15), 262, currentY + 5);
+
+        currentY += rowHeight;
+        studentIndex++;
+      });
+
+      const totalPgs = doc.getNumberOfPages();
+      for (let i = 1; i <= totalPgs; i++) {
+        doc.setPage(i);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.text(`Página ${i} de ${totalPgs}`, pageWidth - 15, pageHeight - 10, { align: 'right' });
+      }
+
+      doc.save(`Lista_Aula_${aula.codigoAula}_${this.turno.codigo}.pdf`);
+      
+    } catch (error) {
+      console.error('Error al generar lista PDF:', error);
+      alert('Ocurrió un error al generar la lista.');
+    } finally {
+      this.cargando = false;
+    }
+  }
+
+  private cargarImagenBase64(url: string): Promise<string | null> {
+    if (!url) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      let timeoutId: any;
+
+      img.onload = () => {
+        clearTimeout(timeoutId);
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            const dataURL = canvas.toDataURL('image/png');
+            resolve(dataURL);
+          } else {
+            resolve(null);
+          }
+        } catch {
+          resolve(null);
+        }
+      };
+
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        resolve(null);
+      };
+
+      timeoutId = setTimeout(() => {
+        img.src = '';
+        resolve(null);
+      }, 5000);
+
+      img.src = url;
+    });
   }
 
   resetAulaEditando() {
