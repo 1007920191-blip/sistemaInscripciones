@@ -8,6 +8,7 @@ import { Turno, AulaTurnoDisplay, TurnoAulaAsignada } from '../../../../models/t
 import { Aula } from '../../../../models/aula.model';
 import { InscripcionService } from '../../../../services/inscripcion';
 import { ConfiguracionService } from '../../../../services/configuracion';
+import { ImpresionService } from '../../../../services/impresion';
 import { jsPDF } from 'jspdf';
 
 @Component({
@@ -40,6 +41,12 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
   // Estados de modales
   mostrarModalAsignar: boolean = false;
   mostrarModalEditar: boolean = false;
+  
+  // Impresión
+  mostrarModalImpresion: boolean = false;
+  tipoImpresion: 'TARJETA' | 'CARTILLA' = 'TARJETA';
+  alternativasImpresion: number = 4;
+  aulaParaImpresion?: AulaTurnoDisplay;
   
   // Aula en edición (todos los campos editables)
   aulaEditando: AulaTurnoDisplay = {
@@ -102,6 +109,7 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
     private aulaService: AulaService,
     private inscripcionService: InscripcionService,
     private configuracionService: ConfiguracionService,
+    private impresionService: ImpresionService,
     private ngZone: NgZone
   ) {}
 
@@ -380,6 +388,79 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
 
   cerrarModalEditar() {
     this.mostrarModalEditar = false;
+  }
+
+  // ============================================
+  // GENERAR TARJETAS / CARTILLAS
+  // ============================================
+
+  abrirModalImpresion(aula: AulaTurnoDisplay) {
+    if (!aula.inscritos || aula.inscritos === 0) {
+      alert('No existen inscritos asignados a esta aula.');
+      return;
+    }
+    this.aulaParaImpresion = aula;
+    this.tipoImpresion = 'TARJETA';
+    this.alternativasImpresion = 4;
+    this.mostrarModalImpresion = true;
+  }
+
+  cerrarModalImpresion() {
+    this.mostrarModalImpresion = false;
+    this.aulaParaImpresion = undefined;
+  }
+
+  async confirmarImpresion() {
+    if (!this.aulaParaImpresion) return;
+    
+    this.cargandoModal = true;
+    try {
+      let config: any = null;
+      try {
+        config = await this.configuracionService.obtenerConfiguracion();
+      } catch (e) {
+        console.warn('No se pudo cargar la configuración para la impresión');
+      }
+
+      const inscripcionesRelacionadas = this.inscripcionesActuales.filter(ins => 
+        ins.asignacionesAula?.some((asig: any) => asig.aulaId === this.aulaParaImpresion!.aulaId || asig.aulaId === this.aulaParaImpresion!.id)
+      );
+
+      const estudiantesFinales: any[] = [];
+      
+      for (const ins of inscripcionesRelacionadas) {
+        if (ins.id) {
+          const estudiantes = await this.inscripcionService.obtenerEstudiantes(ins.id);
+          for (const est of estudiantes) {
+            if (est.aulaAsignadaId === this.aulaParaImpresion!.aulaId || est.aulaAsignadaId === this.aulaParaImpresion!.id) {
+              estudiantesFinales.push({
+                ...est,
+                colegioObj: est.colegio || ins.colegio
+              });
+            }
+          }
+        }
+      }
+
+      estudiantesFinales.sort((a, b) => {
+        const nomA = `${a.apellidos || ''} ${a.nombres || ''}`.trim().toLowerCase();
+        const nomB = `${b.apellidos || ''} ${b.nombres || ''}`.trim().toLowerCase();
+        return nomA.localeCompare(nomB);
+      });
+
+      if (this.tipoImpresion === 'TARJETA') {
+        await this.impresionService.generarTarjetas(estudiantesFinales, this.aulaParaImpresion, this.turno, config);
+      } else {
+        await this.impresionService.generarCartillas(estudiantesFinales, this.aulaParaImpresion, this.turno, config, this.alternativasImpresion);
+      }
+      
+      this.cerrarModalImpresion();
+    } catch (error) {
+      console.error('Error al generar impresión:', error);
+      alert('Ocurrió un error al generar el documento.');
+    } finally {
+      this.cargandoModal = false;
+    }
   }
 
   // ============================================

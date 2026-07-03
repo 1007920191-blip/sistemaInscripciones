@@ -95,6 +95,13 @@
                 📋
               </button>
               <button 
+                class="btn-accion btn-imprimir" 
+                (click)="abrirModalImpresion(aula)"
+                title="Generar Cartilla/Tarjeta"
+                type="button">
+                🖨️
+              </button>
+              <button 
                 class="btn-accion btn-eliminar" 
                 (click)="eliminarAsignacion(aula)"
                 title="Eliminar"
@@ -302,5 +309,42 @@
       </button>
     </div>
 
+  </div>
+</div>
+
+<!-- Modal Generar Cartilla / Tarjeta -->
+<div class="modal-overlay modal-asignar" *ngIf="mostrarModalImpresion" (click)="cerrarModalImpresion()">
+  <div class="modal-content modal-form" (click)="$event.stopPropagation()" style="max-width: 400px;">
+    
+    <div class="header">
+      <h2>OPCIONES DE IMPRESIÓN</h2>
+      <button class="btn-cerrar" (click)="cerrarModalImpresion()" type="button">×</button>
+    </div>
+
+    <div class="form-container">
+      <div class="campo campo-full">
+        <label>TIPO DE IMPRESIÓN</label>
+        <div style="display: flex; gap: 1rem; margin-top: 0.5rem; justify-content: center; align-items: center; padding: 10px;">
+          <label style="cursor: pointer;">
+            <input type="radio" name="tipoImpresion" value="TARJETA" [(ngModel)]="tipoImpresion"> Tarjeta
+          </label>
+          <label style="cursor: pointer;">
+            <input type="radio" name="tipoImpresion" value="CARTILLA" [(ngModel)]="tipoImpresion"> Cartilla
+          </label>
+        </div>
+      </div>
+
+      <div class="campo campo-full" *ngIf="tipoImpresion === 'CARTILLA'">
+        <label>CANTIDAD DE ALTERNATIVAS *</label>
+        <input type="number" [(ngModel)]="alternativasImpresion" min="2" max="5" class="input-busqueda" style="width: 100%;">
+      </div>
+
+      <div class="botones" style="margin-top: 2rem;">
+        <button class="btn-cancelar" (click)="cerrarModalImpresion()" type="button" [disabled]="cargandoModal" style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Cancelar</button>
+        <button class="btn-guardar" (click)="confirmarImpresion()" type="button" [disabled]="cargandoModal">
+          {{ cargandoModal ? 'Generando...' : 'Aceptar' }}
+        </button>
+      </div>
+    </div>
   </div>
 </div>
