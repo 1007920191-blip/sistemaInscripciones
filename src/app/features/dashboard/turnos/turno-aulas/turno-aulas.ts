@@ -435,7 +435,8 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
             if (est.aulaAsignadaId === this.aulaParaImpresion!.aulaId || est.aulaAsignadaId === this.aulaParaImpresion!.id) {
               estudiantesFinales.push({
                 ...est,
-                colegioObj: est.colegio || ins.colegio
+                colegioObj: est.colegio || ins.colegio,
+                inscripcionId: ins.id
               });
             }
           }

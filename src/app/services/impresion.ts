@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import { jsPDF } from 'jspdf';
 import { AulaTurnoDisplay, Turno } from '../models/turno.model';
+import * as QRCode from 'qrcode';
+import JsBarcode from 'jsbarcode';
 
 @Injectable({
   providedIn: 'root'
@@ -80,13 +82,16 @@ export class ImpresionService {
       doc.setFontSize(20);
       doc.text(aula.codigoAula || '—', xactual + 8, yactual + 63);
 
-      doc.setDrawColor(200, 200, 200);
-      doc.rect(xactual, yactual + 20, 35, 35, 'S');
-      doc.setFontSize(7);
-      doc.text('QR AQUI', xactual + 10, yactual + 37);
+      const textToEncode = `${edicion.NOMBRE}/${config?.edicion || ''}/${aula.sede || ''}/${turno.codigo}/${aula.codigoAula}/${est.inscripcionId || 'N/A'}/${est.id || 'N/A'}/${est.nombres || 'N/A'}/${est.apellidos || 'N/A'}`;
+      const qr = await QRCode.toDataURL(textToEncode, { errorCorrectionLevel: 'M' });
+      const qrSize = 35;
+      
+      doc.setDrawColor(0, 0, 0);
+      doc.rect(xactual - 0.5, yactual + 20 - 0.5, qrSize + 1, qrSize + 1, 'S');
+      doc.addImage(qr, 'JPEG', xactual, yactual + 20, qrSize, qrSize);
 
-      doc.rect(xactual + 50, yactual + 52, 40, 13, 'S');
-      doc.text('BARCODE', xactual + 65, yactual + 59);
+      const barcodeDataUrl = this.generateBarcode(est.id || 'SIN_ID');
+      doc.addImage(barcodeDataUrl, 'PNG', xactual + 50, yactual + 52, 40, 13);
 
       if ((x + 1) % 2 === 0) {
         yactual = yactual + incy;
@@ -154,10 +159,16 @@ export class ImpresionService {
       doc.text(nombre, centerX / 2 + desplazamientox, inicioy + 6, { align: 'center' });
       doc.text(slogan, centerX / 2 + desplazamientox, inicioy + 12, { align: 'center' });
 
-      doc.setDrawColor(200, 200, 200);
-      doc.rect(20 + desplazamientox, 28, 36, 36, 'S');
-      doc.text('QR AQUI', 30 + desplazamientox, 45);
+      const textToEncode = `${nombre}/${config?.edicion || ''}/${aula.sede || ''}/${turno.codigo}/${aula.codigoAula}/${est.inscripcionId || 'N/A'}/${est.id || 'N/A'}/${est.nombres || 'N/A'}/${est.apellidos || 'N/A'}`;
+      const qr = await QRCode.toDataURL(textToEncode, { errorCorrectionLevel: 'M' });
+      const qrSize = 35;
+      const qrX = 20;
+      const qrY = 28;
+
       doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.75);
+      doc.rect(qrX + desplazamientox, qrY, qrSize + 1, qrSize + 1, 'S');
+      doc.addImage(qr, 'JPEG', qrX + desplazamientox + 0.5, qrY + 0.5, qrSize, qrSize);
 
       doc.text('CARTILLA DE RESPUESTAS', centerX / 2 + 35 + desplazamientox, 30, { align: 'center' });
       doc.text(`TURNO: ${turno.codigo}`, centerX / 2 - 5 + desplazamientox, 40, { align: 'center' });
@@ -265,5 +276,13 @@ export class ImpresionService {
 
       img.src = url;
     });
+  }
+
+  private generateBarcode(text: string): string {
+    const canvas = document.createElement('canvas');
+    JsBarcode(canvas, text, {
+      format: 'CODE128',
+    });
+    return canvas.toDataURL('image/png');
   }
 }

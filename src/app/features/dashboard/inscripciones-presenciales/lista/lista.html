@@ -186,7 +186,7 @@
               <th>Grado</th>
               <th>Nivel</th>
               <th>Aula Asignada</th>
-              <th style="width: 130px; text-align: center;">Acciones</th>
+              <th style="width: 160px; text-align: center;">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -209,7 +209,11 @@
               </td>
               <td style="text-align: center;">
                 <button class="btn-credencial-indiv" (click)="descargarCredencialIndividual(est)" title="Generar credencial individual">
-                  🪪 Imprimir
+                  🪪 Credencial
+                </button>
+                <button class="btn-credencial-indiv" (click)="abrirModalImpresionIndividual(est)" title="Imprimir Tarjeta o Cartilla"
+                  style="background: #6c5ce7; margin-top: 4px;">
+                  🖨️
                 </button>
               </td>
             </tr>
@@ -240,7 +244,54 @@
           (click)="descargarCredencialesGrupales()" 
           [disabled]="cargandoLista || estudiantesSeleccionados.size === 0"
           title="Generar credenciales tipo tiras de los seleccionados">
-          🪪 Imprimir Credenciales
+          🪪 Credenciales
+        </button>
+
+        <button 
+          class="btn-pdf-credenciales"
+          (click)="abrirModalImpresionGrupal()"
+          [disabled]="cargandoLista || estudiantesSeleccionados.size === 0"
+          title="Generar Tarjeta o Cartilla de los seleccionados"
+          style="background: #6c5ce7;">
+          🖨️ Cartillas
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Imprimir Tarjeta / Cartilla (individual o grupal) -->
+<div class="modal-overlay modal-asignar" *ngIf="mostrarModalImpresionIndividual" (click)="cerrarModalImpresionIndividual()">
+  <div class="modal-content modal-form" (click)="$event.stopPropagation()" style="max-width: 400px;">
+
+    <div class="header">
+      <h2 style="color: #000; font-weight: 700;">OPCIONES DE IMPRESIÓN</h2>
+      <button class="btn-cerrar" (click)="cerrarModalImpresionIndividual()" type="button">×</button>
+    </div>
+
+    <div class="form-container">
+      <div class="campo campo-full">
+        <label>TIPO DE IMPRESIÓN</label>
+        <div style="display: flex; gap: 1rem; margin-top: 0.5rem; justify-content: center; align-items: center; padding: 10px;">
+          <label style="cursor: pointer;">
+            <input type="radio" name="tipoImpresionLista" value="TARJETA" [(ngModel)]="tipoImpresionIndividual"> Tarjeta
+          </label>
+          <label style="cursor: pointer;">
+            <input type="radio" name="tipoImpresionLista" value="CARTILLA" [(ngModel)]="tipoImpresionIndividual"> Cartilla
+          </label>
+        </div>
+      </div>
+
+      <div class="campo campo-full" *ngIf="tipoImpresionIndividual === 'CARTILLA'">
+        <label>CANTIDAD DE ALTERNATIVAS *</label>
+        <input type="number" [(ngModel)]="alternativasImpresionIndividual" min="2" max="5" class="input-busqueda" style="width: 100%;">
+      </div>
+
+      <div class="botones" style="margin-top: 2rem;">
+        <button class="btn-cancelar" (click)="cerrarModalImpresionIndividual()" type="button" [disabled]="cargandoImpresion"
+          style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Cancelar</button>
+        <button class="btn-guardar" (click)="confirmarImpresionIndividual()" type="button" [disabled]="cargandoImpresion">
+          {{ cargandoImpresion ? 'Generando...' : 'Aceptar' }}
         </button>
       </div>
     </div>

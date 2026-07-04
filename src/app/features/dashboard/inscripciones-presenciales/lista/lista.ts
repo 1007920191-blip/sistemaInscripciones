@@ -5,7 +5,9 @@ import { jsPDF } from 'jspdf';
 import { NuevaInscripcion } from '../nueva-inscripcion/nueva-inscripcion';
 import { InscripcionService } from '../../../../services/inscripcion';
 import { ConfiguracionService } from '../../../../services/configuracion';
+import { ImpresionService } from '../../../../services/impresion';
 import { Inscripcion, Estudiante } from '../../../../models/inscripcion.model';
+import { AulaTurnoDisplay, Turno } from '../../../../models/turno.model';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc as firestoreDoc, getDoc } from 'firebase/firestore';
 import { firebaseApp } from '../../../../firebase-config';
@@ -38,6 +40,15 @@ export class Lista implements OnInit {
 
   // Selección de estudiantes
   estudiantesSeleccionados: Set<string> = new Set();
+
+  // Modal de Impresión — compartido individual/grupal
+  mostrarModalImpresionIndividual = false;
+  tipoImpresionIndividual: 'TARJETA' | 'CARTILLA' = 'TARJETA';
+  alternativasImpresionIndividual: number = 4;
+  estudianteParaImpresion: Estudiante | null = null;
+  estudiantesParaImpresionGrupal: Estudiante[] = []; // usado en modo grupal
+  modoImpresionGrupal = false;
+  cargandoImpresion = false;
   
   // Paginación
   itemsPorPagina = this.obtenerItemsPorPagina();
@@ -49,7 +60,8 @@ export class Lista implements OnInit {
 
   constructor(
     private inscripcionService: InscripcionService,
-    private configuracionService: ConfiguracionService
+    private configuracionService: ConfiguracionService,
+    private impresionService: ImpresionService
   ) {}
 
   obtenerFechaHoyTexto(): string {
@@ -744,6 +756,107 @@ export class Lista implements OnInit {
 
   descargarCredencialIndividual(estudiante: Estudiante) {
     this.generarCredencialesPDF([estudiante]);
+  }
+
+  // ============================================
+  // IMPRIMIR TARJETA / CARTILLA INDIVIDUAL
+  // ============================================
+  abrirModalImpresionIndividual(est: Estudiante) {
+    this.estudianteParaImpresion = est;
+    this.modoImpresionGrupal = false;
+    this.estudiantesParaImpresionGrupal = [];
+    this.tipoImpresionIndividual = 'TARJETA';
+    this.alternativasImpresionIndividual = 4;
+    this.mostrarModalImpresionIndividual = true;
+  }
+
+  abrirModalImpresionGrupal() {
+    const seleccionados = this.estudiantesParaLista.filter(est =>
+      est.numeroDocumento && this.estudiantesSeleccionados.has(est.numeroDocumento)
+    );
+    if (seleccionados.length === 0) {
+      alert('Debe seleccionar al menos un estudiante de la lista.');
+      return;
+    }
+    this.estudiantesParaImpresionGrupal = seleccionados;
+    this.estudianteParaImpresion = null;
+    this.modoImpresionGrupal = true;
+    this.tipoImpresionIndividual = 'TARJETA';
+    this.alternativasImpresionIndividual = 4;
+    this.mostrarModalImpresionIndividual = true;
+  }
+
+  cerrarModalImpresionIndividual() {
+    this.mostrarModalImpresionIndividual = false;
+    this.estudianteParaImpresion = null;
+  }
+
+  async confirmarImpresionIndividual() {
+    this.cargandoImpresion = true;
+    try {
+      let config: any = null;
+      try {
+        config = await this.configuracionService.obtenerConfiguracion();
+      } catch {
+        console.warn('No se pudo cargar la configuración para la impresión');
+      }
+
+      // Resolver lista de estudiantes: individual o grupal
+      const listaEstudiantes: Estudiante[] = this.modoImpresionGrupal
+        ? this.estudiantesParaImpresionGrupal
+        : (this.estudianteParaImpresion ? [this.estudianteParaImpresion] : []);
+
+      if (listaEstudiantes.length === 0) return;
+
+      // Construir AulaTurnoDisplay genérico (sede tomada del primer est)
+      const primerEst = listaEstudiantes[0];
+      const aulaDisplay: AulaTurnoDisplay = {
+        id: primerEst.aulaAsignadaId || '',
+        aulaId: primerEst.aulaAsignadaId || '',
+        codigoAula: primerEst.codigoAula || '—',
+        inscritos: listaEstudiantes.length,
+        capacidad: 0,
+        grado: primerEst.grado || '',
+        nivel: primerEst.nivel || '',
+        local: '',
+        pabellon: '',
+        piso: 0,
+        puertaAcceso: '',
+        sede: this.inscripcionParaLista?.colegio?.IE || '',
+        turnoId: this.inscripcionParaLista?.turnoId || ''
+      };
+
+      const turnoObj: Turno = {
+        id: this.inscripcionParaLista?.turnoId || '',
+        codigo: this.inscripcionParaLista?.turnoCodigo || '—',
+        fecha: new Date(),
+        horaInicioEntrada: '',
+        horaFinEntrada: '',
+        horaInicioPrueba: '',
+        horaFinPrueba: '',
+        nivel: (primerEst.nivel === 'Primaria' || primerEst.nivel === 'Secundaria') ? primerEst.nivel : 'Primaria',
+        grados: [primerEst.grado || '']
+      };
+
+      const estudiantesEnriquecidos = listaEstudiantes.map(est => ({
+        ...est,
+        colegioObj: est.colegio || this.inscripcionParaLista?.colegio,
+        inscripcionId: this.inscripcionParaLista?.id || 'N/A'
+      }));
+
+      if (this.tipoImpresionIndividual === 'TARJETA') {
+        await this.impresionService.generarTarjetas(estudiantesEnriquecidos, aulaDisplay, turnoObj, config);
+      } else {
+        await this.impresionService.generarCartillas(estudiantesEnriquecidos, aulaDisplay, turnoObj, config, this.alternativasImpresionIndividual);
+      }
+
+      this.cerrarModalImpresionIndividual();
+    } catch (error) {
+      console.error('Error al generar impresión:', error);
+      alert('Ocurrió un error al generar el documento.');
+    } finally {
+      this.cargandoImpresion = false;
+    }
   }
 
   /**
