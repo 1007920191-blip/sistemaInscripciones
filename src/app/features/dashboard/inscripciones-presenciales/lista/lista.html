@@ -265,11 +265,24 @@
   <div class="modal-content modal-form" (click)="$event.stopPropagation()" style="max-width: 400px;">
 
     <div class="header">
-      <h2 style="color: #000; font-weight: 700;">OPCIONES DE IMPRESIÓN</h2>
+      <h2>OPCIONES DE IMPRESIÓN</h2>
       <button class="btn-cerrar" (click)="cerrarModalImpresionIndividual()" type="button">×</button>
     </div>
 
     <div class="form-container">
+      
+      <!-- Contenido dinámico (Única diferencia permitida) -->
+      <div class="campo campo-full" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea; margin-bottom: 20px;">
+        <ng-container *ngIf="!modoImpresionGrupal && estudianteParaImpresion">
+          <div style="font-weight: 700; color: #333; margin-bottom: 5px;">{{ estudianteParaImpresion.apellidos }}, {{ estudianteParaImpresion.nombres }}</div>
+          <div style="font-size: 0.85rem; color: #666;">DNI: {{ estudianteParaImpresion.numeroDocumento }} | {{ estudianteParaImpresion.grado }} {{ estudianteParaImpresion.nivel }}</div>
+        </ng-container>
+        <ng-container *ngIf="modoImpresionGrupal && estudiantesParaImpresionGrupal.length > 0">
+          <div style="font-weight: 700; color: #333; margin-bottom: 5px;">Impresión Grupal</div>
+          <div style="font-size: 0.85rem; color: #666;">Se generarán documentos para <strong>{{ estudiantesParaImpresionGrupal.length }}</strong> estudiantes seleccionados.</div>
+        </ng-container>
+      </div>
+
       <div class="campo campo-full">
         <label>TIPO DE IMPRESIÓN</label>
         <div style="display: flex; gap: 1rem; margin-top: 0.5rem; justify-content: center; align-items: center; padding: 10px;">
@@ -288,8 +301,7 @@
       </div>
 
       <div class="botones" style="margin-top: 2rem;">
-        <button class="btn-cancelar" (click)="cerrarModalImpresionIndividual()" type="button" [disabled]="cargandoImpresion"
-          style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Cancelar</button>
+        <button class="btn-cancelar" (click)="cerrarModalImpresionIndividual()" type="button" [disabled]="cargandoImpresion">Cancelar</button>
         <button class="btn-guardar" (click)="confirmarImpresionIndividual()" type="button" [disabled]="cargandoImpresion">
           {{ cargandoImpresion ? 'Generando...' : 'Aceptar' }}
         </button>

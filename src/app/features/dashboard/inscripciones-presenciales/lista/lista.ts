@@ -520,8 +520,17 @@ export class Lista implements OnInit {
         const pabellonVal = aulaInfo?.pabellon || '—';
         const pisoVal = aulaInfo?.piso || '—';
         const puertaVal = aulaInfo?.puertaAcceso || '—';
-        const ingresoVal = turnoInfo?.horaInicioEntrada || '—';
-        const examenVal = turnoInfo?.horaInicioPrueba || '—';
+        
+        const hIniEnt = turnoInfo?.horaInicioEntrada || '—';
+        const hFinEnt = turnoInfo?.horaFinEntrada || '—';
+        const hIniPru = turnoInfo?.horaInicioPrueba || '—';
+        const hFinPru = turnoInfo?.horaFinPrueba || '—';
+        const ingresoStr = (hIniEnt !== '—' && hFinEnt !== '—') ? `${hIniEnt} - ${hFinEnt}` : (hIniEnt !== '—' ? hIniEnt : '—');
+        const examenStr = (hIniPru !== '—' && hFinPru !== '—') ? `${hIniPru} - ${hFinPru}` : (hIniPru !== '—' ? hIniPru : '—');
+        
+        const colInfo = est.colegio || this.inscripcionParaLista?.colegio;
+        const gestionVal = colInfo?.GESTION || '—';
+        const areaVal = colInfo?.AREA || '—';
 
         // Borde y Fondo de Credencial
         if (fondoCredencialB64) {
@@ -631,7 +640,19 @@ export class Lista implements OnInit {
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(7);
         const gradNivel = `${est.grado || '—'} - ${est.nivel || '—'}`.toUpperCase();
-        doc.text(gradNivel, rectX + 4, rectY + 30, { maxWidth: rectW - 28 });
+        doc.text(gradNivel, rectX + 4, rectY + 30, { maxWidth: rectW / 2 });
+
+        // Gestión y Área
+        doc.setTextColor(100, 110, 120);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(5);
+        doc.text('GESTIÓN / ÁREA:', rectX + (rectW / 2) + 2, rectY + 26.5);
+
+        doc.setTextColor(33, 37, 41);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7);
+        const gestArea = `${gestionVal} / ${areaVal}`.toUpperCase();
+        doc.text(gestArea, rectX + (rectW / 2) + 2, rectY + 30, { maxWidth: (rectW / 2) - 6 });
 
         // Separador logístico
         doc.setDrawColor(240, 240, 240);
@@ -648,32 +669,41 @@ export class Lista implements OnInit {
         doc.text(sedeVal.toUpperCase(), rectX + 12, rectY + 36.5, { maxWidth: rectW - 38 });
 
         // Puerta, Pabellon, Piso
-        doc.setTextColor(100, 110, 120);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('PUERTA:', rectX + 4, rectY + 41);
-        doc.setTextColor(33, 37, 41);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(6.5);
-        doc.text(String(puertaVal), rectX + 15, rectY + 41);
+        let currentX = rectX + 4;
+        if (puertaVal !== '—' && puertaVal !== '') {
+            doc.setTextColor(100, 110, 120);
+            doc.setFont('Helvetica', 'normal');
+            doc.setFontSize(5);
+            doc.text('PUERTA:', currentX, rectY + 41);
+            doc.setTextColor(33, 37, 41);
+            doc.setFont('Helvetica', 'bold');
+            doc.setFontSize(6.5);
+            doc.text(String(puertaVal), currentX + 11, rectY + 41);
+            currentX += 20 + String(puertaVal).length;
+        }
 
-        doc.setTextColor(100, 110, 120);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('PABELLÓN:', rectX + 24, rectY + 41);
-        doc.setTextColor(33, 37, 41);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(6.5);
-        doc.text(String(pabellonVal), rectX + 38, rectY + 41);
+        if (pabellonVal !== '—' && pabellonVal !== '') {
+            doc.setTextColor(100, 110, 120);
+            doc.setFont('Helvetica', 'normal');
+            doc.setFontSize(5);
+            doc.text('PABELLÓN:', currentX, rectY + 41);
+            doc.setTextColor(33, 37, 41);
+            doc.setFont('Helvetica', 'bold');
+            doc.setFontSize(6.5);
+            doc.text(String(pabellonVal), currentX + 14, rectY + 41);
+            currentX += 23 + String(pabellonVal).length;
+        }
 
-        doc.setTextColor(100, 110, 120);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('PISO:', rectX + 46, rectY + 41);
-        doc.setTextColor(33, 37, 41);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(6.5);
-        doc.text(String(pisoVal), rectX + 53, rectY + 41);
+        if (pisoVal !== '—' && pisoVal !== '') {
+            doc.setTextColor(100, 110, 120);
+            doc.setFont('Helvetica', 'normal');
+            doc.setFontSize(5);
+            doc.text('PISO:', currentX, rectY + 41);
+            doc.setTextColor(33, 37, 41);
+            doc.setFont('Helvetica', 'bold');
+            doc.setFontSize(6.5);
+            doc.text(String(pisoVal), currentX + 7, rectY + 41);
+        }
 
         // Horarios
         doc.setTextColor(100, 110, 120);
@@ -683,16 +713,16 @@ export class Lista implements OnInit {
         doc.setTextColor(33, 37, 41);
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(6.5);
-        doc.text(String(ingresoVal), rectX + 16, rectY + 45.5);
+        doc.text(String(ingresoStr), rectX + 15, rectY + 45.5);
 
         doc.setTextColor(100, 110, 120);
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(5);
-        doc.text('EXAMEN:', rectX + 32, rectY + 45.5);
+        doc.text('EXAMEN:', rectX + 43, rectY + 45.5);
         doc.setTextColor(33, 37, 41);
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(6.5);
-        doc.text(String(examenVal), rectX + 43, rectY + 45.5);
+        doc.text(String(examenStr), rectX + 53, rectY + 45.5);
 
         // ===================================
         // Asignación de Aula y Turno (Badges en la derecha)
