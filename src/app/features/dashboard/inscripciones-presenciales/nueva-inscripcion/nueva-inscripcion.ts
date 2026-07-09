@@ -450,18 +450,27 @@ export class NuevaInscripcion implements OnInit {
   // ============ GUARDAR CON ASIGNACIÓN REAL ============
 
   private async ejecutarFinalizacionConAsignacion() {
+    // Sincronizar el colegio en todos los estudiantes con el colegio actual (evita desincronización en ediciones)
+    const estudiantesConColegioActualizado = this.estudiantesRegistrados.map(est => ({
+      ...est,
+      colegio: this.colegioSeleccionado
+    }));
+
     const inscripcionData: Partial<Inscripcion> = {
       colegio: this.colegioSeleccionado,
       metodoPago: this.datosPago.metodo,
       cantidadEstudiantes: this.datosPago.cantidad,
       montoTotal: this.datosPago.monto,
       telefonoApoderado: this.datosPago.telefono,
-      estudiantes: [...this.estudiantesRegistrados],
+      estudiantes: estudiantesConColegioActualizado,
       estado: 'completada',
       turnoId: '',
       turnoCodigo: '',
       asignacionesAula: []
     };
+
+    // Usar la lista sincronizada desde ahora en adelante
+    this.estudiantesRegistrados = estudiantesConColegioActualizado;
 
     // 1. Guardar inscripción base
     let inscripcionId: string;

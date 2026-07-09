@@ -545,7 +545,8 @@ export class Lista implements OnInit {
         const ingresoStr = (hIniEnt !== '—' && hFinEnt !== '—') ? `${hIniEnt} - ${hFinEnt}` : (hIniEnt !== '—' ? hIniEnt : '—');
         const examenStr = (hIniPru !== '—' && hFinPru !== '—') ? `${hIniPru} - ${hFinPru}` : (hIniPru !== '—' ? hIniPru : '—');
         
-        const colInfo = est.colegio || this.inscripcionParaLista?.colegio;
+        // Siempre usar inscripcion.colegio como fuente maestra (se sincroniza al guardar)
+        const colInfo = this.inscripcionParaLista?.colegio || est.colegio;
         const gestionVal = colInfo?.GESTION || '—';
         const areaVal = colInfo?.AREA || '—';
 
@@ -644,7 +645,7 @@ export class Lista implements OnInit {
         doc.setTextColor(33, 37, 41);
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(7);
-        const colNombre = (est.colegio?.IE || this.inscripcionParaLista?.colegio?.IE || 'N/A').toUpperCase();
+        const colNombre = (colInfo?.IE || 'N/A').toUpperCase();
         doc.text(colNombre, rectX + 24, rectY + 21.5, { maxWidth: rectW - 48 });
 
         // Grado y Nivel
@@ -904,7 +905,8 @@ export class Lista implements OnInit {
 
         return {
           ...est,
-          colegioObj: est.colegio || this.inscripcionParaLista?.colegio,
+          // Siempre usar inscripcion.colegio como fuente maestra para colegioObj
+          colegioObj: this.inscripcionParaLista?.colegio || est.colegio,
           inscripcionId: this.inscripcionParaLista?.id || 'N/A',
           aulaDisplay: estAulaDisplay,
           turnoObj: estTurnoObj

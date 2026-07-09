@@ -66,6 +66,9 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
       console.log('[Hijo] Cambió estudianteEdicion:', this.estudianteEdicion);
       this.cargarEstudiante();
     }
+    if (changes['colegio'] && this.estudiante) {
+  this.estudiante.colegio = this.colegio;
+}
   }
 
   private cargarEstudiante() {
@@ -76,15 +79,19 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
       console.log('[Hijo] Cargando datos EXISTENTES del estudiante', this.numeroEstudiante);
       
       this.estudiante = {
-        tipoDocumento: this.estudianteEdicion.tipoDocumento,
-        numeroDocumento: this.estudianteEdicion.numeroDocumento,
-        nombres: this.estudianteEdicion.nombres,
-        apellidos: this.estudianteEdicion.apellidos,
-        nivel: this.estudianteEdicion.nivel,
-        grado: this.estudianteEdicion.grado,
-        colegio: this.estudianteEdicion.colegio,
-        fechaRegistro: this.estudianteEdicion.fechaRegistro
-      };
+    tipoDocumento: this.estudianteEdicion.tipoDocumento,
+    numeroDocumento: this.estudianteEdicion.numeroDocumento,
+    nombres: this.estudianteEdicion.nombres,
+    apellidos: this.estudianteEdicion.apellidos,
+    nivel: this.estudianteEdicion.nivel,
+    grado: this.estudianteEdicion.grado,
+
+    // SI existe un colegio nuevo seleccionado usarlo.
+    // Si no, usar el colegio del estudiante.
+    colegio: this.colegio ?? this.estudianteEdicion.colegio,
+
+    fechaRegistro: this.estudianteEdicion.fechaRegistro
+};
       
       // Debug
       this.debugInfo = {
