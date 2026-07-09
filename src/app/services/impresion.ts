@@ -40,6 +40,8 @@ export class ImpresionService {
 
     for (let x = 0; x < estudiantes.length; x++) {
       const est = estudiantes[x];
+      const estAula = est.aulaDisplay || aula;
+      const estTurno = est.turnoObj || turno;
       
       doc.setFontSize(7);
       doc.setFont('helvetica', 'normal');
@@ -47,7 +49,7 @@ export class ImpresionService {
       const nombreajustado = doc.splitTextToSize(edicion.NOMBRE, 150);
       const sloganajustado = doc.splitTextToSize(`${edicion.SLOGAN} - ${config?.edicion || ''}`, 150);
       const ieajustado = doc.splitTextToSize(edicion.ORGANIZADOR, 150);
-      const sedeajustado = doc.splitTextToSize(aula.sede || '', 150);
+      const sedeajustado = doc.splitTextToSize(estAula.sede || '', 150);
 
       doc.text(nombreajustado, xactual + 47.5, yactual + 5, { align: 'center' });
       doc.text(sloganajustado, xactual + 47.5, yactual + 9, { align: 'center' });
@@ -66,7 +68,7 @@ export class ImpresionService {
 
       doc.setFont('helvetica', 'normal');
       doc.text(est.numeroDocumento || 'SIN NÚMERO', xactual + 51, yactual + 23);
-      doc.text(turno.codigo || '—', xactual + 78, yactual + 23);
+      doc.text(estTurno.codigo || '—', xactual + 78, yactual + 23);
       
       const nombres = `${est.apellidos || ''} ${est.nombres || ''}`.trim();
       doc.text(nombres.substring(0, 35), xactual + 51, yactual + 27);
@@ -80,9 +82,9 @@ export class ImpresionService {
       doc.text(`${est.grado || ''} ${est.nivel || ''}`.trim(), xactual + 51, yactual + 47);
 
       doc.setFontSize(20);
-      doc.text(aula.codigoAula || '—', xactual + 8, yactual + 63);
+      doc.text(estAula.codigoAula || '—', xactual + 8, yactual + 63);
 
-      const textToEncode = `${edicion.NOMBRE}/${config?.edicion || ''}/${aula.sede || ''}/${turno.codigo}/${aula.codigoAula}/${est.inscripcionId || 'N/A'}/${est.id || 'N/A'}/${est.nombres || 'N/A'}/${est.apellidos || 'N/A'}`;
+      const textToEncode = `${edicion.NOMBRE}/${config?.edicion || ''}/${estAula.sede || ''}/${estTurno.codigo}/${estAula.codigoAula}/${est.inscripcionId || 'N/A'}/${est.id || 'N/A'}/${est.nombres || 'N/A'}/${est.apellidos || 'N/A'}`;
       const qr = await QRCode.toDataURL(textToEncode, { errorCorrectionLevel: 'M' });
       const qrSize = 35;
       
@@ -121,7 +123,8 @@ export class ImpresionService {
       }
     }
 
-    doc.save(`TARJETAS_Aula_${aula.codigoAula}_${turno.codigo}.pdf`);
+    const isMultiple = estudiantes.length > 1;
+    doc.save(`TARJETAS_${isMultiple ? 'Grupales' : 'Aula_' + aula.codigoAula + '_' + turno.codigo}.pdf`);
   }
 
   async generarCartillas(estudiantes: any[], aula: AulaTurnoDisplay, turno: Turno, config: any, alternativas: number) {
@@ -145,6 +148,8 @@ export class ImpresionService {
 
     for (let x = 1; x <= estudiantes.length; x++) {
       const est = estudiantes[x - 1];
+      const estAula = est.aulaDisplay || aula;
+      const estTurno = est.turnoObj || turno;
 
       if (x % 2 === 1) {
         desplazamientox = 0;
@@ -159,7 +164,7 @@ export class ImpresionService {
       doc.text(nombre, centerX / 2 + desplazamientox, inicioy + 6, { align: 'center' });
       doc.text(slogan, centerX / 2 + desplazamientox, inicioy + 12, { align: 'center' });
 
-      const textToEncode = `${nombre}/${config?.edicion || ''}/${aula.sede || ''}/${turno.codigo}/${aula.codigoAula}/${est.inscripcionId || 'N/A'}/${est.id || 'N/A'}/${est.nombres || 'N/A'}/${est.apellidos || 'N/A'}`;
+      const textToEncode = `${nombre}/${config?.edicion || ''}/${estAula.sede || ''}/${estTurno.codigo}/${estAula.codigoAula}/${est.inscripcionId || 'N/A'}/${est.id || 'N/A'}/${est.nombres || 'N/A'}/${est.apellidos || 'N/A'}`;
       const qr = await QRCode.toDataURL(textToEncode, { errorCorrectionLevel: 'M' });
       const qrSize = 35;
       const qrX = 20;
@@ -171,8 +176,8 @@ export class ImpresionService {
       doc.addImage(qr, 'JPEG', qrX + desplazamientox + 0.5, qrY + 0.5, qrSize, qrSize);
 
       doc.text('CARTILLA DE RESPUESTAS', centerX / 2 + 35 + desplazamientox, 30, { align: 'center' });
-      doc.text(`TURNO: ${turno.codigo}`, centerX / 2 - 5 + desplazamientox, 40, { align: 'center' });
-      doc.text(`AULA: ${aula.codigoAula}`, centerX / 2 - 5 + desplazamientox, 47, { align: 'center' });
+      doc.text(`TURNO: ${estTurno.codigo}`, centerX / 2 - 5 + desplazamientox, 40, { align: 'center' });
+      doc.text(`AULA: ${estAula.codigoAula}`, centerX / 2 - 5 + desplazamientox, 47, { align: 'center' });
 
       doc.rect(87 + desplazamientox, 35, 48 + (alternativas > 4 ? 10 : 0), 165);
       doc.setLineWidth(0.5);
@@ -236,7 +241,8 @@ export class ImpresionService {
       }
     }
 
-    doc.save(`CARTILLAS_Aula_${aula.codigoAula}_${turno.codigo}.pdf`);
+    const isMultiple = estudiantes.length > 1;
+    doc.save(`CARTILLAS_${isMultiple ? 'Grupales' : 'Aula_' + aula.codigoAula + '_' + turno.codigo}.pdf`);
   }
 
   private cargarImagenBase64(url: string): Promise<string | null> {

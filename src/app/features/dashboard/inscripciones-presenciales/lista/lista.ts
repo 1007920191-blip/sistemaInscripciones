@@ -9,7 +9,7 @@ import { ImpresionService } from '../../../../services/impresion';
 import { Inscripcion, Estudiante } from '../../../../models/inscripcion.model';
 import { AulaTurnoDisplay, Turno } from '../../../../models/turno.model';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc as firestoreDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc as firestoreDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { firebaseApp } from '../../../../firebase-config';
 
 @Component({
@@ -437,9 +437,11 @@ export class Lista implements OnInit {
     }
 
     // 0. Validaciones Obligatorias
-    const datosFaltantes = estudiantesAImprimir.some(est => 
-      !est.codigoAula || !this.inscripcionParaLista?.turnoCodigo || !est.grado || !est.nivel
-    );
+    const datosFaltantes = estudiantesAImprimir.some(est => {
+      const indexReal = this.inscripcionParaLista?.estudiantes?.findIndex(e => e.numeroDocumento === est.numeroDocumento) ?? -1;
+      const asignacion = this.inscripcionParaLista?.asignacionesAula?.find(a => a.estudianteIndex === indexReal);
+      return !asignacion || !asignacion.codigoAula || !asignacion.turnoCodigo || !est.grado || !est.nivel;
+    });
 
     if (datosFaltantes) {
       alert('Error: No se puede generar la credencial. Verifique que todos los estudiantes seleccionados tengan Aula, Turno, Grado y Nivel asignados y guardados en el sistema.');
@@ -448,24 +450,30 @@ export class Lista implements OnInit {
 
     this.cargandoLista = true;
     try {
-      // 0.5 Obtener Información de Turno y Aulas desde Firestore
+      // 0.5 Obtener Información de Turno y Aulas desde Firestore por cada estudiante
       const db = getFirestore(firebaseApp);
-      let turnoInfo: any = null;
-      if (this.inscripcionParaLista?.turnoId) {
-        const turnoRef = firestoreDoc(db, 'turnos', this.inscripcionParaLista.turnoId);
-        const turnoSnap = await getDoc(turnoRef);
-        if (turnoSnap.exists()) {
-          turnoInfo = turnoSnap.data();
-        }
-      }
-
       const aulaCache = new Map<string, any>();
+      const turnoCache = new Map<string, any>();
+
       for (const est of estudiantesAImprimir) {
-        if (est.aulaAsignadaId && !aulaCache.has(est.aulaAsignadaId)) {
-          const aulaRef = firestoreDoc(db, 'turnosedicion', est.aulaAsignadaId);
-          const aulaSnap = await getDoc(aulaRef);
-          if (aulaSnap.exists()) {
-            aulaCache.set(est.aulaAsignadaId, aulaSnap.data());
+        const indexReal = this.inscripcionParaLista?.estudiantes?.findIndex(e => e.numeroDocumento === est.numeroDocumento) ?? -1;
+        const asignacion = this.inscripcionParaLista?.asignacionesAula?.find(a => a.estudianteIndex === indexReal);
+        
+        if (asignacion) {
+          if (asignacion.aulaId && !aulaCache.has(asignacion.aulaId)) {
+            const aulaRef = firestoreDoc(db, 'turnosedicion', asignacion.aulaId);
+            const aulaSnap = await getDoc(aulaRef);
+            if (aulaSnap.exists()) {
+              aulaCache.set(asignacion.aulaId, aulaSnap.data());
+            }
+          }
+          if (asignacion.turnoCodigo && !turnoCache.has(asignacion.turnoCodigo)) {
+            const turnosRef = collection(db, 'turnos');
+            const qTurno = query(turnosRef, where('codigo', '==', asignacion.turnoCodigo));
+            const snapTurno = await getDocs(qTurno);
+            if (!snapTurno.empty) {
+              turnoCache.set(asignacion.turnoCodigo, snapTurno.docs[0].data());
+            }
           }
         }
       }
@@ -515,7 +523,16 @@ export class Lista implements OnInit {
         const x = startX; // Una sola columna
         const y = startY + posEnPagina * (stripHeight + spacing);
 
-        const aulaInfo = est.aulaAsignadaId ? aulaCache.get(est.aulaAsignadaId) : null;
+        const indexReal = this.inscripcionParaLista?.estudiantes?.findIndex(e => e.numeroDocumento === est.numeroDocumento) ?? -1;
+        const asignacion = this.inscripcionParaLista?.asignacionesAula?.find(a => a.estudianteIndex === indexReal);
+        
+        const aulaAsignadaId = asignacion?.aulaId || est.aulaAsignadaId;
+        const codigoAulaEst = asignacion?.codigoAula || est.codigoAula || 'PEND';
+        const turnoCodigoEst = asignacion?.turnoCodigo || 'T—';
+
+        const aulaInfo = aulaAsignadaId ? aulaCache.get(aulaAsignadaId) : null;
+        const turnoInfo = turnoCodigoEst !== 'T—' ? turnoCache.get(turnoCodigoEst) : null;
+
         const sedeVal = aulaInfo?.local || aulaInfo?.sede || '—';
         const pabellonVal = aulaInfo?.pabellon || '—';
         const pisoVal = aulaInfo?.piso || '—';
@@ -739,7 +756,7 @@ export class Lista implements OnInit {
         doc.text('AULA', badgeX + 9, badgeY1 + 5, { align: 'center' });
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(9);
-        doc.text(est.codigoAula || 'PEND', badgeX + 9, badgeY1 + 11, { align: 'center' });
+        doc.text(codigoAulaEst, badgeX + 9, badgeY1 + 11, { align: 'center' });
 
         // TURNO
         const badgeY2 = rectY + 29;
@@ -751,8 +768,7 @@ export class Lista implements OnInit {
         doc.text('TURNO', badgeX + 9, badgeY2 + 5, { align: 'center' });
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(9);
-        const turnoCod = this.inscripcionParaLista?.turnoCodigo || 'T—';
-        doc.text(turnoCod, badgeX + 9, badgeY2 + 11, { align: 'center' });
+        doc.text(turnoCodigoEst, badgeX + 9, badgeY2 + 11, { align: 'center' });
 
         // Pie de Credencial (Indicación Institucional)
         doc.setTextColor(255, 255, 255);
@@ -838,46 +854,71 @@ export class Lista implements OnInit {
 
       if (listaEstudiantes.length === 0) return;
 
-      // Construir AulaTurnoDisplay genérico (sede tomada del primer est)
-      const primerEst = listaEstudiantes[0];
-      const aulaDisplay: AulaTurnoDisplay = {
-        id: primerEst.aulaAsignadaId || '',
-        aulaId: primerEst.aulaAsignadaId || '',
-        codigoAula: primerEst.codigoAula || '—',
-        inscritos: listaEstudiantes.length,
-        capacidad: 0,
-        grado: primerEst.grado || '',
-        nivel: primerEst.nivel || '',
-        local: '',
-        pabellon: '',
-        piso: 0,
-        puertaAcceso: '',
-        sede: this.inscripcionParaLista?.colegio?.IE || '',
-        turnoId: this.inscripcionParaLista?.turnoId || ''
-      };
+      // Resolver datos de Aula y Turno por cada estudiante usando asignacionesAula
+      const db = getFirestore(firebaseApp);
+      const estudiantesEnriquecidos = await Promise.all(listaEstudiantes.map(async (est) => {
+        const indexReal = this.inscripcionParaLista?.estudiantes?.findIndex(e => e.numeroDocumento === est.numeroDocumento) ?? -1;
+        const asignacion = this.inscripcionParaLista?.asignacionesAula?.find(a => a.estudianteIndex === indexReal);
+        
+        const aulaId = asignacion?.aulaId || est.aulaAsignadaId || '';
+        const codigoAula = asignacion?.codigoAula || est.codigoAula || '—';
+        const turnoCodigo = asignacion?.turnoCodigo || '—';
+        
+        let turnoId = '';
+        if (turnoCodigo !== '—') {
+          const turnosRef = collection(db, 'turnos');
+          const qTurno = query(turnosRef, where('codigo', '==', turnoCodigo));
+          const snapTurno = await getDocs(qTurno);
+          if (!snapTurno.empty) {
+            turnoId = snapTurno.docs[0].id;
+          }
+        }
 
-      const turnoObj: Turno = {
-        id: this.inscripcionParaLista?.turnoId || '',
-        codigo: this.inscripcionParaLista?.turnoCodigo || '—',
-        fecha: new Date(),
-        horaInicioEntrada: '',
-        horaFinEntrada: '',
-        horaInicioPrueba: '',
-        horaFinPrueba: '',
-        nivel: (primerEst.nivel === 'Primaria' || primerEst.nivel === 'Secundaria') ? primerEst.nivel : 'Primaria',
-        grados: [primerEst.grado || '']
-      };
+        const estAulaDisplay: AulaTurnoDisplay = {
+          id: aulaId,
+          aulaId: aulaId,
+          codigoAula: codigoAula,
+          inscritos: 1,
+          capacidad: 0,
+          grado: est.grado || '',
+          nivel: est.nivel || '',
+          local: '',
+          pabellon: '',
+          piso: 0,
+          puertaAcceso: '',
+          sede: this.inscripcionParaLista?.colegio?.IE || '',
+          turnoId: turnoId
+        };
 
-      const estudiantesEnriquecidos = listaEstudiantes.map(est => ({
-        ...est,
-        colegioObj: est.colegio || this.inscripcionParaLista?.colegio,
-        inscripcionId: this.inscripcionParaLista?.id || 'N/A'
+        const estTurnoObj: Turno = {
+          id: turnoId,
+          codigo: turnoCodigo,
+          fecha: new Date(),
+          horaInicioEntrada: '',
+          horaFinEntrada: '',
+          horaInicioPrueba: '',
+          horaFinPrueba: '',
+          nivel: (est.nivel === 'Primaria' || est.nivel === 'Secundaria') ? est.nivel : 'Primaria',
+          grados: [est.grado || '']
+        };
+
+        return {
+          ...est,
+          colegioObj: est.colegio || this.inscripcionParaLista?.colegio,
+          inscripcionId: this.inscripcionParaLista?.id || 'N/A',
+          aulaDisplay: estAulaDisplay,
+          turnoObj: estTurnoObj
+        };
       }));
 
+      // Pasar un dummy aula y turno global (el servicio ahora priorizará el de cada estEnriquecido)
+      const dummyAula = estudiantesEnriquecidos[0]?.aulaDisplay || {} as AulaTurnoDisplay;
+      const dummyTurno = estudiantesEnriquecidos[0]?.turnoObj || {} as Turno;
+
       if (this.tipoImpresionIndividual === 'TARJETA') {
-        await this.impresionService.generarTarjetas(estudiantesEnriquecidos, aulaDisplay, turnoObj, config);
+        await this.impresionService.generarTarjetas(estudiantesEnriquecidos, dummyAula, dummyTurno, config);
       } else {
-        await this.impresionService.generarCartillas(estudiantesEnriquecidos, aulaDisplay, turnoObj, config, this.alternativasImpresionIndividual);
+        await this.impresionService.generarCartillas(estudiantesEnriquecidos, dummyAula, dummyTurno, config, this.alternativasImpresionIndividual);
       }
 
       this.cerrarModalImpresionIndividual();

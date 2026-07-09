@@ -39,6 +39,7 @@ export interface AsignacionAulaResumen {
   estudianteNombre: string;
   aulaId: string;
   codigoAula: string;
+  turnoCodigo: string;
   grado: string;
   nivel: string;
 }
