@@ -553,229 +553,175 @@ export class Lista implements OnInit {
         // Borde y Fondo de Credencial
         if (fondoCredencialB64) {
           doc.addImage(fondoCredencialB64, 'JPEG', x, y, stripWidth, stripHeight);
-        } else {
-          doc.setFillColor(248, 249, 250); 
-          doc.setDrawColor(0, 92, 191); 
-          doc.setLineWidth(0.8);
-          doc.roundedRect(x, y, stripWidth, stripHeight, 3, 3, 'FD');
-
-          // Header azul
-          doc.setFillColor(0, 92, 191);
-          doc.rect(x + 0.4, y + 0.4, stripWidth - 0.8, 16, 'F');
-          
-          // Pie rojo
-          doc.setFillColor(220, 53, 69);
-          doc.rect(x + 0.4, y + stripHeight - 6.4, stripWidth - 0.8, 6, 'F');
         }
+
+        // Borde punteado (guía de recorte)
+        doc.setDrawColor(150, 150, 150);
+        doc.setLineWidth(0.3);
+        doc.setLineDashPattern([2, 2], 0);
+        doc.rect(x, y, stripWidth, stripHeight);
+        doc.setLineDashPattern([], 0); // Reset
+
+        // Pequeñas marcas de corte en las esquinas
+        doc.setDrawColor(100, 100, 100);
+        doc.setLineWidth(0.2);
+        const l = 3; // longitud de la marca
+        // Superior Izquierda
+        doc.line(x - l, y, x, y);
+        doc.line(x, y - l, x, y);
+        // Superior Derecha
+        doc.line(x + stripWidth, y, x + stripWidth + l, y);
+        doc.line(x + stripWidth, y - l, x + stripWidth, y);
+        // Inferior Izquierda
+        doc.line(x - l, y + stripHeight, x, y + stripHeight);
+        doc.line(x, y + stripHeight, x, y + stripHeight + l);
+        // Inferior Derecha
+        doc.line(x + stripWidth, y + stripHeight, x + stripWidth + l, y + stripHeight);
+        doc.line(x + stripWidth, y + stripHeight, x + stripWidth, y + stripHeight + l);
 
         // Logos de Cabecera
         if (logoIzquierdoB64) {
-          doc.addImage(logoIzquierdoB64, 'PNG', x + 3, y + 2, 12, 12);
-        } else {
-          doc.setFillColor(255, 255, 255, 0.2);
-          doc.circle(x + 9, y + 8, 6, 'F');
+          doc.addImage(logoIzquierdoB64, 'PNG', x + 3, y + 3, 11, 11);
+        }
+        if (logoDerechoB64) {
+          doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 14, y + 3, 11, 11);
         }
 
-        if (logoDerechoB64) {
-          doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 15, y + 2, 12, 12);
-        } else {
-          doc.setFillColor(255, 255, 255, 0.2);
-          doc.circle(x + stripWidth - 9, y + 8, 6, 'F');
-        }
+        // Colores base institucionales
+        const azulInstitucional = [0, 51, 102];
+        const textoGris = [100, 100, 100];
+        const textoNegro = [30, 30, 30];
+        const colorLinea = [220, 220, 220];
 
         // Texto Cabecera
-        doc.setTextColor(255, 255, 255);
+        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 7, { align: 'center', maxWidth: stripWidth - 32 });
+        doc.setFontSize(7.5);
+        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 5.5, { align: 'center', maxWidth: stripWidth - 30 });
         
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(6);
-        doc.text(`${eslogan} - EDICIÓN ${edicion}`, x + stripWidth / 2, y + 12, { align: 'center', maxWidth: stripWidth - 32 });
-
-        // Tarjeta Blanca de Datos (Zona principal)
-        const rectX = x + 3;
-        const rectY = y + 17;
-        const rectW = stripWidth - 6; 
-        const rectH = 47;
-
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(220, 224, 230);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(rectX, rectY, rectW, rectH, 2, 2, 'FD');
-
-        // Título Credencial
-        doc.setTextColor(0, 92, 191);
-        doc.setFontSize(8.5);
-        doc.setFont('Helvetica', 'bold');
-        doc.text('CREDENCIAL OFICIAL', rectX + rectW / 2, rectY + 4.5, { align: 'center' });
-
-        doc.setDrawColor(230, 235, 240);
-        doc.line(rectX + 4, rectY + 6.5, rectX + rectW - 4, rectY + 6.5);
-
-        // Estudiante
-        doc.setTextColor(100, 110, 120);
+        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(5.5);
-        doc.text('ESTUDIANTE:', rectX + 4, rectY + 10);
+        doc.text(`${eslogan} - EDICIÓN ${edicion}`.toUpperCase(), x + stripWidth / 2, y + 8.5, { align: 'center', maxWidth: stripWidth - 30 });
 
-        doc.setTextColor(33, 37, 41);
+        doc.setTextColor(azulInstitucional[0], azulInstitucional[1], azulInstitucional[2]);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(10.5);
+        doc.text('CREDENCIAL OFICIAL', x + stripWidth / 2, y + 13.5, { align: 'center' });
+
+        // Linea 1
+        doc.setDrawColor(colorLinea[0], colorLinea[1], colorLinea[2]);
+        doc.setLineWidth(0.2);
+        doc.line(x + 4, y + 16, x + stripWidth - 4, y + 16);
+
+        // ESTUDIANTE
+        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(5);
+        doc.text('ESTUDIANTE', x + 4, y + 19);
+
+        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(8.5);
         const nomCompleto = `${est.nombres || ''} ${est.apellidos || ''}`.trim().toUpperCase();
-        doc.text(nomCompleto, rectX + 4, rectY + 14, { maxWidth: rectW - 28 });
+        doc.text(nomCompleto, x + 4, y + 23.5, { maxWidth: stripWidth - 8 });
 
-        // DNI
-        doc.setTextColor(100, 110, 120);
+        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(5);
-        doc.text('DNI / DOC:', rectX + 4, rectY + 18);
+        doc.text('DNI / DOC:', x + 4, y + 27.5);
         
-        doc.setTextColor(33, 37, 41);
+        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(7);
-        doc.text(est.numeroDocumento || '—', rectX + 4, rectY + 21.5);
+        doc.text(est.numeroDocumento || '—', x + 16, y + 27.5);
 
-        // Colegio
-        doc.setTextColor(100, 110, 120);
+        // Linea 2
+        doc.setDrawColor(colorLinea[0], colorLinea[1], colorLinea[2]);
+        doc.line(x + 4, y + 29.5, x + stripWidth - 4, y + 29.5);
+
+        // COLEGIO
+        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(5);
-        doc.text('INSTITUCIÓN EDUCATIVA:', rectX + 24, rectY + 18);
+        doc.text('INSTITUCIÓN EDUCATIVA', x + 4, y + 32.5);
 
-        doc.setTextColor(33, 37, 41);
+        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
         doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(7);
+        doc.setFontSize(8);
         const colNombre = (colInfo?.IE || 'N/A').toUpperCase();
-        doc.text(colNombre, rectX + 24, rectY + 21.5, { maxWidth: rectW - 48 });
+        doc.text(colNombre, x + 4, y + 36.5, { maxWidth: stripWidth - 8 });
 
-        // Grado y Nivel
-        doc.setTextColor(100, 110, 120);
+        // Linea 3
+        doc.setDrawColor(colorLinea[0], colorLinea[1], colorLinea[2]);
+        doc.line(x + 4, y + 39, x + stripWidth - 4, y + 39);
+
+        // NIVEL, GRADO, GESTION, AREA
+        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(5);
-        doc.text('GRADO Y NIVEL:', rectX + 4, rectY + 26.5);
+        doc.text('NIVEL', x + 4, y + 42);
+        doc.text('GRADO', x + 26, y + 42);
+        doc.text('GESTIÓN', x + 51, y + 42);
+        doc.text('ÁREA', x + 73, y + 42);
 
-        doc.setTextColor(33, 37, 41);
+        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(7);
-        const gradNivel = `${est.grado || '—'} - ${est.nivel || '—'}`.toUpperCase();
-        doc.text(gradNivel, rectX + 4, rectY + 30, { maxWidth: rectW / 2 });
+        doc.text((est.nivel || '—').toUpperCase(), x + 4, y + 45.5);
+        doc.text((est.grado || '—').toUpperCase(), x + 26, y + 45.5);
+        doc.text(gestionVal.toUpperCase(), x + 51, y + 45.5);
+        doc.text(areaVal.toUpperCase(), x + 73, y + 45.5);
 
-        // Gestión y Área
-        doc.setTextColor(100, 110, 120);
+        // Linea 4
+        doc.setDrawColor(colorLinea[0], colorLinea[1], colorLinea[2]);
+        doc.line(x + 4, y + 48, x + stripWidth - 4, y + 48);
+
+        // SEDE, AULA, TURNO
+        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(5);
-        doc.text('GESTIÓN / ÁREA:', rectX + (rectW / 2) + 2, rectY + 26.5);
+        doc.text('SEDE', x + 4, y + 51);
+        doc.text('AULA', x + 51, y + 51);
+        doc.text('TURNO', x + 73, y + 51);
 
-        doc.setTextColor(33, 37, 41);
+        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(7);
-        const gestArea = `${gestionVal} / ${areaVal}`.toUpperCase();
-        doc.text(gestArea, rectX + (rectW / 2) + 2, rectY + 30, { maxWidth: (rectW / 2) - 6 });
-
-        // Separador logístico
-        doc.setDrawColor(240, 240, 240);
-        doc.line(rectX + 4, rectY + 33, rectX + rectW - 24, rectY + 33);
-
-        // SEDE
-        doc.setTextColor(100, 110, 120);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('SEDE:', rectX + 4, rectY + 36.5);
-        doc.setTextColor(33, 37, 41);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(6.5);
-        doc.text(sedeVal.toUpperCase(), rectX + 12, rectY + 36.5, { maxWidth: rectW - 38 });
-
-        // Puerta, Pabellon, Piso
-        let currentX = rectX + 4;
-        if (puertaVal !== '—' && puertaVal !== '') {
-            doc.setTextColor(100, 110, 120);
-            doc.setFont('Helvetica', 'normal');
-            doc.setFontSize(5);
-            doc.text('PUERTA:', currentX, rectY + 41);
-            doc.setTextColor(33, 37, 41);
-            doc.setFont('Helvetica', 'bold');
-            doc.setFontSize(6.5);
-            doc.text(String(puertaVal), currentX + 11, rectY + 41);
-            currentX += 20 + String(puertaVal).length;
-        }
-
-        if (pabellonVal !== '—' && pabellonVal !== '') {
-            doc.setTextColor(100, 110, 120);
-            doc.setFont('Helvetica', 'normal');
-            doc.setFontSize(5);
-            doc.text('PABELLÓN:', currentX, rectY + 41);
-            doc.setTextColor(33, 37, 41);
-            doc.setFont('Helvetica', 'bold');
-            doc.setFontSize(6.5);
-            doc.text(String(pabellonVal), currentX + 14, rectY + 41);
-            currentX += 23 + String(pabellonVal).length;
-        }
-
-        if (pisoVal !== '—' && pisoVal !== '') {
-            doc.setTextColor(100, 110, 120);
-            doc.setFont('Helvetica', 'normal');
-            doc.setFontSize(5);
-            doc.text('PISO:', currentX, rectY + 41);
-            doc.setTextColor(33, 37, 41);
-            doc.setFont('Helvetica', 'bold');
-            doc.setFontSize(6.5);
-            doc.text(String(pisoVal), currentX + 7, rectY + 41);
-        }
-
-        // Horarios
-        doc.setTextColor(100, 110, 120);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('INGRESO:', rectX + 4, rectY + 45.5);
-        doc.setTextColor(33, 37, 41);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(6.5);
-        doc.text(String(ingresoStr), rectX + 15, rectY + 45.5);
-
-        doc.setTextColor(100, 110, 120);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('EXAMEN:', rectX + 43, rectY + 45.5);
-        doc.setTextColor(33, 37, 41);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(6.5);
-        doc.text(String(examenStr), rectX + 53, rectY + 45.5);
-
-        // ===================================
-        // Asignación de Aula y Turno (Badges en la derecha)
-        // ===================================
-        const badgeX = rectX + rectW - 22; // A la derecha
+        doc.text(sedeVal.toUpperCase(), x + 4, y + 54.5, { maxWidth: 45 });
         
-        // AULA
-        const badgeY1 = rectY + 12;
-        doc.setFillColor(0, 92, 191); 
-        doc.roundedRect(badgeX, badgeY1, 18, 14, 1, 1, 'F');
-        doc.setTextColor(255, 255, 255);
+        doc.setTextColor(azulInstitucional[0], azulInstitucional[1], azulInstitucional[2]);
+        doc.setFontSize(8.5);
+        doc.text(codigoAulaEst.toUpperCase(), x + 51, y + 54.5);
+        doc.text(turnoCodigoEst.toUpperCase(), x + 73, y + 54.5);
+
+        // Linea 5
+        doc.setDrawColor(colorLinea[0], colorLinea[1], colorLinea[2]);
+        doc.line(x + 4, y + 57, x + stripWidth - 4, y + 57);
+
+        // INGRESO, EXAMEN
+        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(5);
-        doc.text('AULA', badgeX + 9, badgeY1 + 5, { align: 'center' });
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.text(codigoAulaEst, badgeX + 9, badgeY1 + 11, { align: 'center' });
+        doc.text('INGRESO', x + 4, y + 60);
+        doc.text('EXAMEN', x + 51, y + 60);
 
-        // TURNO
-        const badgeY2 = rectY + 29;
-        doc.setFillColor(40, 167, 69); 
-        doc.roundedRect(badgeX, badgeY2, 18, 14, 1, 1, 'F');
-        doc.setTextColor(255, 255, 255);
+        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.text(String(ingresoStr), x + 4, y + 63.5);
+        doc.text(String(examenStr), x + 51, y + 63.5);
+
+        // Linea 6
+        doc.setDrawColor(colorLinea[0], colorLinea[1], colorLinea[2]);
+        doc.line(x + 4, y + 66, x + stripWidth - 4, y + 66);
+
+        // FOOTER
+        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
         doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('TURNO', badgeX + 9, badgeY2 + 5, { align: 'center' });
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.text(turnoCodigoEst, badgeX + 9, badgeY2 + 11, { align: 'center' });
-
-        // Pie de Credencial (Indicación Institucional)
-        doc.setTextColor(255, 255, 255);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(6);
-        doc.text('PRESENTAR ESTA CREDENCIAL IMPRESA EL DÍA DEL EVENTO', x + stripWidth / 2, y + stripHeight - 2.5, { align: 'center' });
+        doc.setFontSize(5.5);
+        doc.text('Presentar esta credencial impresa el día del evento.', x + stripWidth / 2, y + 68.5, { align: 'center' });
+        doc.text('Es personal e intransferible.', x + stripWidth / 2, y + 70.5, { align: 'center' });
       }
 
       const ieNombre = (this.inscripcionParaLista?.colegio?.IE || 'Credenciales').replace(/\s+/g, '_');
