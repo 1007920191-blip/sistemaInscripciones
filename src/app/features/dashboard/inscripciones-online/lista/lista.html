@@ -1,1 +1,156 @@
-<p>lista works!</p>
+<div class="lista-container">
+  <div *ngIf="cargando" style="text-align: center; padding: 20px;">
+    Cargando inscripciones online...
+  </div>
+
+  <div *ngIf="!cargando">
+    <h2>Inscripciones Online</h2>
+
+    <table class="tabla-inscripciones" *ngIf="inscripciones.length > 0">
+      <thead>
+        <tr>
+          <th>N°</th>
+          <th>Correo del responsable</th>
+          <th>Teléfono</th>
+          <th>Estudiantes</th>
+          <th>Total</th>
+          <th>Fecha</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let ins of inscripciones; let i = index">
+          <td>{{ i + 1 }}</td>
+          <td>{{ obtenerCorreoResponsable(ins) }}</td>
+          <td>{{ ins.telefonoApoderado }}</td>
+          <td>{{ cantidadEstudiantesValidos(ins) }}</td>
+          <td>S/ {{ ins.montoTotal }}</td>
+          <td>{{ formatearFecha(ins.fechaInscripcion) }}</td>
+          <td><span class="estado-badge" [ngClass]="getEstadoClase(ins.estado)">{{ ins.estado }}</span></td>
+          <td class="acciones">
+            <button class="btn-detalle" (click)="toggleExpandir(ins)" title="Ver detalle">
+              {{ inscripcionExpandida === ins.id ? '▲' : '▼' }}
+            </button>
+            <button
+              *ngIf="ins.estado === 'pendiente'"
+              class="btn-validar"
+              (click)="abrirModalValidar(ins)">
+              Validar
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div *ngIf="inscripciones.length === 0" style="text-align: center; padding: 20px;">
+      No hay inscripciones online registradas
+    </div>
+
+    <div *ngIf="inscripcionExpandida" class="detalle-panel">
+      <ng-container *ngFor="let ins of inscripciones">
+        <div *ngIf="ins.id === inscripcionExpandida" class="detalle-contenido">
+          <div class="detalle-grid">
+            <div class="detalle-col">
+              <h4>Datos del Responsable</h4>
+              <p><strong>Correo:</strong> {{ obtenerCorreoResponsable(ins) }}</p>
+              <p><strong>Teléfono:</strong> {{ ins.telefonoApoderado }}</p>
+            </div>
+            <div class="detalle-col">
+              <h4>Datos del Colegio</h4>
+              <p *ngIf="ins.colegio?.IE"><strong>IE:</strong> {{ ins.colegio.IE }}</p>
+              <p *ngIf="ins.colegio?.nivel"><strong>Nivel:</strong> {{ ins.colegio.nivel }}</p>
+              <p *ngIf="ins.colegio?.grado"><strong>Grado:</strong> {{ ins.colegio.grado }}</p>
+              <p><strong>Monto total:</strong> S/ {{ ins.montoTotal }}</p>
+            </div>
+            <div class="detalle-col">
+              <h4>Voucher de Pago</h4>
+              <p><strong>N° Operación:</strong> {{ $any(ins).voucherNumeroOperacion || '-' }}</p>
+              <div *ngIf="tieneVoucher(ins)" class="voucher-preview">
+                <img [src]="obtenerVoucherUrl(ins)" alt="Voucher" class="voucher-img">
+              </div>
+              <p *ngIf="!tieneVoucher(ins)" class="sin-voucher">Sin comprobante de pago</p>
+            </div>
+          </div>
+
+          <div class="detalle-estudiantes">
+            <h4>Estudiantes ({{ cantidadEstudiantesValidos(ins) }})</h4>
+            <table class="tabla-estudiantes" *ngIf="ins.estudiantes?.length">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>DNI</th>
+                  <th>Nombres</th>
+                  <th>Apellidos</th>
+                  <th>Nivel</th>
+                  <th>Grado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let est of ins.estudiantes; let j = index">
+                  <td>{{ j + 1 }}</td>
+                  <td>{{ est.numeroDocumento }}</td>
+                  <td>{{ est.nombres }}</td>
+                  <td>{{ est.apellidos }}</td>
+                  <td>{{ est.nivel }}</td>
+                  <td>{{ est.grado }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </ng-container>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" *ngIf="mostrarModalValidar" (click)="cerrarModalValidar()">
+  <div class="modal-content modal-validar" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Validar Inscripción Online</h2>
+      <button class="btn-cerrar" (click)="cerrarModalValidar()">×</button>
+    </div>
+
+    <div class="modal-body" *ngIf="inscripcionAValidar">
+      <div class="validation-grid">
+        <div class="validation-col">
+          <h4>Responsable</h4>
+          <p><strong>Correo:</strong> {{ obtenerCorreoResponsable(inscripcionAValidar) }}</p>
+          <p><strong>Teléfono:</strong> {{ inscripcionAValidar.telefonoApoderado }}</p>
+        </div>
+        <div class="validation-col">
+          <h4>Pago</h4>
+          <p><strong>N° Operación:</strong> {{ $any(inscripcionAValidar).voucherNumeroOperacion || '-' }}</p>
+          <p><strong>Monto:</strong> S/ {{ inscripcionAValidar.montoTotal }}</p>
+          <p><strong>Método de pago:</strong> {{ $any(inscripcionAValidar).metodoPago }}</p>
+          <div *ngIf="tieneVoucher(inscripcionAValidar)" class="voucher-preview">
+            <img [src]="obtenerVoucherUrl(inscripcionAValidar)" alt="Comprobante de pago" class="voucher-img">
+          </div>
+          <p *ngIf="!tieneVoucher(inscripcionAValidar)" class="sin-voucher">No se ha subido comprobante de pago</p>
+        </div>
+        <div class="validation-col">
+          <h4>Colegio</h4>
+          <p><strong>IE:</strong> {{ inscripcionAValidar.colegio?.IE }}</p>
+          <p><strong>Estudiantes:</strong> {{ cantidadEstudiantesValidos(inscripcionAValidar) }}</p>
+        </div>
+      </div>
+
+      <div class="validation-confirm">
+        <label class="checkbox-container">
+          <input type="checkbox" [(ngModel)]="confirmacionValidacion">
+          <span class="checkbox-label">Confirmo que he revisado el comprobante de pago y los datos de la inscripción, y autorizo la validación.</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-cancelar" (click)="cerrarModalValidar()">Cancelar</button>
+      <button
+        class="btn-validar-confirmar"
+        [disabled]="!confirmacionValidacion || validando"
+        (click)="confirmarValidacion()">
+        {{ validando ? 'Validando...' : 'Validar inscripción' }}
+      </button>
+    </div>
+  </div>
+</div>

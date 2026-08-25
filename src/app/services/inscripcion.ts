@@ -104,19 +104,13 @@ export class InscripcionService {
     try {
       let q;
       if (verTodos) {
-        // Modo histórico: carga TODA la colección sin filtro de usuarioId ni fechaTexto en Firestore.
-        // El filtrado de fecha se realiza localmente en el componente para dar soporte a
-        // documentos viejos sin fechaTexto.
         q = this.inscripcionesRef;
       } else if (ignorarFecha) {
-        // Modo normal con búsqueda global: se ignorará el filtro de fechaTexto en Firestore
-        // cargando todas las inscripciones del usuario actual para posibilitar búsquedas globales.
         q = query(
           this.inscripcionesRef,
           where('usuarioId', '==', usuarioId)
         );
       } else {
-        // Modo normal por fecha: filtra por fechaTexto exacto Y usuarioId.
         q = query(
           this.inscripcionesRef,
           where('fechaTexto', '==', fechaTexto),
@@ -145,6 +139,28 @@ export class InscripcionService {
       });
     } catch (error) {
       console.error('Error al obtener inscripciones filtradas:', error);
+      throw error;
+    }
+  }
+
+  async obtenerInscripcionesPorOrigen(origen: string): Promise<Inscripcion[]> {
+    try {
+      const q = query(this.inscripcionesRef, where('origen', '==', origen));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(docSnap => {
+        const data = docSnap.data() as any;
+        let fechaInscripcion = data.fechaInscripcion;
+        if (fechaInscripcion && typeof fechaInscripcion.toDate === 'function') {
+          fechaInscripcion = fechaInscripcion.toDate();
+        }
+        return { id: docSnap.id, ...data, fechaInscripcion } as Inscripcion;
+      }).sort((a, b) => {
+        const fechaA = a.fechaInscripcion?.getTime?.() || 0;
+        const fechaB = b.fechaInscripcion?.getTime?.() || 0;
+        return fechaB - fechaA;
+      });
+    } catch (error) {
+      console.error('Error al obtener inscripciones por origen:', error);
       throw error;
     }
   }

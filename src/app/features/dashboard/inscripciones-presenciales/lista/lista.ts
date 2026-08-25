@@ -102,6 +102,13 @@ export class Lista implements OnInit {
       console.log('¿Buscador trabaja sobre la colección completa permitida?:', tieneBusqueda ? 'SÍ (Colección completa filtrada únicamente por usuarioId si no es modo histórico)' : 'NO (Solo sobre los registros de la fecha seleccionada)');
       console.log('1. Cantidad de registros cargados desde Firestore:', rawDocs.length);
 
+      // Excluir inscripciones online del listado presencial
+      const sinOnline = rawDocs.filter(ins => (ins as any).origen !== 'online');
+      if (sinOnline.length !== rawDocs.length) {
+        console.log(`1b. Excluidas ${rawDocs.length - sinOnline.length} inscripciones online`);
+      }
+      rawDocs = sinOnline;
+
       // Imprimir la estructura de los primeros documentos para ver sus campos raíz (diagnóstico)
       if (rawDocs.length > 0) {
         console.log('Estructura muestra del primer documento:', JSON.stringify(rawDocs[0]));

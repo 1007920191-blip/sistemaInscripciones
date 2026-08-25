@@ -4,11 +4,8 @@
     <ul>
       <li><button (click)="section = 'inscripciones-presenciales'">Inscripciones presenciales</button></li>
       <li><button (click)="section = 'inscripciones-online'">Inscripciones online</button></li>
-      <li><button (click)="section = 'concursos'">Concursos</button></li>
-      <li><button (click)="section = 'participantes'">Participantes</button></li>
-      <li><button (click)="section = 'aulas'">Aulas</button></li>  <!-- AÑADIDO -->
+      <li><button (click)="section = 'aulas'">Aulas</button></li>
       <li><button (click)="section = 'turnos'">Turnos</button></li>
-      <li><button (click)="section = 'reportes'">Reportes</button></li>
       <li><button (click)="irAConfiguracion()">Configuración</button></li>
       <li><button (click)="logout()">Salir</button></li>
     </ul>
@@ -58,9 +55,5 @@
       (cancelar)="onCancelarTurno()">
     </app-turno-form>
     
-    <!-- Otros módulos -->
-    <div *ngIf="section === 'concursos'"><h2>Concursos</h2></div>
-    <div *ngIf="section === 'participantes'"><h2>Participantes</h2></div>
-    <div *ngIf="section === 'reportes'"><h2>Reportes</h2></div>
   </main>
 </div>
