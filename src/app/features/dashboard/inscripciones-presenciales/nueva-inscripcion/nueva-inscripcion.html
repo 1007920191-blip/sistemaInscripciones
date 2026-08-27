@@ -1,3 +1,4 @@
+<div *ngIf="!modoEdicion && inicioCronometro" style="position:sticky;top:0;z-index:10;background:#0f172a;color:#38bdf8;padding:6px 12px;border-radius:8px;font-weight:700;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px">⏱ Tiempo: {{ tiempoFormateado }} <span style="font-weight:400;opacity:0.8">desde Nueva inscripción</span></div>
 <!-- PASO 1: COLEGIO -->
 <div *ngIf="pasoActual === 'colegio'" class="seleccion-colegio">
   

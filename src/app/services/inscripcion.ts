@@ -3,7 +3,6 @@ import { Injectable } from '@angular/core';
 import {
   Firestore,
   collection,
-  addDoc,
   getDocs,
   Timestamp,
   doc,
@@ -12,7 +11,9 @@ import {
   onSnapshot,
   where,
   query,
-  Unsubscribe
+  Unsubscribe,
+  runTransaction,
+  setDoc
 } from '@angular/fire/firestore';
 import { getAuth } from 'firebase/auth';
 import { firebaseApp } from '../firebase-config';
@@ -29,41 +30,63 @@ export class InscripcionService {
     this.inscripcionesRef = collection(this.firestore, 'inscripciones');
   }
 
+  private async siguienteCodigo(nombre: 'pagos' | 'estudiantes', inicial: number): Promise<string> {
+    const ref = doc(this.firestore, 'contadores', nombre);
+    return runTransaction(this.firestore, async (tx) => {
+      const snap = await tx.get(ref);
+      let valor: number;
+      if (!snap.exists()) {
+        valor = inicial;
+        tx.set(ref, { valor: valor + 1 });
+        return String(valor);
+      }
+      const d: any = snap.data();
+      valor = typeof d['valor'] === 'number' ? d['valor'] : typeof d['ultimo'] === 'number' ? d['ultimo'] + 1 : inicial;
+      if (valor < inicial) valor = inicial;
+      tx.update(ref, { valor: valor + 1 });
+      return String(valor);
+    });
+  }
+
   async guardarInscripcion(inscripcion: Inscripcion): Promise<string> {
     const hoy = new Date();
     const anio = hoy.getFullYear();
     const mes = String(hoy.getMonth() + 1).padStart(2, '0');
     const dia = String(hoy.getDate()).padStart(2, '0');
     const fechaTexto = `${anio}-${mes}-${dia}`;
-
     const auth = getAuth(firebaseApp);
     const usuarioId = auth.currentUser?.uid || '';
-
-    const docRef = await addDoc(this.inscripcionesRef, {
+    const codigo = await this.siguienteCodigo('pagos', 1000);
+    const ref = doc(this.firestore, 'inscripciones', codigo);
+    await setDoc(ref, {
       ...inscripcion,
+      codigo,
       fechaTexto,
       usuarioId,
       fechaInscripcion: Timestamp.now()
     });
-
-    return docRef.id;
+    return codigo;
   }
 
-  async guardarEstudiante(
-    estudiante: Estudiante,
-    inscripcionId: string
-  ): Promise<void> {
-
-    const estudiantesRef = collection(
-      this.firestore,
-      'inscripciones',
-      inscripcionId,
-      'estudiantes'
-    );
-
-    await addDoc(estudiantesRef, {
+  async guardarEstudiante(estudiante: Estudiante, inscripcionId: string): Promise<void> {
+    let codigoEst = (estudiante as any).codigo || (estudiante as any).id;
+    const esCodigoValido = codigoEst && /^\d{5}$/.test(String(codigoEst));
+    if (!esCodigoValido) codigoEst = await this.siguienteCodigo('estudiantes', 10000);
+    else codigoEst = String(codigoEst);
+    const ref = doc(this.firestore, 'inscripciones', inscripcionId, 'estudiantes', codigoEst);
+    await setDoc(ref, {
       ...estudiante,
-      fechaRegistro: Timestamp.now()
+      codigo: codigoEst,
+      CORRECTAS: (estudiante as any).CORRECTAS ?? 0,
+      INCORRECTAS: (estudiante as any).INCORRECTAS ?? 0,
+      EN_BLANCO: (estudiante as any).EN_BLANCO ?? (estudiante as any).BLANCO ?? 0,
+      BLANCO: (estudiante as any).BLANCO ?? (estudiante as any).EN_BLANCO ?? 0,
+      PUNTAJE_FINAL: (estudiante as any).PUNTAJE_FINAL ?? 0,
+      ASISTENCIA: (estudiante as any).ASISTENCIA ?? '',
+      FECHA_ASISTENCIA: (estudiante as any).FECHA_ASISTENCIA ?? (estudiante as any).HORA_ENTREGA ?? null,
+      HORA_ENTREGA: (estudiante as any).HORA_ENTREGA ?? (estudiante as any).FECHA_ASISTENCIA ?? null,
+      PUESTO: (estudiante as any).PUESTO ?? 0,
+      fechaRegistro: (estudiante as any).fechaRegistro || Timestamp.now()
     });
   }
 
@@ -174,40 +197,32 @@ export class InscripcionService {
    */
   filtrarInscripcionesLocal(inscripciones: Inscripcion[], termino: string): Inscripcion[] {
     const term = this.normalizarTexto(termino.trim());
+    const termRaw = termino.trim();
     if (!term) return inscripciones;
-
     return inscripciones.filter(ins => {
       const data = ins as any;
-
-      // 1. Colegio (campo directo del documento raiz)
+      const codigoIns = this.normalizarTexto(String(data.codigo || ins.id || ''));
+      if (codigoIns.includes(term)) return true;
+      if (termRaw && String(data.codigo || ins.id || '').includes(termRaw)) return true;
       const colegio  = this.normalizarTexto(ins.colegio?.IE || '');
       const modular  = this.normalizarTexto(ins.colegio?.CODIGOMODULAR || ins.colegio?.codigoModular || '');
       if (colegio.includes(term) || modular.includes(term)) return true;
-
-      // 2. Campos de texto planos del documento raíz (ej. nombreContacto, observaciones)
-      const camposDirectos = [
-        data.nombreContacto, data.observaciones,
-        data.turnoId, data.turnoCodigo, data.estado
-      ].filter(Boolean);
+      const camposDirectos = [data.nombreContacto, data.observaciones, data.turnoId, data.turnoCodigo, data.estado].filter(Boolean);
       if (camposDirectos.some(c => this.normalizarTexto(String(c)).includes(term))) return true;
-
-      // 3. Campos del estudiante a nivel raíz (si existen directamente en el documento raíz)
       const nombresRaiz = this.normalizarTexto(data.nombres || data.nombre || '');
       const apellidosRaiz = this.normalizarTexto(data.apellidos || data.apellido || '');
       const dniRaiz = this.normalizarTexto(data.numeroDocumento || data.dni || data.documento || '');
       if (nombresRaiz.includes(term) || apellidosRaiz.includes(term) || dniRaiz.includes(term)) return true;
-
-      // 4. Array de estudiantes embebido en el documento (si existe)
       const estudiantes: any[] = ins.estudiantes || data.estudiantes || [];
       if (estudiantes.length > 0) {
         return estudiantes.some(est => {
-          const nombres   = this.normalizarTexto(est.nombres   || est.nombre   || '');
+          const nombres = this.normalizarTexto(est.nombres || est.nombre || '');
           const apellidos = this.normalizarTexto(est.apellidos || est.apellido || '');
-          const dni       = this.normalizarTexto(est.numeroDocumento || est.dni || '');
-          return nombres.includes(term) || apellidos.includes(term) || dni.includes(term);
+          const dni = this.normalizarTexto(est.numeroDocumento || est.dni || '');
+          const codEst = this.normalizarTexto(String(est.codigo || est.id || ''));
+          return nombres.includes(term) || apellidos.includes(term) || dni.includes(term) || codEst.includes(term) || String(est.codigo || est.id || '').includes(termRaw);
         });
       }
-
       return false;
     });
   }

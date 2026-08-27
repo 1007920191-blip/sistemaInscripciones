@@ -74,19 +74,10 @@
           <td>{{ formatearFecha(ins.fechaInscripcion) }}</td>
           <td>{{ ins.estado }}</td>
           
-          <!-- ← NUEVO: Columna de acciones con 3 botones -->
           <td class="acciones">
-            <!-- Botón Lista - Genera PDF -->
-            <button class="btn-lista" (click)="verLista(ins)" title="Descargar lista PDF">
+            <button class="btn-lista" (click)="verLista(ins)" title="Ver lista y credenciales">
               Lista
             </button>
-            
-            <!-- Botón Credenciales - Icono -->
-            <button class="btn-credenciales" (click)="verCredenciales(ins)" title="Ver credenciales">
-              🪪
-            </button>
-            
-            <!-- Botón Editar existente -->
             <button class="btn-editar" (click)="editarInscripcion(ins)">
               Editar
             </button>

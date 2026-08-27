@@ -503,17 +503,11 @@ export class Lista implements OnInit {
         this.cargarImagenBase64(config?.fondoCredencial || '')
       ]);
 
-      // 3. Crear jsPDF para media hoja A4 vertical (105mm ancho x 297mm alto)
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: [105, 297]
-      });
-
-      const stripWidth = 95; // Usar el máximo ancho posible dejando 5mm de margen a cada lado
-      const stripHeight = 71; // Aumentado ligeramente para acomodar más info
-      const spacing = 2; // Espacio entre credenciales reducido para encajar 4
-      const startY = 3;
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [105, 297] });
+      const stripWidth = 95;
+      const stripHeight = 72.5;
+      const spacing = 1.6;
+      const startY = 2.5;
       const startX = 5;
 
       const totalEstudiantes = estudiantesAImprimir.length;
@@ -557,182 +551,129 @@ export class Lista implements OnInit {
         const gestionVal = colInfo?.GESTION || '—';
         const areaVal = colInfo?.AREA || '—';
 
-        // Borde y Fondo de Credencial
+        const azul = [0, 51, 102] as any;
+        const azulClaro = [14, 99, 180] as any;
+        const gris = [100, 100, 100] as any;
+        const negro = [20, 20, 20] as any;
+        const linea = [210, 210, 210] as any;
+        const codPago = (this.inscripcionParaLista as any)?.codigo || this.inscripcionParaLista?.id || '—';
+        const codEst = (est as any).codigo || (est as any).id || '—';
+        const codigoUnido = `${codPago}-${codEst}`;
+        const colNombre = (colInfo?.IE || 'N/A').toUpperCase();
+        const codModular = colInfo?.CODIGOMODULAR || '—';
+        const ieLugar = aulaInfo?.local || colInfo?.DISTRITO || sedeVal;
+        const fechaVal = '22-08-2026';
+        const fechaTurno: any = turnoInfo?.fecha;
+        const f = fechaTurno?.toDate ? fechaTurno.toDate() : fechaTurno ? new Date(fechaTurno) : null;
+        const fechaStr = f ? `${String(f.getDate()).padStart(2,'0')}-${String(f.getMonth()+1).padStart(2,'0')}-${f.getFullYear()}` : fechaVal;
+
         if (fondoCredencialB64) {
-          doc.addImage(fondoCredencialB64, 'JPEG', x, y, stripWidth, stripHeight);
+          try { doc.addImage(fondoCredencialB64, 'JPEG', x, y, stripWidth, stripHeight, undefined, 'FAST'); } catch {
+            doc.setFillColor(255, 255, 255);
+            doc.setDrawColor(azul[0], azul[1], azul[2]);
+            doc.setLineWidth(0.42);
+            doc.roundedRect(x, y, stripWidth, stripHeight, 2, 2, 'FD');
+          }
+        } else {
+          doc.setFillColor(255, 255, 255);
+          doc.setDrawColor(azul[0], azul[1], azul[2]);
+          doc.setLineWidth(0.42);
+          doc.roundedRect(x, y, stripWidth, stripHeight, 2, 2, 'FD');
         }
-
-        // Borde punteado (guía de recorte)
-        doc.setDrawColor(150, 150, 150);
-        doc.setLineWidth(0.3);
-        doc.setLineDashPattern([2, 2], 0);
+        doc.setDrawColor(linea[0], linea[1], linea[2]);
+        doc.setLineWidth(0.25);
+        doc.setLineDashPattern([1.2, 1.2], 0);
         doc.rect(x, y, stripWidth, stripHeight);
-        doc.setLineDashPattern([], 0); // Reset
+        doc.setLineDashPattern([], 0);
+        const l = 2.5; doc.setDrawColor(90, 90, 90); doc.setLineWidth(0.18);
+        doc.line(x - l, y, x, y); doc.line(x, y - l, x, y);
+        doc.line(x + stripWidth, y, x + stripWidth + l, y); doc.line(x + stripWidth, y - l, x + stripWidth, y);
+        doc.line(x - l, y + stripHeight, x, y + stripHeight); doc.line(x, y + stripHeight, x, y + stripHeight + l);
+        doc.line(x + stripWidth, y + stripHeight, x + stripWidth + l, y + stripHeight); doc.line(x + stripWidth, y + stripHeight, x + stripWidth, y + stripHeight + l);
 
-        // Pequeñas marcas de corte en las esquinas
-        doc.setDrawColor(100, 100, 100);
-        doc.setLineWidth(0.2);
-        const l = 3; // longitud de la marca
-        // Superior Izquierda
-        doc.line(x - l, y, x, y);
-        doc.line(x, y - l, x, y);
-        // Superior Derecha
-        doc.line(x + stripWidth, y, x + stripWidth + l, y);
-        doc.line(x + stripWidth, y - l, x + stripWidth, y);
-        // Inferior Izquierda
-        doc.line(x - l, y + stripHeight, x, y + stripHeight);
-        doc.line(x, y + stripHeight, x, y + stripHeight + l);
-        // Inferior Derecha
-        doc.line(x + stripWidth, y + stripHeight, x + stripWidth + l, y + stripHeight);
-        doc.line(x + stripWidth, y + stripHeight, x + stripWidth, y + stripHeight + l);
-
-        // Logos de Cabecera
+        doc.setFillColor(azul[0], azul[1], azul[2]);
+        doc.rect(x, y, stripWidth, 12, 'F');
+        doc.setFillColor(255, 193, 7);
+        doc.rect(x, y + 11.4, stripWidth, 0.8, 'F');
         if (logoIzquierdoB64) {
-          doc.addImage(logoIzquierdoB64, 'PNG', x + 3, y + 3, 11, 11);
+          doc.addImage(logoIzquierdoB64, 'PNG', x + 2, y + 1.1, 10, 10, undefined, 'FAST');
         }
         if (logoDerechoB64) {
-          doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 14, y + 3, 11, 11);
+          doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 12, y + 1.1, 10, 10, undefined, 'FAST');
         }
+        doc.setTextColor(255, 255, 255); doc.setFont('Helvetica', 'bold'); doc.setFontSize(5.1);
+        doc.text('CONCURSO REGIONAL DE MATEMÁTICA', x + stripWidth / 2, y + 3.8, { align: 'center' });
+        doc.setFontSize(7.4); doc.setTextColor(255, 193, 7);
+        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 7.4, { align: 'center', maxWidth: stripWidth - 26 });
+        doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.1); doc.setTextColor(255, 255, 255);
+        doc.text(`${eslogan} - EDICIÓN ${edicion}`.toUpperCase(), x + stripWidth / 2, y + 9.6, { align: 'center', maxWidth: stripWidth - 26 });
 
-        // Colores base institucionales
-        const azulInstitucional = [0, 51, 102];
-        const textoGris = [100, 100, 100];
-        const textoNegro = [30, 30, 30];
-        const colorLinea = [220, 220, 220];
-
-        // Texto Cabecera
-        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 5.5, { align: 'center', maxWidth: stripWidth - 30 });
-        
-        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5.5);
-        doc.text(`${eslogan} - EDICIÓN ${edicion}`.toUpperCase(), x + stripWidth / 2, y + 8.5, { align: 'center', maxWidth: stripWidth - 30 });
-
-        doc.setTextColor(azulInstitucional[0], azulInstitucional[1], azulInstitucional[2]);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(10.5);
-        doc.text('CREDENCIAL OFICIAL', x + stripWidth / 2, y + 13.5, { align: 'center' });
-
-        // Linea 1
-        doc.setDrawColor(colorLinea[0], colorLinea[1], colorLinea[2]);
-        doc.setLineWidth(0.2);
-        doc.line(x + 4, y + 16, x + stripWidth - 4, y + 16);
-
-        // ESTUDIANTE
-        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('ESTUDIANTE', x + 4, y + 19);
-
-        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(8.5);
-        const nomCompleto = `${est.nombres || ''} ${est.apellidos || ''}`.trim().toUpperCase();
-        doc.text(nomCompleto, x + 4, y + 23.5, { maxWidth: stripWidth - 8 });
-
-        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('DNI / DOC:', x + 4, y + 27.5);
-        
-        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(7);
-        doc.text(est.numeroDocumento || '—', x + 16, y + 27.5);
-
-        // Linea 2
-        doc.setDrawColor(colorLinea[0], colorLinea[1], colorLinea[2]);
-        doc.line(x + 4, y + 29.5, x + stripWidth - 4, y + 29.5);
-
-        // COLEGIO
-        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('INSTITUCIÓN EDUCATIVA', x + 4, y + 32.5);
-
-        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(8);
-        const colNombre = (colInfo?.IE || 'N/A').toUpperCase();
-        doc.text(colNombre, x + 4, y + 36.5, { maxWidth: stripWidth - 8 });
-
-        // Linea 3
-        doc.setDrawColor(colorLinea[0], colorLinea[1], colorLinea[2]);
-        doc.line(x + 4, y + 39, x + stripWidth - 4, y + 39);
-
-        // NIVEL, GRADO, GESTION, AREA
-        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('NIVEL', x + 4, y + 42);
-        doc.text('GRADO', x + 26, y + 42);
-        doc.text('GESTIÓN', x + 51, y + 42);
-        doc.text('ÁREA', x + 73, y + 42);
-
-        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(7);
-        doc.text((est.nivel || '—').toUpperCase(), x + 4, y + 45.5);
-        doc.text((est.grado || '—').toUpperCase(), x + 26, y + 45.5);
-        doc.text(gestionVal.toUpperCase(), x + 51, y + 45.5);
-        doc.text(areaVal.toUpperCase(), x + 73, y + 45.5);
-
-        // Linea 4
-        doc.setDrawColor(colorLinea[0], colorLinea[1], colorLinea[2]);
-        doc.line(x + 4, y + 48, x + stripWidth - 4, y + 48);
-
-        // SEDE, AULA, TURNO
-        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('SEDE', x + 4, y + 51);
-        doc.text('AULA', x + 51, y + 51);
-        doc.text('TURNO', x + 73, y + 51);
-
-        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(7);
-        doc.text(sedeVal.toUpperCase(), x + 4, y + 54.5, { maxWidth: 45 });
-        
-        doc.setTextColor(azulInstitucional[0], azulInstitucional[1], azulInstitucional[2]);
-        doc.setFontSize(8.5);
-        doc.text(codigoAulaEst.toUpperCase(), x + 51, y + 54.5);
-        doc.text(turnoCodigoEst.toUpperCase(), x + 73, y + 54.5);
-
-        // Linea 5
-        doc.setDrawColor(colorLinea[0], colorLinea[1], colorLinea[2]);
-        doc.line(x + 4, y + 57, x + stripWidth - 4, y + 57);
-
-        // INGRESO, EXAMEN
-        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5);
-        doc.text('INGRESO', x + 4, y + 60);
-        doc.text('EXAMEN', x + 51, y + 60);
-
-        doc.setTextColor(textoNegro[0], textoNegro[1], textoNegro[2]);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(7);
-        doc.text(String(ingresoStr), x + 4, y + 63.5);
-        doc.text(String(examenStr), x + 51, y + 63.5);
-
-        // Linea 6
-        doc.setDrawColor(colorLinea[0], colorLinea[1], colorLinea[2]);
-        doc.line(x + 4, y + 66, x + stripWidth - 4, y + 66);
-
-        // FOOTER
-        doc.setTextColor(textoGris[0], textoGris[1], textoGris[2]);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(5.5);
-        doc.text('Presentar esta credencial impresa el día del evento.', x + stripWidth / 2, y + 68.5, { align: 'center' });
-        doc.text('Es personal e intransferible.', x + stripWidth / 2, y + 70.5, { align: 'center' });
+        let cy = y + 15.2;
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.2);
+        doc.text('DNI:', x + 3, cy); doc.text('TURNO:', x + 32, cy); doc.text('PUERTA:', x + 54, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(5.8);
+        doc.text(est.numeroDocumento || '—', x + 9, cy); doc.text(turnoCodigoEst, x + 42, cy); doc.text(puertaVal || 'C', x + 66, cy);
+        cy += 3.8;
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.2); doc.text('PARTICIPANTE:', x + 3, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.2);
+        const nomCompleto = `${est.apellidos || ''} ${est.nombres || ''}`.trim().toUpperCase();
+        doc.text(nomCompleto, x + 20, cy, { maxWidth: stripWidth - 23 });
+        cy += 3.8;
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.2);
+        doc.text('CÓDIGO IE:', x + 3, cy); doc.text('ÁREA:', x + 42, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(5.5);
+        doc.text(codModular, x + 18, cy); doc.text(areaVal.toUpperCase(), x + 50, cy);
+        cy += 3.8;
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.2); doc.text('IE:', x + 3, cy);
+        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.5);
+        doc.text(colNombre, x + 8, cy, { maxWidth: stripWidth - 10 });
+        cy += 3.4;
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.2);
+        doc.text('GESTIÓN:', x + 3, cy); doc.text('GRADO:', x + 42, cy);
+        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(5.8);
+        doc.text(gestionVal.toUpperCase(), x + 15, cy); doc.text((est.grado || '').toUpperCase(), x + 52, cy);
+        cy += 3.8;
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.2);
+        doc.text('LUGAR:', x + 3, cy); doc.text('FECHA:', x + 58, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(4.8);
+        doc.text(ieLugar.substring(0, 22).toUpperCase(), x + 12, cy); doc.text(fechaStr, x + 67, cy);
+        cy += 1.6;
+        doc.setDrawColor(linea[0], linea[1], linea[2]); doc.setLineWidth(0.18); doc.line(x + 2, cy, x + stripWidth - 2, cy);
+        cy += 3.4;
+        const boxW1 = 52; const boxW2 = stripWidth - boxW1 - 8;
+        const boxH2 = 15.2;
+        const bx = x + 2; const by = cy;
+        doc.setFillColor(248, 249, 255); doc.setDrawColor(azul[0], azul[1], azul[2]); doc.setLineWidth(0.38);
+        doc.roundedRect(bx, by, boxW1, boxH2, 1, 1, 'FD');
+        doc.roundedRect(bx + boxW1 + 2, by, boxW2, boxH2, 1, 1, 'FD');
+        doc.setFont('Helvetica', 'normal'); doc.setFontSize(4); doc.setTextColor(gris[0], gris[1], gris[2]);
+        doc.text('AULA', bx + boxW1 / 2, by + 3.4, { align: 'center' });
+        doc.text('PABELLÓN', bx + boxW1 + 2 + boxW2 * 0.30, by + 3.4, { align: 'center' }); doc.text('PISO', bx + boxW1 + 2 + boxW2 * 0.72, by + 3.4, { align: 'center' });
+        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(9);
+        doc.text(codigoAulaEst.toUpperCase(), bx + boxW1 / 2, by + 7.2, { align: 'center' });
+        doc.setFontSize(6.5); doc.text(pabellonVal.toUpperCase(), bx + boxW1 + 2 + boxW2 * 0.30, by + 7.2, { align: 'center' });
+        doc.text(String(pisoVal), bx + boxW1 + 2 + boxW2 * 0.72, by + 7.2, { align: 'center' });
+        doc.setFont('Helvetica', 'normal'); doc.setFontSize(3.7); doc.setTextColor(gris[0], gris[1], gris[2]);
+        doc.text('CÓDIGO', bx + boxW1 / 2, by + 10.2, { align: 'center' });
+        doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.2); doc.setTextColor(azul[0], azul[1], azul[2]);
+        doc.text(codigoUnido, bx + boxW1 / 2, by + 13.2, { align: 'center' } as any);
+        const horaY = by + boxH2 + 1.6;
+        const horaH = 8.8;
+        doc.setDrawColor(azul[0], azul[1], azul[2]); doc.setLineWidth(0.38);
+        doc.roundedRect(bx, horaY, stripWidth - 4, horaH, 0.8, 0.8, 'D');
+        doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.6); doc.setTextColor(gris[0], gris[1], gris[2]);
+        doc.text('HORA INGRESO', bx + (stripWidth - 4) * 0.25, horaY + 3, { align: 'center' });
+        doc.text('HORA EXAMEN', bx + (stripWidth - 4) * 0.75, horaY + 3, { align: 'center' });
+        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(5.8);
+        doc.text(String(ingresoStr).toUpperCase(), bx + (stripWidth - 4) * 0.25, horaY + 6.8, { align: 'center' });
+        doc.text(String(examenStr).toUpperCase(), bx + (stripWidth - 4) * 0.75, horaY + 6.8, { align: 'center' });
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4);
+        doc.text('Código claro para consultar resultados • Conservar', x + stripWidth / 2, y + stripHeight - 1.4, { align: 'center' });
       }
 
       const ieNombre = (this.inscripcionParaLista?.colegio?.IE || 'Credenciales').replace(/\s+/g, '_');
-      doc.save(`Credenciales_${ieNombre}_${new Date().getTime()}.pdf`);
+      const codPagoFinal = (this.inscripcionParaLista as any)?.codigo || (this.inscripcionParaLista as any)?.id || '';
+      doc.save(`Credenciales_${ieNombre}_${codPagoFinal}.pdf`);
     } catch (error) {
       console.error('Error al generar credenciales:', error);
       alert('Ocurrió un error al generar las credenciales.');

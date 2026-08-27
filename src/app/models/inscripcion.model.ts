@@ -1,5 +1,6 @@
 export interface Estudiante {
   id?: string;
+  codigo?: string;
   tipoDocumento: string;
   numeroDocumento: string;
   nombres: string;
@@ -11,10 +12,21 @@ export interface Estudiante {
 
   aulaAsignadaId?: string;
   codigoAula?: string;
+
+  CORRECTAS?: number;
+  INCORRECTAS?: number;
+  EN_BLANCO?: number;
+  PUNTAJE_FINAL?: number;
+  ASISTENCIA?: string;
+  FECHA_ASISTENCIA?: any;
+  HORA_ENTREGA?: any;
+  PUESTO?: number;
+  BLANCO?: number;
 }
 
 export interface Inscripcion {
   id?: string;
+  codigo?: string;
   colegio: any;
   metodoPago: string;
   cantidadEstudiantes: number;
@@ -33,6 +45,11 @@ export interface Inscripcion {
   // Optimización de consultas y multiusuario
   fechaTexto?: string;
   usuarioId?: string;
+
+  TIEMPO?: number;
+  tiempoInscripcion?: number;
+  inicioInscripcion?: any;
+  finInscripcion?: any;
 }
 export interface AsignacionAulaResumen {
   estudianteIndex: number;

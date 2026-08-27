@@ -184,6 +184,21 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
     this.volver.emit();
   }
 
+  aMayusculas(campo: 'nombres'|'apellidos', e: any) {
+    const v = (e.target.value || '').toUpperCase();
+    e.target.value = v;
+    (this.estudiante as any)[campo] = v;
+  }
+  soloNumeros(e: KeyboardEvent) {
+    if (this.estudiante.tipoDocumento === 'dni' && !/[0-9]/.test(e.key) && !['Backspace','Delete','Tab','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
+  }
+  onDocumentoInput(e: any) {
+    let v = e.target.value || '';
+    if (this.estudiante.tipoDocumento === 'dni') v = v.replace(/\D/g, '').slice(0, 8);
+    else if (this.estudiante.tipoDocumento === 'ce') v = v.replace(/\D/g, '').slice(0, 12);
+    e.target.value = v;
+    this.estudiante.numeroDocumento = v;
+  }
   validarFormulario(): boolean {
     if (!this.estudiante.tipoDocumento) {
       alert('Seleccione tipo de documento');
@@ -191,6 +206,10 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
     }
     if (!this.estudiante.numeroDocumento && this.estudiante.tipoDocumento !== 'sd') {
       alert('Ingrese número de documento');
+      return false;
+    }
+    if (this.estudiante.tipoDocumento === 'dni' && !/^\d{8}$/.test(this.estudiante.numeroDocumento)) {
+      alert('DNI debe tener 8 dígitos numéricos');
       return false;
     }
     if (!this.estudiante.nombres) {
@@ -201,6 +220,8 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
       alert('Ingrese apellidos');
       return false;
     }
+    this.estudiante.nombres = this.estudiante.nombres.toUpperCase().trim();
+    this.estudiante.apellidos = this.estudiante.apellidos.toUpperCase().trim();
     if (!this.estudiante.grado) {
       alert('Seleccione grado');
       return false;

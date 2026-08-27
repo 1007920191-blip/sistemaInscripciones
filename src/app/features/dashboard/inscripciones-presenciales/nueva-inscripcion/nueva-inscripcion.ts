@@ -72,6 +72,10 @@ export class NuevaInscripcion implements OnInit {
   // Cache de turnos encontrados por estudiante
   turnosPorEstudiante: Map<number, Turno> = new Map();
 
+  inicioCronometro: number | null = null;
+  tiempoVivo = 0;
+  private timerSub: any = null;
+
   constructor(
     private inscripcionService: InscripcionService,
     private previewService: AsignacionPreviewService,
@@ -84,10 +88,35 @@ export class NuevaInscripcion implements OnInit {
   ngOnInit() {
     this.colegios = colegiosData as any[];
     this.colegiosFiltrados = [];
-    
+    if (!this.inscripcionEditar) {
+      this.inicioCronometro = Date.now();
+      this.iniciarTimerVivo();
+    }
     if (this.inscripcionEditar) {
       this.cargarDatosEdicion();
     }
+  }
+
+  ngOnDestroy() {
+    if (this.timerSub) clearInterval(this.timerSub);
+  }
+
+  private iniciarTimerVivo() {
+    if (this.timerSub) clearInterval(this.timerSub);
+    this.ngZone.runOutsideAngular(() => {
+      this.timerSub = setInterval(() => {
+        if (this.inicioCronometro) {
+          const s = Math.floor((Date.now() - this.inicioCronometro) / 1000);
+          this.ngZone.run(() => this.tiempoVivo = s);
+        }
+      }, 1000);
+    });
+  }
+
+  get tiempoFormateado(): string {
+    const m = Math.floor(this.tiempoVivo / 60).toString().padStart(2, '0');
+    const s = (this.tiempoVivo % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
   }
 
   private cargarDatosEdicion() {
@@ -450,7 +479,9 @@ export class NuevaInscripcion implements OnInit {
   // ============ GUARDAR CON ASIGNACIÓN REAL ============
 
   private async ejecutarFinalizacionConAsignacion() {
-    // Sincronizar el colegio en todos los estudiantes con el colegio actual (evita desincronización en ediciones)
+    const fin = Date.now();
+    const inicio = this.inicioCronometro || fin;
+    const tiempoSeg = Math.max(1, Math.round((fin - inicio) / 1000));
     const estudiantesConColegioActualizado = this.estudiantesRegistrados.map(est => ({
       ...est,
       colegio: this.colegioSeleccionado
@@ -466,7 +497,11 @@ export class NuevaInscripcion implements OnInit {
       estado: 'completada',
       turnoId: '',
       turnoCodigo: '',
-      asignacionesAula: []
+      asignacionesAula: [],
+      TIEMPO: tiempoSeg,
+      tiempoInscripcion: tiempoSeg,
+      inicioInscripcion: new Date(inicio),
+      finInscripcion: new Date(fin)
     };
 
     // Usar la lista sincronizada desde ahora en adelante
@@ -552,11 +587,16 @@ export class NuevaInscripcion implements OnInit {
       await this.inscripcionService.guardarEstudiante(estudiante, inscripcionId);
     }
 
-    // 3. Actualizar inscripción con asignaciones
+      // 3. Actualizar inscripción con asignaciones y tiempo
+    if (this.timerSub) clearInterval(this.timerSub);
     await this.inscripcionService.actualizarInscripcion(inscripcionId, {
       turnoId: inscripcionData.turnoId || '',
       turnoCodigo: inscripcionData.turnoCodigo || '',
-      asignacionesAula: asignacionesAula
+      asignacionesAula: asignacionesAula,
+      TIEMPO: (inscripcionData as any).TIEMPO,
+      tiempoInscripcion: (inscripcionData as any).tiempoInscripcion,
+      inicioInscripcion: (inscripcionData as any).inicioInscripcion,
+      finInscripcion: (inscripcionData as any).finInscripcion
     });
 
     // 4. MOSTRAR RESULTADO Y CERRAR
@@ -617,6 +657,7 @@ tieneAsignacionesExitosas(): boolean {
     this.finalizando = false;
     this.previewAsignaciones = [];
     this.turnosPorEstudiante.clear();
+    this.inicioCronometro = null;
     this.limpiarFiltros();
   }
 
