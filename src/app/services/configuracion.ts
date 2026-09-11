@@ -22,15 +22,46 @@ const storage = getStorage(firebaseApp);
 
 @Injectable({ providedIn: 'root' })
 export class ConfiguracionService {
-  private configRef = doc(db, 'Configuracion', 'general');
-  private configCollection = collection(db, 'Configuracion');
+  private configRef = doc(db, 'configuraciones', 'general');
+  private configRefLegacy = doc(db, 'Configuracion', 'general');
+  private configRefOmr = doc(db, 'configuraciones', 'omr');
+  private configCollection = collection(db, 'configuraciones');
+
+  private isConfigVacia(data: any): boolean {
+    if (!data) return true;
+    return !data['nombreConcurso'] && !data['eslogan'] && !data['logoIzquierdo'] && !data['logoDerecho'] && !data['fondoCredencial'];
+  }
 
   // Obtener configuración actual
   async obtenerConfiguracion(): Promise<Configuracion | null> {
   try {
-    const docSnap = await getDoc(this.configRef);
-    if (docSnap.exists()) {
-      const data = docSnap.data();
+    let docSnap = await getDoc(this.configRef);
+    let data: any = docSnap.exists() ? docSnap.data() : null;
+    let esVacia = !docSnap.exists() || this.isConfigVacia(data);
+    if (esVacia) {
+      const omrSnap = await getDoc(this.configRefOmr);
+      if (omrSnap.exists()) {
+        const omrData: any = omrSnap.data();
+        if (!this.isConfigVacia(omrData)) {
+          try { await setDoc(this.configRef, omrData as any, { merge: true } as any); } catch {}
+          data = omrData;
+          docSnap = omrSnap as any;
+          esVacia = false;
+        }
+      }
+    }
+    if (esVacia) {
+      const legacy = await getDoc(this.configRefLegacy);
+      if (legacy.exists()) {
+        const legacyData: any = legacy.data();
+        if (!this.isConfigVacia(legacyData)) {
+          try { await setDoc(this.configRef, legacyData as any, { merge: true } as any); } catch {}
+          data = legacyData;
+          docSnap = legacy as any;
+        }
+      }
+    }
+    if (docSnap.exists() && data && !this.isConfigVacia(data)) {
       return {
         id: docSnap.id,
         nombreConcurso: data['nombreConcurso'] || '',
@@ -40,6 +71,9 @@ export class ConfiguracionService {
         logoDerecho: data['logoDerecho'] || '',
         fondoCredencial: data['fondoCredencial'] || '',
         costoInscripcion: data['costoInscripcion'] || 15,
+        telefonoYape: data['telefonoYape'] || '',
+        titularYape: data['titularYape'] || data['nombreYape'] || '',
+        nombreCompletoTitularYape: data['nombreCompletoTitularYape'] || data['titularYape'] || '',
         fechaActualizacion: data['fechaActualizacion']?.toDate?.() || new Date()
       } as Configuracion;
     }
@@ -50,7 +84,10 @@ export class ConfiguracionService {
       logoIzquierdo: '',
       logoDerecho: '',
       fondoCredencial: '',
-      costoInscripcion: 15
+      costoInscripcion: 15,
+      telefonoYape: '',
+      titularYape: '',
+      nombreCompletoTitularYape: ''
     };
     } catch (error) {
       console.error('Error al obtener configuración:', error);
@@ -61,7 +98,10 @@ export class ConfiguracionService {
       logoIzquierdo: '',
       logoDerecho: '',
       fondoCredencial: '',
-      costoInscripcion: 15
+      costoInscripcion: 15,
+      telefonoYape: '',
+      titularYape: '',
+      nombreCompletoTitularYape: ''
     };
     }
   }
@@ -69,7 +109,7 @@ export class ConfiguracionService {
   // Guardar o actualizar configuración
   async guardarConfiguracion(config: Configuracion): Promise<void> {
   try {
-    const data = {
+    const data: any = {
       nombreConcurso: config.nombreConcurso,
       edicion: config.edicion,
       eslogan: config.eslogan,
@@ -77,12 +117,15 @@ export class ConfiguracionService {
       logoDerecho: config.logoDerecho,
       fondoCredencial: config.fondoCredencial,
       costoInscripcion: config.costoInscripcion,
+      telefonoYape: (config as any).telefonoYape || '',
+      titularYape: (config as any).titularYape || '',
+      nombreCompletoTitularYape: (config as any).nombreCompletoTitularYape || '',
       fechaActualizacion: Timestamp.now()
     };
     
-    console.log('✅ Service: Guardando datos:', data); // ← DEBUG
+    console.log('✅ Service: Guardando datos en configuraciones/general:', data); // ← DEBUG
     await setDoc(this.configRef, data);
-    console.log('✅ Service: Datos guardados'); // ← DEBUG
+    console.log('✅ Service: Datos guardados en configuraciones/general'); // ← DEBUG
   } catch (error) {
     console.error('❌ Service: Error al guardar:', error); // ← DEBUG
     throw error;

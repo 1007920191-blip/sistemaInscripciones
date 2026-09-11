@@ -38,32 +38,61 @@ export class AulaFormComponent {
 
   constructor(private aulaService: AulaService) {}
 
+  cargando = false;
+
   async onSubmit() {
-    // Validaciones
-    if (!this.aulaForm.codigo?.trim()) {
-      alert('El código es obligatorio');
+    if (this.cargando) return;
+    const codigoNorm = this.aulaForm.codigo?.trim().toUpperCase();
+    if (!codigoNorm) {
+      alert('El código es obligatorio (Ej: A1)');
+      return;
+    }
+    if (!/^[A-Z0-9\-]+$/.test(codigoNorm)) {
+      alert('Código solo letras/números y guion. Ej: A1');
       return;
     }
     if (!this.aulaForm.local?.trim()) {
       alert('El local es obligatorio');
       return;
     }
-
+    this.aulaForm.codigo = codigoNorm;
+    this.cargando = true;
+    const timeout = setTimeout(() => {
+      console.warn('Timeout guardando, forzando cierre');
+      this.cargando = false;
+      this.guardar.emit();
+    }, 4000);
     try {
-    if (this.esEdicion && this.aulaForm.id) {
-      const { id, ...data } = this.aulaForm;
-      await this.aulaService.updateAula(id, data);
-    } else {
-      await this.aulaService.addAula(this.aulaForm);
+      if (this.esEdicion && this.aulaForm.id) {
+        const { id, ...data } = this.aulaForm;
+        data.codigo = codigoNorm;
+        await Promise.race([
+          this.aulaService.updateAula(id, data),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout update')), 3000))
+        ]);
+      } else {
+        await Promise.race([
+          this.aulaService.addAula(this.aulaForm),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout creación')), 3500))
+        ]);
+      }
+      clearTimeout(timeout);
+    } catch (error: any) {
+      clearTimeout(timeout);
+      if (error?.message?.includes('Timeout')) {
+        console.warn('Forzando cierre por timeout, datos probablemente guardados');
+        this.cargando = false;
+        this.guardar.emit();
+        return;
+      }
+      console.error('Error al guardar:', error);
+      alert(error?.message || 'Error al guardar el aula');
+      this.cargando = false;
+      return;
     }
-    
-    // ✅ Emitir evento de éxito
+    clearTimeout(timeout);
+    this.cargando = false;
     this.guardar.emit();
-    
-  } catch (error) {
-    console.error('Error al guardar:', error);
-    alert('Error al guardar el aula');
-  }
 }
   onCancelar() {
     this.cancelar.emit();

@@ -1,0 +1,217 @@
+<div class="categorias-page">
+  <div class="page-header">
+    <div class="header-left">
+      <div class="icon-title"><span class="icon">🎓</span></div>
+      <div>
+        <h1>Categorías de calificación</h1>
+        <p>Administra las categorías que se utilizarán durante el procesamiento de las calificaciones.</p>
+      </div>
+    </div>
+    <button class="btn-nueva" (click)="abrirNueva()">+ Nueva categoría</button>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-box"><span>🔍</span><input [(ngModel)]="busqueda" (ngModelChange)="filtrar()" placeholder="Buscar categoría"></div>
+    <span class="count">{{ filtradas.length }} categorías</span>
+  </div>
+
+  <div class="table-card">
+    <table *ngIf="!cargando">
+      <thead><tr><th>CATEGORÍA</th><th>TIPO</th><th>PUESTOS PREMIADOS</th><th>CONFIGURACIÓN</th><th>ESTADO</th><th>ACCIONES</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let cat of filtradas">
+          <td><strong>{{ cat.nombre }}</strong><br><small>Categoría de clasificación</small></td>
+          <td><span class="badge-tipo">{{ cat.tipo === 'INTERNA' ? 'Interna' : 'Normal' }}</span></td>
+          <td><span class="badge-puesto">{{ cat.PUESTOPREMIADO }} <small>puestos</small></span></td>
+          <td>
+            <span *ngFor="let co of cat.condiciones" class="chip">{{ co.campo }} = {{ co.valor }}</span>
+            <span *ngIf="cat.tipo==='INTERNA' && cat.institucionesInternas?.length" class="chip">{{ cat.institucionesInternas.length }} instituciones</span>
+            <span *ngIf="!cat.condiciones?.length && cat.tipo==='NORMAL'" class="muted">—</span>
+          </td>
+          <td><label class="switch"><input type="checkbox" [checked]="cat.activa" (change)="toggleActiva(cat)"><span class="slider"></span></label> <span [style.color]="cat.activa?'#16a34a':'#64748b'">{{ cat.activa ? 'Activa' : 'Inactiva' }}</span></td>
+          <td style="position:relative">
+            <button class="btn-menu" (click)="toggleMenu(cat.id!)">⋮</button>
+            <div *ngIf="menuAbiertoId===cat.id" class="dropdown">
+              <button (click)="abrirEditar(cat); cerrarMenu()">✏️ Editar categoría</button>
+              <button (click)="toggleActiva(cat); cerrarMenu()">{{ cat.activa ? '🚫 Desactivar' : '✅ Activar' }}</button>
+              <button class="danger" (click)="eliminar(cat); cerrarMenu()">🗑️ Eliminar categoría</button>
+            </div>
+          </td>
+        </tr>
+        <tr *ngIf="!filtradas.length"><td colspan="6" style="text-align:center; padding:20px; color:#64748b">Sin categorías</td></tr>
+      </tbody>
+    </table>
+    <div *ngIf="cargando" style="padding:20px; text-align:center">Cargando...</div>
+    <div class="pagination"><span>items por página</span><select><option>10</option></select><span>0 de 0</span></div>
+  </div>
+
+  <div class="notice"><strong>Regla de categoría Interna</strong><br>Los estudiantes cuyo <strong>CODIGOMODULAR</strong> pertenezca a una institución interna aparecerán exclusivamente en esa categoría y serán excluidos de todas las categorías normales.</div>
+</div>
+
+<div class="modal-overlay" *ngIf="mostrarModal" (click)="cerrarModal()">
+  <div class="modal" (click)="$event.stopPropagation()">
+
+    <div class="modal-header">
+      <div class="modal-title">
+        <div class="modal-icon"> 
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="#1a73e8"><path d="M12 2L3 8.5l9 5 9-5L12 2z"/><path d="M4 12l8 4.5L20 12"/><path d="M4 16l8 4.5L20 16"/></svg>
+        </div>
+        <div>
+          <h2>{{ editando ? 'Editar categoría' : 'Nueva categoría' }}</h2>
+          <small *ngIf="!editando">Configure los criterios que se utilizarán para clasificar a los estudiantes.</small>
+          <small *ngIf="editando">Edite los criterios de la categoría.</small>
+        </div>
+      </div>
+      <button class="close" (click)="cerrarModal()">✕</button>
+    </div>
+
+    <div class="modal-body">
+
+      <div class="section">
+        <div class="sec-title">
+          <span class="sec-icon blue"><svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M12 2a10 10 0 1010 10A10 10 0 0012 2zm1 15h-2v-6h2zm0-8h-2V7h2z"/></svg></span>
+          <h3>Información general</h3>
+        </div>
+        <p class="sec-desc">Ingrese el nombre y seleccione el tipo de categoría.</p>
+
+        <div class="field-group">
+          <div class="field outlined">
+            <span class="field-icon">🏷️</span>
+            <input id="nombreCat" [(ngModel)]="form.nombre" placeholder=" " maxlength="80">
+            <label for="nombreCat" class="floating-label">Nombre de la categoría *</label>
+          </div>
+          <span class="counter">{{ form.nombre.length }}/80</span>
+        </div>
+
+        <div class="field outlined">
+          <span class="field-icon">🏅</span>
+          <input id="puestoCat" type="number" [(ngModel)]="form.puestoPremiado" min="1" placeholder=" ">
+          <label for="puestoCat" class="floating-label">Último puesto premiado *</label>
+        </div>
+        <p class="hint">Ejemplo: 7 significa que se premia del puesto 1 al 7.</p>
+
+        <p class="label-sm">Tipo de categoría</p>
+        <div class="tipo-grid">
+          <label class="tipo-card" [class.active]="form.tipo==='NORMAL'">
+            <input type="radio" name="tipo" value="NORMAL" [(ngModel)]="form.tipo" hidden>
+            <span class="radio" [class.checked]="form.tipo==='NORMAL'"></span>
+            <span class="tipo-icon" [class.active]="form.tipo==='NORMAL'">⚙️</span>
+            <div class="tipo-text">
+              <strong>Normal</strong>
+              <small>Clasifica estudiantes mediante GESTION, AREA o NIVEL.</small>
+            </div>
+          </label>
+
+          <label class="tipo-card" [class.active]="form.tipo==='INTERNA'">
+            <input type="radio" name="tipo" value="INTERNA" [(ngModel)]="form.tipo" hidden>
+            <span class="radio" [class.checked]="form.tipo==='INTERNA'"></span>
+            <span class="tipo-icon interna" [class.active]="form.tipo==='INTERNA'">🛡️</span>
+            <div class="tipo-text">
+              <strong>Interna</strong>
+              <small>Agrupa instituciones organizadoras y excluye a sus estudiantes de las otras categorías.</small>
+            </div>
+          </label>
+        </div>
+
+        <div class="estado-card">
+          <div class="estado-left">
+            <span class="eye">👁️</span>
+            <div>
+              <strong>Estado de la categoría</strong>
+              <small>La categoría estará disponible durante el procesamiento.</small>
+            </div>
+          </div>
+          <label class="estado-switch">
+            <input type="checkbox" [(ngModel)]="form.activa">
+            <span class="sw"></span>
+            <span class="sw-label">{{ form.activa ? 'Activa' : 'Inactiva' }}</span>
+          </label>
+        </div>
+      </div>
+
+      <div *ngIf="form.tipo==='NORMAL'" class="section">
+        <div class="sec-title with-btn">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="sec-icon light"><svg viewBox="0 0 24 24" width="16" height="16" fill="#1a73e8"><path d="M3 17h6v2H3zm8 0l4-4 4 4h-8zm-8-6h10v2H3zm0-6h14v2H3z"/></svg></span>
+            <h3>Criterios de clasificación</h3>
+          </div>
+          <button class="btn-add" (click)="agregarCriterio()">+ Agregar criterio</button>
+        </div>
+        <p class="sec-desc" style="margin-left:30px">El estudiante deberá cumplir todos los criterios configurados en esta categoría.</p>
+
+        <div class="criterios-card" *ngIf="form.condiciones.length">
+          <div *ngFor="let co of form.condiciones; let i=index" class="criterio-row">
+            <span class="num">{{ i+1 }}</span>
+
+            <div class="field outlined sm">
+              <label class="floating-label always">Campo*</label>
+              <select [(ngModel)]="co.campo">
+                <option value="GESTION">GESTION</option>
+                <option value="AREA">AREA</option>
+                <option value="NIVEL">NIVEL</option>
+              </select>
+            </div>
+
+            <div class="field outlined sm">
+              <label class="floating-label always">Operador*</label>
+              <select [(ngModel)]="co.operador">
+                <option value="IGUAL">Es igual a</option>
+                <option value="DIFERENTE">Es diferente de</option>
+              </select>
+            </div>
+
+            <div class="field outlined sm">
+              <label class="floating-label always">Valor*</label>
+              <select [(ngModel)]="co.valor">
+                <option value="" disabled>Seleccionar</option>
+                <option *ngFor="let v of valoresPorCampo[co.campo]" [value]="v">{{ v }}</option>
+              </select>
+            </div>
+
+            <button class="btn-del" (click)="eliminarCriterio(i)" title="Eliminar">🗑️</button>
+          </div>
+        </div>
+
+        <div class="info-box">
+          <span class="info-icon">◈</span>
+          <div>
+            <strong>Todos los criterios deben cumplirse</strong>
+            <small>Ejemplo: GESTION = PUBLICA y AREA = URBANA.</small>
+          </div>
+        </div>
+      </div>
+
+      <div *ngIf="form.tipo==='INTERNA'" class="section">
+        <div class="sec-title">
+          <span class="sec-icon blue"><svg viewBox="0 0 24 24" width="14" height="14" fill="white"><path d="M12 2L2 7l10 5 10-5z"/><path d="M2 12l10 5 10-5"/><path d="M2 17l10 5 10-5"/></svg></span>
+          <h3>Instituciones internas</h3>
+        </div>
+        <p class="sec-desc">Busque una institución educativa por nombre o código modular y agréguela a la categoría.</p>
+        <div class="field outlined">
+          <span class="field-icon">🔍</span>
+          <input [(ngModel)]="busquedaInstitucion" (ngModelChange)="onBuscarInstitucion()" placeholder="Buscar institución educativa">
+          <span *ngIf="busquedaInstitucion" class="clear" (click)="busquedaInstitucion=''; resultadosInstitucion=[]">✕</span>
+        </div>
+        <div *ngIf="resultadosInstitucion.length" class="resultados">
+          <div class="res-header">Resultados encontrados <span class="badge">{{ resultadosInstitucion.length }}</span></div>
+          <div *ngFor="let c of resultadosInstitucion" class="res-item">
+            <div><strong>{{ c.IE }}</strong><br><small>Código: {{ c.CODIGOMODULAR }} — {{ c.DEPARTAMENTO }} · {{ c.PROVINCIA }} · {{ c.DISTRITO }}</small></div>
+            <button class="btn-add-sm" (click)="agregarInstitucion(c)">+</button>
+          </div>
+        </div>
+        <div *ngIf="form.institucionesInternas.length" class="seleccionadas">
+          <div *ngFor="let inst of form.institucionesInternas; let i=index" class="sel-item">
+            <span>{{ inst.IE }} ({{ inst.CODIGOMODULAR }})</span><button (click)="quitarInstitucion(i)">✕</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-cancel" (click)="cerrarModal()">Cancelar</button>
+      <button class="btn-create" (click)="guardar()" [disabled]="guardando">💾 {{ editando ? 'Guardar cambios' : 'Crear categoría' }}</button>
+    </div>
+
+  </div>
+</div>

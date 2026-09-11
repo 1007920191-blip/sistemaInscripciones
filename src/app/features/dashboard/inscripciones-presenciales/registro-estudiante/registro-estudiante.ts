@@ -15,6 +15,7 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
   @Input() numeroEstudiante: number = 1;
   @Input() totalEstudiantes: number = 1;
   @Input() estudianteEdicion: Estudiante | null = null;
+  @Input() slotNuevo = false;
   @Input() modoEdicion = false;
 
   // ✅ EVENTOS SEPARADOS Y CLAROS
@@ -31,8 +32,8 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
     { id: 'sd', nombre: 'Sin Documento' }
   ];
 
-  gradosPrimaria = ['1° Primaria', '2° Primaria', '3° Primaria', '4° Primaria', '5° Primaria', '6° Primaria'];
-  gradosSecundaria = ['1° Secundaria', '2° Secundaria', '3° Secundaria', '4° Secundaria', '5° Secundaria'];
+  gradosPrimaria = ['PRIMERO', 'SEGUNDO', 'TERCERO', 'CUARTO', 'QUINTO', 'SEXTO'];
+  gradosSecundaria = ['PRIMERO', 'SEGUNDO', 'TERCERO', 'CUARTO', 'QUINTO'];
 
   estudiante!: Estudiante;
   procesando = false;
@@ -66,43 +67,69 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
       console.log('[Hijo] Cambió estudianteEdicion:', this.estudianteEdicion);
       this.cargarEstudiante();
     }
+    if (changes['slotNuevo'] && !changes['slotNuevo'].firstChange) {
+      this.cargarEstudiante();
+    }
     if (changes['colegio'] && this.estudiante) {
   this.estudiante.colegio = this.colegio;
+  const nivelNuevo = String(this.colegio?.NIVEL || '').toUpperCase().trim();
+  if (nivelNuevo && String(this.estudiante.nivel).toUpperCase().trim() !== nivelNuevo) {
+    this.estudiante.nivel = nivelNuevo;
+    const validos = this.gradosDisponibles;
+    if (this.estudiante.grado && validos.length && !validos.includes(String(this.estudiante.grado).toUpperCase().trim())) {
+      this.estudiante.grado = '';
+    }
+  }
 }
   }
 
   private cargarEstudiante() {
     this.procesando = false;
-    
-    // ✅ USAR TU CÓDIGO ORIGINAL (funciona igual)
-    if (this.estudianteEdicion?.numeroDocumento) {
-      console.log('[Hijo] Cargando datos EXISTENTES del estudiante', this.numeroEstudiante);
-      
+    const ed: any = this.estudianteEdicion as any;
+    if (this.slotNuevo) {
+      // Un slot agregado no representa un documento existente. Esta bandera
+      // tiene prioridad sobre cualquier valor residual de los demás inputs.
+      console.log('[Hijo] Slot NUEVO: formulario vacío', this.numeroEstudiante);
       this.estudiante = {
-    tipoDocumento: this.estudianteEdicion.tipoDocumento,
-    numeroDocumento: this.estudianteEdicion.numeroDocumento,
-    nombres: this.estudianteEdicion.nombres,
-    apellidos: this.estudianteEdicion.apellidos,
-    nivel: this.estudianteEdicion.nivel,
-    grado: this.estudianteEdicion.grado,
-
-    // SI existe un colegio nuevo seleccionado usarlo.
-    // Si no, usar el colegio del estudiante.
-    colegio: this.colegio ?? this.estudianteEdicion.colegio,
-
-    fechaRegistro: this.estudianteEdicion.fechaRegistro
-};
-      
-      // Debug
-      this.debugInfo = {
-        numeroEstudiante: this.numeroEstudiante,
-        tieneDatosEdicion: true,
-        datosCargados: { ...this.estudiante }
-      };
-      
+        tipoDocumento: 'dni', numeroDocumento: '', nombres: '', apellidos: '',
+        nivel: this.colegio?.NIVEL || '', grado: '', colegio: this.colegio,
+        fechaRegistro: new Date()
+      } as any;
+      return;
+    }
+    const hasData = !!(ed?.numeroDocumento && String(ed.numeroDocumento).trim());
+    if (hasData) {
+      console.log('[Hijo] Cargando datos EXISTENTES del estudiante', this.numeroEstudiante);
+      this.estudiante = {
+        tipoDocumento: ed.tipoDocumento || 'dni',
+        numeroDocumento: ed.numeroDocumento,
+        nombres: ed.nombres || '',
+        apellidos: ed.apellidos || '',
+        nivel: ed.nivel || this.colegio?.NIVEL || '',
+        grado: ed.grado || '',
+        colegio: this.colegio ?? ed.colegio,
+        fechaRegistro: ed.fechaRegistro || new Date(),
+        codigo: ed.codigo || ed.id,
+        id: ed.id || ed.codigo,
+        aulaAsignadaId: ed.aulaAsignadaId,
+        codigoAula: ed.codigoAula,
+        turnoCodigo: ed.turnoCodigo
+      } as any;
+    } else if (this.estudianteEdicion) {
+      // Es un slot nuevo vacío (creado al aumentar cantidad) - mantener vacío, no copiar del anterior
+      console.log('[Hijo] Slot NUEVO vacío para estudiante', this.numeroEstudiante);
+      this.estudiante = {
+        tipoDocumento: 'dni',
+        numeroDocumento: '',
+        nombres: '',
+        apellidos: '',
+        nivel: this.colegio?.NIVEL || '',
+        grado: '',
+        colegio: this.colegio,
+        fechaRegistro: new Date()
+      } as any;
     } else {
       console.log('[Hijo] Creando estudiante VACÍO', this.numeroEstudiante);
-      
       this.estudiante = {
         tipoDocumento: '',
         numeroDocumento: '',
@@ -226,6 +253,8 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
       alert('Seleccione grado');
       return false;
     }
+    this.estudiante.grado = String(this.estudiante.grado).toUpperCase().trim();
+    this.estudiante.nivel = String(this.estudiante.nivel || this.colegio?.NIVEL || '').toUpperCase().trim();
     return true;
   }
 }

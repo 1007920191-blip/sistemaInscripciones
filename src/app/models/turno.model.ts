@@ -3,11 +3,11 @@ export type ModoAsignacion = 'normal' | 'contingencia';
 export interface Turno {
   id?: string;
   codigo: string;
-  fecha: Date;
-  horaInicioEntrada: string;
-  horaFinEntrada: string;
-  horaInicioPrueba: string;
-  horaFinPrueba: string;
+  fecha: any;
+  horaInicioEntrada: any;
+  horaFinEntrada: any;
+  horaInicioPrueba: any;
+  horaFinPrueba: any;
   nivel: 'Primaria' | 'Secundaria';        // Compatibilidad
   grados: string[];                        // Compatibilidad
   nivelesGrados?: NivelGrado[];           // ← NUEVO: Guardar pares nivel-grado

@@ -12,16 +12,15 @@ export interface Estudiante {
 
   aulaAsignadaId?: string;
   codigoAula?: string;
+  turnoCodigo?: string;
 
   CORRECTAS?: number;
   INCORRECTAS?: number;
-  EN_BLANCO?: number;
+  BLANCO?: number;
   PUNTAJE_FINAL?: number;
   ASISTENCIA?: string;
-  FECHA_ASISTENCIA?: any;
-  HORA_ENTREGA?: any;
+  FECHAASISTENCIA?: any;
   PUESTO?: number;
-  BLANCO?: number;
 }
 
 export interface Inscripcion {

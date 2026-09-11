@@ -1,4 +1,4 @@
-import { Component, OnInit, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, Output, EventEmitter, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { jsPDF } from 'jspdf';
@@ -55,13 +55,21 @@ export class Lista implements OnInit {
   paginaActual = 1;
   Math = Math;
   
+  estudiantesImportados: Estudiante[] = [];
+
+  // Eliminar individual
+  mostrarModalEliminar = false;
+  estudianteAEliminar: Estudiante | null = null;
+  eliminando = false;
+
   @Output() volver = new EventEmitter<void>();
   @Output() inscripcionGuardada = new EventEmitter<void>();
 
   constructor(
     private inscripcionService: InscripcionService,
     private configuracionService: ConfiguracionService,
-    private impresionService: ImpresionService
+    private impresionService: ImpresionService,
+    private ngZone: NgZone
   ) {}
 
   obtenerFechaHoyTexto(): string {
@@ -82,7 +90,7 @@ export class Lista implements OnInit {
     this.cargando = true;
     try {
       const auth = getAuth(firebaseApp);
-      const uidActual = auth.currentUser?.uid || '';
+      const uidActual = (auth.currentUser?.email || auth.currentUser?.uid || '').toLowerCase().trim();
       const tieneBusqueda = !!this.terminoBusqueda.trim();
 
       // Búsqueda global (sin fecha) vs Búsqueda por fecha exacta
@@ -115,34 +123,7 @@ export class Lista implements OnInit {
         console.log('Campos raíz del primer documento:', Object.keys(rawDocs[0]));
       }
 
-      // Aplicar filtro de fecha en cliente (Solo si NO hay búsqueda activa y estamos en modo histórico)
       let despuesFecha = [...rawDocs];
-      let descartadosFecha = 0;
-      if (!tieneBusqueda && this.verTodos) {
-        despuesFecha = rawDocs.filter(ins => {
-          if (ins.fechaTexto) {
-            return ins.fechaTexto === this.fechaSeleccionada;
-          }
-          if (ins.fechaInscripcion) {
-            const de = new Date(ins.fechaInscripcion);
-            const anio = de.getFullYear();
-            const mes = String(de.getMonth() + 1).padStart(2, '0');
-            const dia = String(de.getDate()).padStart(2, '0');
-            const fechaDoc = `${anio}-${mes}-${dia}`;
-            return fechaDoc === this.fechaSeleccionada;
-          }
-          return false;
-        });
-        descartadosFecha = rawDocs.length - despuesFecha.length;
-      } else if (tieneBusqueda) {
-        // Al haber búsqueda activa, se omite el filtro de fecha completamente para localizar el registro
-        descartadosFecha = 0;
-      } else {
-        // Modo normal sin búsqueda: Firestore ya aplicó el filtro de fecha
-        descartadosFecha = 0;
-      }
-      console.log('2. Cantidad de registros descartados por filtro de fecha:', descartadosFecha);
-      console.log('3. Cantidad de registros restantes después del filtro de fecha:', despuesFecha.length);
 
       // Filtro de usuario en cliente
       let despuesUsuario = [...despuesFecha];
@@ -265,6 +246,14 @@ export class Lista implements OnInit {
       if (!this.estudiantesParaLista || this.estudiantesParaLista.length === 0) {
         this.estudiantesParaLista = ins.estudiantes || [];
       }
+      const seenL = new Set<string>();
+      const dedupL: any[] = [];
+      for (const est of this.estudiantesParaLista) {
+        const k = `${String((est as any).numeroDocumento||'').trim().replace(/\D/g,'')}|${String((est as any).nombres||'').trim().toUpperCase()}|${String((est as any).apellidos||'').trim().toUpperCase()}`;
+        if (k === '||') { dedupL.push(est); continue; }
+        if (!seenL.has(k)) { seenL.add(k); dedupL.push(est); }
+      }
+      this.estudiantesParaLista = dedupL;
     } catch (error) {
       console.error('Error obteniendo estudiantes:', error);
       this.estudiantesParaLista = ins.estudiantes || [];
@@ -278,6 +267,14 @@ export class Lista implements OnInit {
     this.inscripcionParaLista = null;
     this.estudiantesParaLista = [];
     this.estudiantesSeleccionados.clear();
+  }
+
+  private asignacionParaEstudiante(estudiante: Estudiante): any {
+    const codigo = String((estudiante as any).codigo || (estudiante as any).id || '');
+    const indice = codigo
+      ? this.estudiantesParaLista.findIndex((e: any) => String(e.codigo || e.id || '') === codigo)
+      : this.estudiantesParaLista.indexOf(estudiante);
+    return this.inscripcionParaLista?.asignacionesAula?.find((a: any) => a.estudianteIndex === indice);
   }
 
   // Controles de Selección para Checkboxes
@@ -314,124 +311,118 @@ export class Lista implements OnInit {
   // ============================================
   // GENERAR PDF DE ESTUDIANTES (Formato Lista Tradicional)
   // ============================================
-  descargarPDF() {
+  async descargarPDF() {
     if (!this.inscripcionParaLista || this.estudiantesParaLista.length === 0) {
       alert('No hay datos para generar el PDF');
       return;
     }
-    
-    const ins = this.inscripcionParaLista;
-    const estudiantes = this.estudiantesParaLista;
-
-    // Crear documento PDF
-    const doc = new jsPDF();
+    const ins: any = this.inscripcionParaLista;
+    const estudiantes: any[] = [...this.estudiantesParaLista].sort((a: any, b: any) => {
+      const na = `${a.apellidos || ''} ${a.nombres || ''}`.toLowerCase();
+      const nb = `${b.apellidos || ''} ${b.nombres || ''}`.toLowerCase();
+      return na.localeCompare(nb);
+    });
+    let config: any = null;
+    try { config = await this.configuracionService.obtenerConfiguracion(); } catch {}
+    const nombreConcurso = config?.nombreConcurso || 'IV CONCURSO PROVINCIAL DE COMPRENSION LECTORA';
+    const edicion = config?.edicion || '2026';
+    const eslogan = config?.eslogan || '"ÑAWINCHASUN ALLIN KAWSANAPAQ"';
+    const sedeCfg = config?.sede || 'ANDAHUAYLAS';
+    const [logoIzq, logoDer] = await Promise.all([
+      this.cargarImagenBase64(config?.logoIzquierdo || ''),
+      this.cargarImagenBase64(config?.logoDerecho || '')
+    ]);
+    const codigo = (ins as any).codigo || ins.id || 'N/A';
+    const colegioIE = ins.colegio?.IE || 'N/A';
+    const colegioNombre = ins.colegio?.IE || ins.colegio?.nombre || colegioIE;
+    const fechaStr = this.formatearFechaPDF(ins.fechaInscripcion);
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // ===== TÍTULO =====
-    doc.setFontSize(18);
-    doc.setTextColor(33, 37, 41);
-    doc.text('LISTA DE ESTUDIANTES INSCRITOS', pageWidth / 2, 20, { align: 'center' });
-    
-    // ===== INFORMACIÓN GENERAL =====
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Código de inscripción: ${ins.id || 'N/A'}`, 14, 35);
-    doc.text(`Fecha de inscripción: ${this.formatearFechaPDF(ins.fechaInscripcion)}`, 14, 42);
-    doc.text(`Colegio: ${ins.colegio?.IE || 'N/A'}`, 14, 49);
-    doc.text(`Total de estudiantes: ${estudiantes.length}`, 14, 56);
-    
-    // Línea separadora
-    doc.setDrawColor(200, 200, 200);
-    doc.line(14, 62, pageWidth - 14, 62);
-    
-    // ===== TABLA DE ESTUDIANTES =====
-    const startY = 72;
-    const rowHeight = 10;
-    
-    // Configurar columnas: N°, Nombres, DNI, Colegio, Grado, Nivel, Fecha
-    const headers = ['N°', 'Nombres y Apellidos', 'DNI', 'Colegio', 'Grado', 'Nivel', 'Aula', 'Fecha'];
-    const colWidths = [8, 50, 22, 40, 18, 20, 20, 22];
-
-    const colPositions: number[] = [];
-    
-    // Calcular posiciones de columnas
-    let currentX = 14;
-    colWidths.forEach((width) => {
-      colPositions.push(currentX);
-      currentX += width;
-    });
-    
-    // Dibujar encabezados
-    doc.setFillColor(0, 123, 255); // Azul
-    doc.rect(14, startY - 6, pageWidth - 28, 8, 'F');
-    doc.setFontSize(9);
-    doc.setTextColor(255, 255, 255); // Blanco
-    
-    headers.forEach((header, i) => {
-      doc.text(header, colPositions[i] + 2, startY);
-    });
-    
-    // Dibujar filas de estudiantes
-    let currentY = startY + rowHeight;
-    
-    estudiantes.forEach((est, index) => {
-      if (currentY > 270) {
-        doc.addPage();
-        currentY = 20;
-        
-        doc.setFillColor(0, 123, 255);
-        doc.rect(14, currentY - 6, pageWidth - 28, 8, 'F');
-        doc.setTextColor(255, 255, 255);
-        headers.forEach((header, i) => {
-          doc.text(header, colPositions[i] + 2, currentY);
-        });
-        currentY += rowHeight;
-      }
-      
-      if (index % 2 === 0) {
-        doc.setFillColor(245, 245, 245);
-        doc.rect(14, currentY - 6, pageWidth - 28, 8, 'F');
-      }
-      
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const drawHeader = () => {
+      if (logoIzq) { try { doc.addImage(logoIzq, 'PNG', 15, 10, 18, 18); } catch {} }
+      if (logoDer) { try { doc.addImage(logoDer, 'PNG', pageWidth - 33, 10, 18, 18); } catch {} }
+      doc.setTextColor(33, 37, 41);
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(String(nombreConcurso).toUpperCase(), pageWidth / 2, 16, { align: 'center' });
       doc.setFontSize(8);
-      doc.setTextColor(60, 60, 60);
-      
-      const nombreCompleto = `${est.nombres || ''} ${est.apellidos || ''}`.trim() || 'N/A';
-      const dni = est.numeroDocumento || 'N/A';
-      const colegio = ins.colegio?.IE || 'N/A';
-      const grado = est.grado || 'N/A';
-      const nivel = est.nivel || 'N/A';
-      const aula = est.codigoAula || '—';
-      const fecha = this.formatearFechaPDF(ins.fechaInscripcion);
-      
-      doc.text(`${index + 1}`, colPositions[0] + 2, currentY);
-      doc.text(nombreCompleto.substring(0, 30), colPositions[1] + 2, currentY);
-      doc.text(dni, colPositions[2] + 2, currentY);
-      doc.text(colegio.substring(0, 25), colPositions[3] + 2, currentY);
-      doc.text(grado, colPositions[4] + 2, currentY);
-      doc.text(nivel, colPositions[5] + 2, currentY);
-      doc.text(aula, colPositions[6] + 2, currentY);
-      doc.text(fecha, colPositions[7] + 2, currentY);
-      
-      doc.setDrawColor(220, 220, 220);
-      doc.line(14, currentY + 2, pageWidth - 14, currentY + 2);
-      
+      const sloganLine = eslogan ? `${eslogan} - ${edicion}` : `${edicion}`;
+      doc.text(String(sloganLine).toUpperCase(), pageWidth / 2, 21, { align: 'center' });
+      const sedeTxt = `SEDE: ${sedeCfg}`.toUpperCase();
+      doc.text(sedeTxt, pageWidth / 2, 26, { align: 'center' });
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text('LISTA DE INSCRITOS', pageWidth / 2, 34, { align: 'center' });
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setFont('Helvetica', 'bold');
+      doc.text(`CÓDIGO: ${codigo}`, 15, 42);
+      doc.setFont('Helvetica', 'normal');
+      doc.text(`COLEGIO: ${String(colegioNombre).toUpperCase().substring(0, 32)}`, 55, 42);
+      doc.text(`FECHA: ${fechaStr}`, 170, 42);
+      doc.text(`TOTAL: ${estudiantes.length}`, 250, 42);
+      doc.setFillColor(240, 240, 240);
+      doc.rect(15, 46, pageWidth - 30, 8, 'F');
+      doc.setDrawColor(0, 0, 0);
+      doc.rect(15, 46, pageWidth - 30, 8, 'S');
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(0, 0, 0);
+      doc.text('N°', 17, 51);
+      doc.text('DNI', 28, 51);
+      doc.text('APELLIDOS Y NOMBRES', 52, 51);
+      doc.text('GRADO', 137, 51);
+      doc.text('NIVEL', 162, 51);
+      doc.text('IE', 187, 51);
+      doc.text('TURNO', 239, 51);
+      doc.text('AULA', 262, 51);
+    };
+    const rowHeight = 7;
+    let currentY = 54;
+    drawHeader();
+    const indexMap = new Map<string, number>();
+    (this.inscripcionParaLista.estudiantes as any[])?.forEach((e: any, i: number) => { if (e.numeroDocumento) indexMap.set(String(e.numeroDocumento), i); });
+    estudiantes.forEach((est: any, orderIdx: number) => {
+      const originalIdx = est.numeroDocumento && indexMap.has(String(est.numeroDocumento)) ? indexMap.get(String(est.numeroDocumento))! : orderIdx;
+      if (currentY > 185) { doc.addPage(); currentY = 54; drawHeader(); }
+      const dni = est.numeroDocumento || '—';
+      const nombres = `${est.apellidos || ''} ${est.nombres || ''}`.trim().toUpperCase().substring(0, 40);
+      const grado = String(est.grado || '—').toUpperCase();
+      const nivel = String(est.nivel || '—').toUpperCase();
+      const ie = String(colegioIE).toUpperCase().substring(0, 26);
+      const asig = (ins as any).asignacionesAula?.find((a: any) => a.estudianteIndex === originalIdx);
+      const aula = asig?.codigoAula || (est as any).codigoAula || '—';
+      const turnoEst = asig?.turnoCodigo || (est as any).turnoCodigo || '—';
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(0, 0, 0);
+      doc.rect(15, currentY, pageWidth - 30, rowHeight, 'S');
+      doc.line(26, currentY, 26, currentY + rowHeight);
+      doc.line(50, currentY, 50, currentY + rowHeight);
+      doc.line(135, currentY, 135, currentY + rowHeight);
+      doc.line(160, currentY, 160, currentY + rowHeight);
+      doc.line(185, currentY, 185, currentY + rowHeight);
+      doc.line(235, currentY, 235, currentY + rowHeight);
+      doc.line(255, currentY, 255, currentY + rowHeight);
+      doc.text(String(orderIdx + 1), 17, currentY + 4.5);
+      doc.text(dni, 28, currentY + 4.5);
+      doc.text(nombres, 52, currentY + 4.5);
+      doc.text(grado.substring(0, 10), 137, currentY + 4.5);
+      doc.text(nivel.substring(0, 10), 162, currentY + 4.5);
+      doc.text(ie.substring(0, 24), 187, currentY + 4.5);
+      doc.setFont('Helvetica', 'bold');
+      doc.setTextColor(0, 90, 180);
+      doc.text(String(turnoEst).toUpperCase(), 239, currentY + 4.5, { align: 'center' } as any);
+      if (aula !== '—') doc.setTextColor(13, 71, 161); else doc.setTextColor(80, 80, 80);
+      doc.text(String(aula).toUpperCase(), 262, currentY + 4.5, { align: 'center' } as any);
+      doc.setTextColor(0, 0, 0);
       currentY += rowHeight;
     });
-    
-    // ===== PIE DE PÁGINA =====
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text(
-      `Documento generado el ${new Date().toLocaleDateString('es-PE')}`, 
-      pageWidth / 2, 
-      285, 
-      { align: 'center' }
-    );
-    
-    // ===== DESCARGAR PDF =====
-    const nombreArchivo = `Lista_${ins.colegio?.IE || 'Inscripcion'}_${this.formatearFechaPDF(ins.fechaInscripcion)}.pdf`;
-    doc.save(nombreArchivo);
+    const totalPages = (doc as any).getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) { (doc as any).setPage(i); doc.setFont('Helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 100, 100); doc.text(`Página ${i} de ${totalPages}`, pageWidth - 15, pageHeight - 8, { align: 'right' }); }
+    const safeColegio = String(colegioNombre).replace(/\s+/g, '_');
+    doc.save(`Lista_${safeColegio}_${fechaStr.replace(/\//g, '-')}.pdf`);
   }
 
   // ============================================
@@ -445,9 +436,10 @@ export class Lista implements OnInit {
 
     // 0. Validaciones Obligatorias
     const datosFaltantes = estudiantesAImprimir.some(est => {
-      const indexReal = this.inscripcionParaLista?.estudiantes?.findIndex(e => e.numeroDocumento === est.numeroDocumento) ?? -1;
-      const asignacion = this.inscripcionParaLista?.asignacionesAula?.find(a => a.estudianteIndex === indexReal);
-      return !asignacion || !asignacion.codigoAula || !asignacion.turnoCodigo || !est.grado || !est.nivel;
+      const asignacion = this.asignacionParaEstudiante(est);
+      return !(asignacion?.codigoAula || (est as any).codigoAula)
+        || !(asignacion?.turnoCodigo || (est as any).turnoCodigo)
+        || !est.grado || !est.nivel;
     });
 
     if (datosFaltantes) {
@@ -463,23 +455,24 @@ export class Lista implements OnInit {
       const turnoCache = new Map<string, any>();
 
       for (const est of estudiantesAImprimir) {
-        const indexReal = this.inscripcionParaLista?.estudiantes?.findIndex(e => e.numeroDocumento === est.numeroDocumento) ?? -1;
-        const asignacion = this.inscripcionParaLista?.asignacionesAula?.find(a => a.estudianteIndex === indexReal);
+        const asignacion = this.asignacionParaEstudiante(est);
         
-        if (asignacion) {
-          if (asignacion.aulaId && !aulaCache.has(asignacion.aulaId)) {
-            const aulaRef = firestoreDoc(db, 'turnosedicion', asignacion.aulaId);
+        const aulaId = asignacion?.aulaId || (est as any).aulaAsignadaId;
+        const turnoCodigo = asignacion?.turnoCodigo || (est as any).turnoCodigo;
+        if (aulaId || turnoCodigo) {
+          if (aulaId && !aulaCache.has(aulaId)) {
+            const aulaRef = firestoreDoc(db, 'turnosedicion', aulaId);
             const aulaSnap = await getDoc(aulaRef);
             if (aulaSnap.exists()) {
-              aulaCache.set(asignacion.aulaId, aulaSnap.data());
+              aulaCache.set(aulaId, aulaSnap.data());
             }
           }
-          if (asignacion.turnoCodigo && !turnoCache.has(asignacion.turnoCodigo)) {
+          if (turnoCodigo && !turnoCache.has(turnoCodigo)) {
             const turnosRef = collection(db, 'turnos');
-            const qTurno = query(turnosRef, where('codigo', '==', asignacion.turnoCodigo));
+            const qTurno = query(turnosRef, where('codigo', '==', turnoCodigo));
             const snapTurno = await getDocs(qTurno);
             if (!snapTurno.empty) {
-              turnoCache.set(asignacion.turnoCodigo, snapTurno.docs[0].data());
+              turnoCache.set(turnoCodigo, snapTurno.docs[0].data());
             }
           }
         }
@@ -524,12 +517,11 @@ export class Lista implements OnInit {
         const x = startX; // Una sola columna
         const y = startY + posEnPagina * (stripHeight + spacing);
 
-        const indexReal = this.inscripcionParaLista?.estudiantes?.findIndex(e => e.numeroDocumento === est.numeroDocumento) ?? -1;
-        const asignacion = this.inscripcionParaLista?.asignacionesAula?.find(a => a.estudianteIndex === indexReal);
+        const asignacion = this.asignacionParaEstudiante(est);
         
         const aulaAsignadaId = asignacion?.aulaId || est.aulaAsignadaId;
         const codigoAulaEst = asignacion?.codigoAula || est.codigoAula || 'PEND';
-        const turnoCodigoEst = asignacion?.turnoCodigo || 'T—';
+        const turnoCodigoEst = asignacion?.turnoCodigo || est.turnoCodigo || 'T—';
 
         const aulaInfo = aulaAsignadaId ? aulaCache.get(aulaAsignadaId) : null;
         const turnoInfo = turnoCodigoEst !== 'T—' ? turnoCache.get(turnoCodigoEst) : null;
@@ -539,10 +531,21 @@ export class Lista implements OnInit {
         const pisoVal = aulaInfo?.piso || '—';
         const puertaVal = aulaInfo?.puertaAcceso || '—';
         
-        const hIniEnt = turnoInfo?.horaInicioEntrada || '—';
-        const hFinEnt = turnoInfo?.horaFinEntrada || '—';
-        const hIniPru = turnoInfo?.horaInicioPrueba || '—';
-        const hFinPru = turnoInfo?.horaFinPrueba || '—';
+        const fmtHora = (v:any): string => {
+          if (!v) return '—';
+          if (typeof v === 'string') { const m=v.match(/^(\d{1,2}):(\d{2})/); return m ? `${m[1].padStart(2,'0')}:${m[2]}` : v.slice(0,5); }
+          let d: Date | null = null;
+          if (v?.toDate) d = v.toDate();
+          else if (v?.seconds != null) d = new Date(v.seconds*1000 + Math.floor((v.nanoseconds||0)/1e6));
+          else if (v instanceof Date) d = v;
+          else return String(v).slice(0,5);
+          if (!d || isNaN(d.getTime())) return '—';
+          return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        };
+        const hIniEnt = turnoInfo?.horaInicioEntrada ? fmtHora(turnoInfo.horaInicioEntrada) : '—';
+        const hFinEnt = turnoInfo?.horaFinEntrada ? fmtHora(turnoInfo.horaFinEntrada) : '—';
+        const hIniPru = turnoInfo?.horaInicioPrueba ? fmtHora(turnoInfo.horaInicioPrueba) : '—';
+        const hFinPru = turnoInfo?.horaFinPrueba ? fmtHora(turnoInfo.horaFinPrueba) : '—';
         const ingresoStr = (hIniEnt !== '—' && hFinEnt !== '—') ? `${hIniEnt} - ${hFinEnt}` : (hIniEnt !== '—' ? hIniEnt : '—');
         const examenStr = (hIniPru !== '—' && hFinPru !== '—') ? `${hIniPru} - ${hFinPru}` : (hIniPru !== '—' ? hIniPru : '—');
         
@@ -592,81 +595,81 @@ export class Lista implements OnInit {
         doc.line(x + stripWidth, y + stripHeight, x + stripWidth + l, y + stripHeight); doc.line(x + stripWidth, y + stripHeight, x + stripWidth, y + stripHeight + l);
 
         doc.setFillColor(azul[0], azul[1], azul[2]);
-        doc.rect(x, y, stripWidth, 12, 'F');
+        doc.rect(x, y, stripWidth, 16, 'F');
         doc.setFillColor(255, 193, 7);
-        doc.rect(x, y + 11.4, stripWidth, 0.8, 'F');
+        doc.rect(x, y + 15.1, stripWidth, 0.9, 'F');
         if (logoIzquierdoB64) {
-          doc.addImage(logoIzquierdoB64, 'PNG', x + 2, y + 1.1, 10, 10, undefined, 'FAST');
+          doc.addImage(logoIzquierdoB64, 'PNG', x + 2, y + 3, 10, 10, undefined, 'FAST');
         }
         if (logoDerechoB64) {
-          doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 12, y + 1.1, 10, 10, undefined, 'FAST');
+          doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 12, y + 3, 10, 10, undefined, 'FAST');
         }
-        doc.setTextColor(255, 255, 255); doc.setFont('Helvetica', 'bold'); doc.setFontSize(5.1);
-        doc.text('CONCURSO REGIONAL DE MATEMÁTICA', x + stripWidth / 2, y + 3.8, { align: 'center' });
-        doc.setFontSize(7.4); doc.setTextColor(255, 193, 7);
-        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 7.4, { align: 'center', maxWidth: stripWidth - 26 });
-        doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.1); doc.setTextColor(255, 255, 255);
-        doc.text(`${eslogan} - EDICIÓN ${edicion}`.toUpperCase(), x + stripWidth / 2, y + 9.6, { align: 'center', maxWidth: stripWidth - 26 });
+        doc.setTextColor(255, 193, 7); doc.setFont('Helvetica', 'bold'); doc.setFontSize(8.8);
+        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 6.5, { align: 'center', maxWidth: stripWidth - 26 });
+        doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8); doc.setTextColor(255, 255, 255);
+        const esloganLine = eslogan ? `${eslogan} - EDICIÓN ${edicion}`.toUpperCase() : `EDICIÓN ${edicion}`.toUpperCase();
+        doc.text(esloganLine, x + stripWidth / 2, y + 12.2, { align: 'center', maxWidth: stripWidth - 26 });
 
-        let cy = y + 15.2;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.2);
+        let cy = y + 19;
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8);
         doc.text('DNI:', x + 3, cy); doc.text('TURNO:', x + 32, cy); doc.text('PUERTA:', x + 54, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(5.8);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.5);
         doc.text(est.numeroDocumento || '—', x + 9, cy); doc.text(turnoCodigoEst, x + 42, cy); doc.text(puertaVal || 'C', x + 66, cy);
-        cy += 3.8;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.2); doc.text('PARTICIPANTE:', x + 3, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.2);
+        cy += 4.2;
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8); doc.text('PARTICIPANTE:', x + 3, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(7);
         const nomCompleto = `${est.apellidos || ''} ${est.nombres || ''}`.trim().toUpperCase();
         doc.text(nomCompleto, x + 20, cy, { maxWidth: stripWidth - 23 });
-        cy += 3.8;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.2);
+        cy += 4.2;
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8);
         doc.text('CÓDIGO IE:', x + 3, cy); doc.text('ÁREA:', x + 42, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(5.5);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.2);
         doc.text(codModular, x + 18, cy); doc.text(areaVal.toUpperCase(), x + 50, cy);
+        cy += 4.2;
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8); doc.text('IE:', x + 3, cy);
+        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(7);
+        doc.text(colNombre, x + 15, cy, { maxWidth: stripWidth - 18 });
         cy += 3.8;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.2); doc.text('IE:', x + 3, cy);
-        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.5);
-        doc.text(colNombre, x + 8, cy, { maxWidth: stripWidth - 10 });
-        cy += 3.4;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.2);
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8);
         doc.text('GESTIÓN:', x + 3, cy); doc.text('GRADO:', x + 42, cy);
-        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(5.8);
-        doc.text(gestionVal.toUpperCase(), x + 15, cy); doc.text((est.grado || '').toUpperCase(), x + 52, cy);
-        cy += 3.8;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.2);
+        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.5);
+        const gradoNivelStr = `${String(est.grado||'').toUpperCase()} ${String(est.nivel||'').toUpperCase()}`.trim();
+        doc.text(gestionVal.toUpperCase(), x + 15, cy); doc.text(gradoNivelStr, x + 54, cy, { maxWidth: 40 });
+        cy += 4;
+        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8);
         doc.text('LUGAR:', x + 3, cy); doc.text('FECHA:', x + 58, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(4.8);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(5.5);
         doc.text(ieLugar.substring(0, 22).toUpperCase(), x + 12, cy); doc.text(fechaStr, x + 67, cy);
         cy += 1.6;
         doc.setDrawColor(linea[0], linea[1], linea[2]); doc.setLineWidth(0.18); doc.line(x + 2, cy, x + stripWidth - 2, cy);
-        cy += 3.4;
+        cy += 3.2;
         const boxW1 = 52; const boxW2 = stripWidth - boxW1 - 8;
-        const boxH2 = 15.2;
+        const boxH2 = 12.5;
         const bx = x + 2; const by = cy;
         doc.setFillColor(248, 249, 255); doc.setDrawColor(azul[0], azul[1], azul[2]); doc.setLineWidth(0.38);
         doc.roundedRect(bx, by, boxW1, boxH2, 1, 1, 'FD');
         doc.roundedRect(bx + boxW1 + 2, by, boxW2, boxH2, 1, 1, 'FD');
-        doc.setFont('Helvetica', 'normal'); doc.setFontSize(4); doc.setTextColor(gris[0], gris[1], gris[2]);
-        doc.text('AULA', bx + boxW1 / 2, by + 3.4, { align: 'center' });
+        doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.5); doc.setTextColor(gris[0], gris[1], gris[2]);
+        doc.text('AULA', bx + boxW1 * 0.25, by + 3.4, { align: 'center' });
+        doc.text('CÓDIGO', bx + boxW1 * 0.75, by + 3.4, { align: 'center' });
         doc.text('PABELLÓN', bx + boxW1 + 2 + boxW2 * 0.30, by + 3.4, { align: 'center' }); doc.text('PISO', bx + boxW1 + 2 + boxW2 * 0.72, by + 3.4, { align: 'center' });
-        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(9);
-        doc.text(codigoAulaEst.toUpperCase(), bx + boxW1 / 2, by + 7.2, { align: 'center' });
-        doc.setFontSize(6.5); doc.text(pabellonVal.toUpperCase(), bx + boxW1 + 2 + boxW2 * 0.30, by + 7.2, { align: 'center' });
-        doc.text(String(pisoVal), bx + boxW1 + 2 + boxW2 * 0.72, by + 7.2, { align: 'center' });
-        doc.setFont('Helvetica', 'normal'); doc.setFontSize(3.7); doc.setTextColor(gris[0], gris[1], gris[2]);
-        doc.text('CÓDIGO', bx + boxW1 / 2, by + 10.2, { align: 'center' });
-        doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.2); doc.setTextColor(azul[0], azul[1], azul[2]);
-        doc.text(codigoUnido, bx + boxW1 / 2, by + 13.2, { align: 'center' } as any);
+        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(11.5);
+        doc.text(codigoAulaEst.toUpperCase(), bx + boxW1 * 0.25, by + 8.2, { align: 'center' });
+        doc.setFontSize(9.5); doc.setTextColor(azul[0], azul[1], azul[2]);
+        doc.text(codigoUnido, bx + boxW1 * 0.75, by + 8.2, { align: 'center' } as any);
+        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(10);
+        doc.text(pabellonVal.toUpperCase(), bx + boxW1 + 2 + boxW2 * 0.30, by + 8.2, { align: 'center' });
+        doc.text(String(pisoVal), bx + boxW1 + 2 + boxW2 * 0.72, by + 8.2, { align: 'center' });
         const horaY = by + boxH2 + 1.6;
-        const horaH = 8.8;
+        const horaH = 9.5;
         doc.setDrawColor(azul[0], azul[1], azul[2]); doc.setLineWidth(0.38);
         doc.roundedRect(bx, horaY, stripWidth - 4, horaH, 0.8, 0.8, 'D');
-        doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.6); doc.setTextColor(gris[0], gris[1], gris[2]);
-        doc.text('HORA INGRESO', bx + (stripWidth - 4) * 0.25, horaY + 3, { align: 'center' });
-        doc.text('HORA EXAMEN', bx + (stripWidth - 4) * 0.75, horaY + 3, { align: 'center' });
-        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(5.8);
-        doc.text(String(ingresoStr).toUpperCase(), bx + (stripWidth - 4) * 0.25, horaY + 6.8, { align: 'center' });
-        doc.text(String(examenStr).toUpperCase(), bx + (stripWidth - 4) * 0.75, horaY + 6.8, { align: 'center' });
+        doc.setFont('Helvetica', 'normal'); doc.setFontSize(5.2); doc.setTextColor(gris[0], gris[1], gris[2]);
+        doc.text('HORA INGRESO', bx + (stripWidth - 4) * 0.25, horaY + 3.2, { align: 'center' });
+        doc.text('HORA EXAMEN', bx + (stripWidth - 4) * 0.75, horaY + 3.2, { align: 'center' });
+        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(8.5);
+        doc.text(String(ingresoStr).toUpperCase(), bx + (stripWidth - 4) * 0.25, horaY + 7.2, { align: 'center' });
+        doc.text(String(examenStr).toUpperCase(), bx + (stripWidth - 4) * 0.75, horaY + 7.2, { align: 'center' });
         doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4);
         doc.text('Código claro para consultar resultados • Conservar', x + stripWidth / 2, y + stripHeight - 1.4, { align: 'center' });
       }
@@ -882,6 +885,49 @@ export class Lista implements OnInit {
     });
   }
 
+  async enviarWhatsapp(ins: Inscripcion): Promise<void> {
+    const telRaw = String((ins as any).telefonoApoderado || '').replace(/\D/g, '');
+    if (!telRaw) { alert('No hay teléfono del apoderado registrado'); return; }
+    const telefono = telRaw.startsWith('51') ? telRaw : `51${telRaw}`;
+    const codigoIns = String((ins as any).codigo || ins.id || '').trim();
+    if (!/^\d{4}$/.test(codigoIns)) { alert('Código de inscripción inválido: ' + codigoIns); return; }
+    let est: any = (ins.estudiantes && ins.estudiantes[0]) ? ins.estudiantes[0] as any : null;
+    let codigoEst = String(est?.codigo || (est as any)?.id || '').trim();
+    if (!/^\d{5}$/.test(codigoEst)) {
+      try {
+        const lista = await this.inscripcionService.obtenerEstudiantes(codigoIns);
+        const primero = lista && lista.length ? (lista as any[]).sort((a:any,b:any)=> Number(a.codigo||a.id)-Number(b.codigo||b.id))[0] : null;
+        if (primero) { est = primero; codigoEst = String((primero as any).codigo || (primero as any).id || '').trim(); }
+      } catch {}
+    }
+    if (!/^\d{5}$/.test(codigoEst)) { alert('No se encontró código de 5 dígitos del estudiante. Verifique que la inscripción tenga estudiantes registrados.'); return; }
+    const codigo = `${codigoIns}-${codigoEst}`;
+    const nombre = est ? `${est.nombres || ''} ${est.apellidos || ''}`.trim() || 'PARTICIPANTE' : 'PARTICIPANTE';
+    const baseUrl = 'https://solarislee-resultados.web.app/';
+    const enlace = `${baseUrl}?tipo=individual&codigo=${codigo}`;
+    const mensaje = `RESULTADOS SOLARISLEE 2026\nEstimado(a) participante:\nA traves de este enlace puede consultar su resultado:\n${enlace}\nParticipante: ${nombre}\nCódigo: ${codigo}`;
+    const whatsappUrl = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+  }
+
+  enviarWhatsappEstudiante(est: Estudiante): void {
+    const ins: any = this.inscripcionParaLista;
+    if (!ins) return;
+    const telRaw = String(ins.telefonoApoderado || '').replace(/\D/g, '');
+    if (!telRaw) { alert('No hay teléfono del apoderado registrado'); return; }
+    const telefono = telRaw.startsWith('51') ? telRaw : `51${telRaw}`;
+    const codigoIns = String(ins.codigo || ins.id || '').trim();
+    const codigoEst = String((est as any).codigo || (est as any).id || '').trim();
+    if (!/^\d{4}$/.test(codigoIns) || !/^\d{5}$/.test(codigoEst)) { alert('Código inválido: se esperaba 4 dígitos inscripción y 5 dígitos estudiante. Actual: ' + codigoIns + '-' + codigoEst); return; }
+    const codigo = `${codigoIns}-${codigoEst}`;
+    const nombre = `${est.nombres || ''} ${est.apellidos || ''}`.trim();
+    const baseUrl = 'https://solarislee-resultados.web.app/';
+    const enlace = `${baseUrl}?tipo=individual&codigo=${codigo}`;
+    const mensaje = `RESULTADOS SOLARISLEE 2026\nEstimado(a) participante:\nA traves de este enlace puede consultar su resultado:\n${enlace}\nParticipante: ${nombre}\nCódigo: ${codigo}`;
+    const whatsappUrl = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+  }
+
   // ============================================
   // BOTÓN CREDENCIALES - Icono 🪪 en la tabla principal
   // ============================================
@@ -901,18 +947,148 @@ export class Lista implements OnInit {
     console.log('Estudiantes cargados:', this.estudiantesEditar.length);
     
     this.inscripcionEditar = ins;
+    this.estudiantesImportados = [];
     this.mostrarNuevaInscripcion = true;
   }
 
   irANueva() {
     this.inscripcionEditar = null;
     this.estudiantesEditar = [];
+    this.estudiantesImportados = [];
     this.mostrarNuevaInscripcion = true;
+  }
+
+  async onExcelSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const XLSX: any = await import('xlsx');
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      const headerRow = 7;
+      const colMap: Record<string, number> = {};
+      const headers: string[] = (rows[headerRow] || []).map((h: any) => String(h).trim().toUpperCase());
+      headers.forEach((h, i) => {
+        if (h.includes('TIPO')) colMap['TIPO'] = i;
+        else if (h === 'NUMERO' || h.includes('NÚMERO') || h.includes('NUMERO')) colMap['NUMERO'] = i;
+        else if (h.includes('NOMBRES')) colMap['NOMBRES'] = i;
+        else if (h.includes('APELLIDOS')) colMap['APELLIDOS'] = i;
+        else if (h === 'GRADO') colMap['GRADO'] = i;
+        else if (h.includes('NIVEL') || h.includes('NIEVL')) colMap['NIVEL'] = i;
+      });
+      if (colMap['NUMERO'] === undefined || colMap['NOMBRES'] === undefined) {
+        alert('Plantilla no válida: no se encontró cabecera TIPO/NUMERO/NOMBRES en fila 8');
+        input.value = '';
+        return;
+      }
+      const parsed: Estudiante[] = [];
+      let omitidos = 0;
+      const gradoMap: Record<string,string> = { '1':'PRIMERO','2':'SEGUNDO','3':'TERCERO','4':'CUARTO','5':'QUINTO','6':'SEXTO','1°':'PRIMERO','2°':'SEGUNDO','3°':'TERCERO','4°':'CUARTO','5°':'QUINTO','6°':'SEXTO','PRIMERO':'PRIMERO','SEGUNDO':'SEGUNDO','TERCERO':'TERCERO','CUARTO':'CUARTO','QUINTO':'QUINTO','SEXTO':'SEXTO' };
+      for (let r = headerRow + 1; r < rows.length; r++) {
+        const row = rows[r];
+        if (!row || row.every((c: any) => String(c).trim() === '')) continue;
+        const tipo = String(row[colMap['TIPO']] || '').trim().toUpperCase() || 'DNI';
+        const numero = String(row[colMap['NUMERO']] || '').trim();
+        const nombres = String(row[colMap['NOMBRES']] || '').trim();
+        const apellidos = String(row[colMap['APELLIDOS']] || '').trim();
+        const gradoRaw = String(row[colMap['GRADO']] || '').trim().toUpperCase();
+        const nivelRaw = String(row[colMap['NIVEL']] || '').trim().toUpperCase();
+        if (!numero || !nombres || !apellidos || !gradoRaw || !nivelRaw) { omitidos++; continue; }
+        if (!/^\d{6,9}$/.test(numero)) { omitidos++; continue; }
+        const nivel = nivelRaw.includes('SEC') ? 'SECUNDARIA' : 'PRIMARIA';
+        const gradoNum = gradoMap[gradoRaw] || gradoMap[gradoRaw.replace(/[^A-Z0-9]/g,'')] || '';
+        const grado = gradoNum || gradoRaw.toUpperCase().trim();
+        parsed.push({
+          tipoDocumento: tipo.toLowerCase(),
+          numeroDocumento: numero,
+          nombres: nombres.toUpperCase(),
+          apellidos: apellidos.toUpperCase(),
+          grado,
+          nivel,
+          colegio: null as any,
+          fechaRegistro: new Date()
+        });
+      }
+      if (parsed.length === 0) {
+        alert(`No se encontró ningún estudiante válido. Omitidos: ${omitidos}. Verifique que tenga TIPO, NUMERO, NOMBRES, APELLIDOS, GRADO, NIVEL completos.`);
+        input.value = '';
+        return;
+      }
+      if (omitidos > 0) alert(`Se importaron ${parsed.length} estudiantes. Se omitieron ${omitidos} filas incompletas.`);
+      this.ngZone.run(() => {
+        this.estudiantesImportados = parsed;
+        this.inscripcionEditar = null;
+        this.estudiantesEditar = [];
+        this.mostrarNuevaInscripcion = true;
+      });
+    } catch (e: any) {
+      console.error('Error leyendo Excel', e);
+      alert('Error leyendo Excel: ' + (e?.message || e));
+    } finally {
+      input.value = '';
+    }
+  }
+
+  abrirModalEliminar(est: Estudiante) {
+    this.estudianteAEliminar = est;
+    this.mostrarModalEliminar = true;
+  }
+  cerrarModalEliminar() {
+    if (this.eliminando) return;
+    this.mostrarModalEliminar = false;
+    this.estudianteAEliminar = null;
+  }
+  async confirmarEliminarEstudiante() {
+    if (!this.inscripcionParaLista?.id || !this.estudianteAEliminar) return;
+    const codigoEst = String((this.estudianteAEliminar as any).codigo || (this.estudianteAEliminar as any).id);
+    if (!codigoEst) { alert('Código de estudiante inválido'); return; }
+    const estEliminado: any = { ...this.estudianteAEliminar as any };
+    const insId = this.inscripcionParaLista.id!;
+    this.mostrarModalEliminar = false;
+    this.estudianteAEliminar = null;
+    this.eliminando = true;
+    try {
+      await this.inscripcionService.eliminarEstudiante(insId, codigoEst);
+    } catch (e: any) {
+      console.error('Error eliminar', e);
+      alert('Error al eliminar: ' + (e?.message || e));
+      this.eliminando = false;
+      return;
+    }
+    try {
+      this.ngZone.run(() => {
+        this.estudiantesParaLista = this.estudiantesParaLista.filter(e => String((e as any).codigo || (e as any).id) !== String(codigoEst));
+        this.estudiantesSeleccionados.delete(estEliminado.numeroDocumento);
+      });
+    } catch {}
+    this.eliminando = false;
+    try {
+      await this.cargarInscripciones();
+      const fresh = await this.inscripcionService.obtenerEstudiantes(insId);
+      const seen = new Set<string>();
+      const dedup: any[] = [];
+      for (const e of fresh as any[]) {
+        const k = `${String((e as any).numeroDocumento||'').trim()}|${String((e as any).nombres||'').trim().toUpperCase()}|${String((e as any).apellidos||'').trim().toUpperCase()}`;
+        if (k === '||') { dedup.push(e); continue; }
+        if (!seen.has(k)) { seen.add(k); dedup.push(e); }
+      }
+      this.ngZone.run(() => {
+        this.estudiantesParaLista = dedup.length ? dedup : fresh as any[];
+        if (this.inscripcionParaLista) {
+          (this.inscripcionParaLista as any).cantidadEstudiantes = this.estudiantesParaLista.length;
+          this.inscripcionParaLista = this.inscripciones.find(i => i.id === insId) || this.inscripcionParaLista;
+        }
+      });
+    } catch {}
   }
 
   async recargarInscripciones() {
     this.inscripcionEditar = null;
     this.estudiantesEditar = [];
+    this.estudiantesImportados = [];
     await this.cargarInscripciones();
     this.mostrarNuevaInscripcion = false;
   }
@@ -920,6 +1096,7 @@ export class Lista implements OnInit {
   volverALista() {
     this.inscripcionEditar = null;
     this.estudiantesEditar = [];
+    this.estudiantesImportados = [];
     this.mostrarNuevaInscripcion = false;
   }
 }

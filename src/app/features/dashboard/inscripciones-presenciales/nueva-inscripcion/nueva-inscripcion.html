@@ -108,13 +108,19 @@
 </app-pago>
 
 <!-- PASO 3: ESTUDIANTES -->
+<div *ngIf="pasoActual === 'estudiante' && modoEdicion" style="margin-bottom:12px;">
+  <input [(ngModel)]="busquedaEstudiante" placeholder="BUSCAR ESTUDIANTE" (input)="onBuscarEstudianteVent()" style="width:100%;padding:13px 16px;border:2px solid #005cbf;border-radius:10px;font-size:0.95rem;background:#e0f2fe;color:#0c4a6e;font-weight:800;letter-spacing:0.6px;">
+</div>
 <app-registro-estudiante
   *ngIf="pasoActual === 'estudiante'"
   [colegio]="colegioSeleccionado"
   [numeroEstudiante]="estudianteActual"
   [totalEstudiantes]="datosPago?.cantidad || 1"
+  [slotNuevo]="esSlotNuevo(estudianteActual - 1)"
   [estudianteEdicion]="
-  estudiantesRegistrados.length > 0
+  esSlotNuevo(estudianteActual - 1)
+    ? null
+    : estudiantesRegistrados.length > 0
     ? estudiantesRegistrados[estudianteActual - 1]
     : null
 "
@@ -157,7 +163,7 @@
         <td>{{ i + 1 }}</td>
         <td>{{ preview.estudiante.nombres }} {{ preview.estudiante.apellidos }}</td>
         <td>{{ preview.estudiante.grado }} {{ preview.estudiante.nivel }}</td>
-        <td>{{ turnosPorEstudiante.get(i)?.codigo || '—' }}</td>
+        <td>{{ turnoDePreview(i)?.codigo || '—' }}</td>
         <td>
           <span *ngIf="preview.sugerencia.exito" class="aula-asignada">
             {{ preview.sugerencia.codigoAula || 'Nueva aula' }}

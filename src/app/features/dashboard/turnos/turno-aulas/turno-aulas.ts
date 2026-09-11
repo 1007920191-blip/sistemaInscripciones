@@ -125,22 +125,27 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
+  normalizarGradoDisplay(g: string): string {
+    const t = (g || '').toUpperCase().trim().replace(/\s+/g, ' ');
+    if (t === '4°' || t === '4' || t === 'CUARTO' || t.includes('4° PRIMARIA')) return 'CUARTO';
+    if (t.includes('1°') || t === '1') return 'PRIMERO';
+    if (t.includes('2°') || t === '2') return 'SEGUNDO';
+    if (t.includes('3°') || t === '3') return 'TERCERO';
+    if (t.includes('5°') || t === '5') return 'QUINTO';
+    if (t.includes('6°') || t === '6') return 'SEXTO';
+    return t;
+  }
+
   private actualizarGradosDelTurno() {
     let rawGrados: string[] = [];
 
     if (this.turno.nivelesGrados && this.turno.nivelesGrados.length > 0) {
       rawGrados = this.turno.nivelesGrados.map(ng => {
-        const g = (ng.grado || '').trim();
+        const gRaw = (ng.grado || '').trim();
+        const g = this.normalizarGradoDisplay(gRaw);
         const n = (ng.nivel || '').trim();
-        
-        // Si el grado ya contiene el nivel, no lo concatenamos de nuevo
-        if (n && g.toUpperCase().includes(n.toUpperCase())) {
-          return g;
-        }
-        // Si el grado ya tiene "PRIMARIA" o "SECUNDARIA" (cualquier variación), retornamos g
-        if (g.toUpperCase().includes('PRIMARIA') || g.toUpperCase().includes('SECUNDARIA')) {
-          return g;
-        }
+        if (n && g.toUpperCase().includes(n.toUpperCase())) return g;
+        if (g.toUpperCase().includes('PRIMARIA') || g.toUpperCase().includes('SECUNDARIA')) return g;
         return n ? `${g} ${this.capitalizar(n)}` : g;
       });
     } else {
@@ -197,7 +202,7 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
       
       this.unsubscribeInscripciones = this.inscripcionService.escucharInscripcionesPorTurno(this.turno.id!, (inscripciones) => {
         this.ngZone.run(() => {
-          this.inscripcionesActuales = inscripciones;
+          this.inscripcionesActuales = inscripciones.filter((i:any)=> i.estado==='completada');
           this.procesarDatosCombinados();
         });
       }, this.turno.codigo);
@@ -240,18 +245,16 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
              (conteoPorAula.get(aula.id) || 0)
 }));
 
-    // Filtrar por el grado seleccionado con trim y case-insensitive
     this.ngZone.run(() => {
       this.aulasAsignadas = aulasActualizadas.filter(aula => {
-
-  const gradoAula = this.normalizarTexto(aula.grado);
-  const gradoSel = this.normalizarTexto(this.gradoSeleccionado);
-
-  console.log('Comparando:', gradoAula, 'vs', gradoSel);
-
-  return gradoAula.includes(gradoSel)
-    || gradoSel.includes(gradoAula);
-});
+        const gradoAulaNorm = this.normalizarGradoDisplay(aula.grado).toUpperCase();
+        const nivelAulaNorm = String(aula.nivel||'').toUpperCase().trim();
+        const selRaw = String(this.gradoSeleccionado||'').trim();
+        const selGradoRaw = selRaw.split(' ')[0] || selRaw;
+        const selGrado = this.normalizarGradoDisplay(selGradoRaw).toUpperCase();
+        const selNivel = selRaw.toUpperCase().includes('SECUNDARIA') ? 'SECUNDARIA' : selRaw.toUpperCase().includes('PRIMARIA') ? 'PRIMARIA' : String(this.turno.nivel||'').toUpperCase().trim();
+        return gradoAulaNorm === selGrado && nivelAulaNorm === selNivel;
+      });
       
       this.filtrarAulas();
       this.cargando = false;
@@ -350,12 +353,14 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
         return;
       }
 
+      const gradoSoloRaw = (this.gradoSeleccionado || '').split(' ')[0] || this.gradoSeleccionado;
+      const gradoSolo = this.normalizarGradoDisplay(gradoSoloRaw);
       const data: TurnoAulaAsignada = {
         turnoId: this.turno.id!,
         aulaId: aula.id!,
         codigoAula: aula.codigo,
-        grado: this.gradoSeleccionado,
-        nivel: this.turno.nivel,
+        grado: gradoSolo,
+        nivel: (this.turno.nivel || this.gradoSeleccionado.includes('SECUNDARIA') ? 'SECUNDARIA' : 'PRIMARIA') as any,
         inscritos: 0,
         capacidad: aula.capacidad,
         local: this.LOCAL_DEFAULT,
@@ -559,10 +564,12 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
         doc.setFontSize(14);
         doc.text('LISTA DE INSCRITOS', pageWidth / 2, 38, { align: 'center' });
 
+        const gradoNivelFix = aula.grado.toUpperCase().includes(aula.nivel.toUpperCase()) ? aula.grado.toUpperCase() : `${aula.grado.toUpperCase()} ${aula.nivel.toUpperCase()}`;
+        const gradoFix = gradoNivelFix.replace(/4°/g, 'CUARTO').replace(/°/g, '').replace(/\s+/g, ' ').trim();
         doc.setFontSize(10);
         doc.text(`TURNO: ${this.turno.codigo}`, 20, 50);
         doc.text(`AULA: ${aula.codigoAula}`, 80, 50);
-        doc.text(`GRADO: ${aula.grado.toUpperCase()} ${aula.nivel.toUpperCase()}`, 140, 50);
+        doc.text(`GRADO: ${gradoFix}`, 140, 50);
 
         doc.setFillColor(240, 240, 240);
         doc.rect(15, 55, pageWidth - 30, 8, 'F');

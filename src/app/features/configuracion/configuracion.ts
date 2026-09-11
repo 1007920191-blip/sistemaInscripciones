@@ -20,7 +20,10 @@ export class ConfiguracionComponent implements OnInit {
     logoIzquierdo: '',
     logoDerecho: '',
     fondoCredencial: '',
-    costoInscripcion: 15
+    costoInscripcion: 15,
+    telefonoYape: '',
+    titularYape: '',
+    nombreCompletoTitularYape: ''
   };
 
   logoIzquierdoFile: File | null = null;

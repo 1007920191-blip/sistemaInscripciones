@@ -7,5 +7,8 @@ export interface Configuracion {
   logoDerecho: string;
   fondoCredencial: string;
   costoInscripcion: number;
+  telefonoYape?: string;
+  titularYape?: string;
+  nombreCompletoTitularYape?: string;
   fechaActualizacion?: Date;
 }

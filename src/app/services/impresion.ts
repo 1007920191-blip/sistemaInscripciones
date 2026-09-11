@@ -138,8 +138,8 @@ export class ImpresionService {
     const centerX = pageWidth / 2;
 
     const nombre = config?.nombreConcurso || 'CONCURSO NACIONAL';
-    const slogan = `${config?.eslogan || ''} - ${config?.edicion || ''}`;
-    const ie = config?.organizador || 'I.E.';
+    const slogan = `${config?.eslogan || ''} - ${config?.edicion || ''}`.trim().replace(/^-\s*|\s*-\s*$/g,'');
+    const ie = String(config?.organizador || '').trim();
 
     const altsMap: { [key: number]: string } = { 0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E' };
 
@@ -160,11 +160,12 @@ export class ImpresionService {
 
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text(ie, centerX / 2 + desplazamientox, inicioy, { align: 'center' });
-      doc.text(nombre, centerX / 2 + desplazamientox, inicioy + 6, { align: 'center' });
-      doc.text(slogan, centerX / 2 + desplazamientox, inicioy + 12, { align: 'center' });
+      let yHeader = inicioy;
+      if (ie) { doc.text(ie, centerX / 2 + desplazamientox, yHeader, { align: 'center' }); yHeader += 6; } else { yHeader += 0; }
+      doc.text(nombre, centerX / 2 + desplazamientox, yHeader, { align: 'center' });
+      doc.text(slogan, centerX / 2 + desplazamientox, yHeader + 6, { align: 'center' });
 
-      const textToEncode = `${nombre}/${config?.edicion || ''}/${estAula.sede || ''}/${estTurno.codigo}/${estAula.codigoAula}/${est.inscripcionId || 'N/A'}/${est.id || 'N/A'}/${est.nombres || 'N/A'}/${est.apellidos || 'N/A'}`;
+      const textToEncode = `${estTurno.codigo}/${estAula.codigoAula}/${est.inscripcionId || 'N/A'}/${est.id || 'N/A'}/${est.nombres || 'N/A'}/${est.apellidos || 'N/A'}`;
       const qr = await QRCode.toDataURL(textToEncode, { errorCorrectionLevel: 'M' });
       const qrSize = 35;
       const qrX = 20;

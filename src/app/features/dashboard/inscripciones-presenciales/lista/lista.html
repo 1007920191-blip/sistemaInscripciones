@@ -10,6 +10,10 @@
       <button class="btn-nueva" (click)="irANueva()">
         + Nueva inscripción
       </button>
+      <button class="btn-excel" (click)="excelInput.click()" title="Subir plantilla Excel grupal">
+        📊 Subir Excel
+      </button>
+      <input #excelInput type="file" accept=".xlsx,.xls" (change)="onExcelSelected($event)" hidden>
       
       <div class="filtros-container">
         <!-- Buscador -->
@@ -81,6 +85,9 @@
             <button class="btn-editar" (click)="editarInscripcion(ins)">
               Editar
             </button>
+            <button class="btn-lista" (click)="enviarWhatsapp(ins)" title="Enviar WhatsApp" style="background:#25D366;color:white;margin-left:4px;">
+              WhatsApp
+            </button>
           </td>
         </tr>
       </tbody>
@@ -129,6 +136,7 @@
   *ngIf="mostrarNuevaInscripcion"
   [inscripcionEditar]="inscripcionEditar"
   [estudiantesEditar]="estudiantesEditar"
+  [estudiantesImportados]="estudiantesImportados"
   (volverLista)="volverALista()"
   (inscripcionGuardada)="recargarInscripciones()">
 </app-nueva-inscripcion>
@@ -206,6 +214,12 @@
                   style="background: #6c5ce7; margin-top: 4px;">
                   🖨️
                 </button>
+                <button class="btn-credencial-indiv" (click)="enviarWhatsappEstudiante(est)" title="Enviar WhatsApp" style="background: #25D366; margin-top: 4px;">
+                  💬 WhatsApp
+                </button>
+                <button class="btn-credencial-indiv" (click)="abrirModalEliminar(est)" title="Eliminar estudiante" style="background:#dc2626; color:white; margin-top:4px;">
+                  🗑️ Eliminar
+                </button>
               </td>
             </tr>
           </tbody>
@@ -246,6 +260,25 @@
           style="background: #6c5ce7;">
           🖨️ Cartillas
         </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Confirmar Eliminar Estudiante -->
+<div class="modal-overlay" *ngIf="mostrarModalEliminar" (click)="cerrarModalEliminar()">
+  <div class="modal-content modal-form" (click)="$event.stopPropagation()" style="max-width:360px;">
+    <div class="header" style="background:#fef2f2; border-bottom:2px solid #fecaca;">
+      <h2 style="color:#dc2626; font-size:1rem;">¿Eliminar estudiante?</h2>
+      <button class="btn-cerrar" (click)="cerrarModalEliminar()" type="button" [disabled]="eliminando">×</button>
+    </div>
+    <div class="form-container" *ngIf="estudianteAEliminar as est" style="text-align:center; padding:18px;">
+      <div style="font-weight:700; color:#0f172a; font-size:1rem; margin-bottom:6px;">{{ est.nombres }} {{ est.apellidos }}</div>
+      <div style="font-size:0.92rem; color:#334155;">Código: <strong>{{ $any(est).codigo || $any(est).id }}</strong></div>
+      <div style="font-size:0.92rem; color:#334155; margin-bottom:14px;">Aula asignada: <strong>{{ est.codigoAula || 'Sin aula' }}</strong></div>
+      <div class="botones" style="margin-top:0.8rem; justify-content:center; gap:10px;">
+        <button class="btn-cancelar" (click)="cerrarModalEliminar()" type="button" [disabled]="eliminando" style="min-width:110px; background:#2563eb; color:white; border:none;">Cancelar</button>
+        <button class="btn-guardar" (click)="confirmarEliminarEstudiante()" type="button" [disabled]="eliminando" style="min-width:110px; background:#e5e7eb; color:#374151; border:1px solid #d1d5db;">{{ eliminando ? 'Eliminando...' : 'Eliminar' }}</button>
       </div>
     </div>
   </div>

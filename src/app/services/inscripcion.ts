@@ -4,6 +4,7 @@ import {
   Firestore,
   collection,
   getDocs,
+  getDoc,
   Timestamp,
   doc,
   updateDoc,
@@ -55,7 +56,7 @@ export class InscripcionService {
     const dia = String(hoy.getDate()).padStart(2, '0');
     const fechaTexto = `${anio}-${mes}-${dia}`;
     const auth = getAuth(firebaseApp);
-    const usuarioId = auth.currentUser?.uid || '';
+    const usuarioId = (auth.currentUser?.email || auth.currentUser?.uid || '').toLowerCase().trim();
     const codigo = await this.siguienteCodigo('pagos', 1000);
     const ref = doc(this.firestore, 'inscripciones', codigo);
     await setDoc(ref, {
@@ -68,26 +69,28 @@ export class InscripcionService {
     return codigo;
   }
 
-  async guardarEstudiante(estudiante: Estudiante, inscripcionId: string): Promise<void> {
+  async guardarEstudiante(estudiante: Estudiante, inscripcionId: string): Promise<string> {
     let codigoEst = (estudiante as any).codigo || (estudiante as any).id;
     const esCodigoValido = codigoEst && /^\d{5}$/.test(String(codigoEst));
     if (!esCodigoValido) codigoEst = await this.siguienteCodigo('estudiantes', 10000);
     else codigoEst = String(codigoEst);
+    const base: any = { ...estudiante };
     const ref = doc(this.firestore, 'inscripciones', inscripcionId, 'estudiantes', codigoEst);
     await setDoc(ref, {
-      ...estudiante,
+      apellidos: base.apellidos ?? '',
+      aulaAsignadaId: base.aulaAsignadaId ?? '',
       codigo: codigoEst,
-      CORRECTAS: (estudiante as any).CORRECTAS ?? 0,
-      INCORRECTAS: (estudiante as any).INCORRECTAS ?? 0,
-      EN_BLANCO: (estudiante as any).EN_BLANCO ?? (estudiante as any).BLANCO ?? 0,
-      BLANCO: (estudiante as any).BLANCO ?? (estudiante as any).EN_BLANCO ?? 0,
-      PUNTAJE_FINAL: (estudiante as any).PUNTAJE_FINAL ?? 0,
-      ASISTENCIA: (estudiante as any).ASISTENCIA ?? '',
-      FECHA_ASISTENCIA: (estudiante as any).FECHA_ASISTENCIA ?? (estudiante as any).HORA_ENTREGA ?? null,
-      HORA_ENTREGA: (estudiante as any).HORA_ENTREGA ?? (estudiante as any).FECHA_ASISTENCIA ?? null,
-      PUESTO: (estudiante as any).PUESTO ?? 0,
-      fechaRegistro: (estudiante as any).fechaRegistro || Timestamp.now()
-    });
+      codigoAula: base.codigoAula ?? '',
+      colegio: base.colegio ?? null,
+      grado: base.grado ?? '',
+      nivel: base.nivel ?? '',
+      nombres: base.nombres ?? '',
+      numeroDocumento: base.numeroDocumento ?? '',
+      tipoDocumento: base.tipoDocumento ?? '',
+      turnoCodigo: base.turnoCodigo ?? '',
+      fechaRegistro: base.fechaRegistro || Timestamp.now()
+    }, { merge: true });
+    return codigoEst;
   }
 
   async obtenerInscripciones(): Promise<Inscripcion[]> {
@@ -126,18 +129,12 @@ export class InscripcionService {
   async obtenerInscripcionesFiltradas(fechaTexto: string, usuarioId: string, verTodos: boolean = false, ignorarFecha: boolean = false): Promise<Inscripcion[]> {
     try {
       let q;
-      if (verTodos) {
+      if (verTodos || ignorarFecha) {
         q = this.inscripcionesRef;
-      } else if (ignorarFecha) {
-        q = query(
-          this.inscripcionesRef,
-          where('usuarioId', '==', usuarioId)
-        );
       } else {
         q = query(
           this.inscripcionesRef,
-          where('fechaTexto', '==', fechaTexto),
-          where('usuarioId', '==', usuarioId)
+          where('fechaTexto', '==', fechaTexto)
         );
       }
       
@@ -251,6 +248,63 @@ export class InscripcionService {
       id: docSnap.id,
       ...docSnap.data()
     } as Estudiante));
+  }
+
+  async eliminarEstudiante(inscripcionId: string, codigoEstudiante: string): Promise<void> {
+    const insRef = doc(this.firestore, 'inscripciones', inscripcionId);
+    const estRef = doc(this.firestore, 'inscripciones', inscripcionId, 'estudiantes', codigoEstudiante);
+    await runTransaction(this.firestore, async (tx) => {
+      const insSnap = await tx.get(insRef);
+      if (!insSnap.exists()) throw new Error('Inscripción no existe');
+      const insData: any = insSnap.data();
+      const estSnap = await tx.get(estRef);
+      if (!estSnap.exists()) throw new Error('Estudiante no encontrado');
+      const estData: any = estSnap.data();
+      const aulaId = String(estData.aulaAsignadaId || '').trim();
+      const colegioId = String(estData.colegio?.CODIGOMODULAR || insData.colegio?.CODIGOMODULAR || '').trim();
+      const estudiantesArr: any[] = insData.estudiantes || [];
+      let remaining: any[] = estudiantesArr.filter((e: any) => {
+        if (String(e.codigo || e.id) === String(codigoEstudiante)) return false;
+        if (e.numeroDocumento && estData.numeroDocumento && String(e.numeroDocumento) === String(estData.numeroDocumento)) return false;
+        if (String(e.nombres||'').toUpperCase().trim() === String(estData.nombres||'').toUpperCase().trim() && String(e.apellidos||'').toUpperCase().trim() === String(estData.apellidos||'').toUpperCase().trim()) return false;
+        return true;
+      });
+      let nuevasAsignaciones: any[] = insData.asignacionesAula || [];
+      const nombreCompleto = `${estData.nombres} ${estData.apellidos}`;
+      nuevasAsignaciones = nuevasAsignaciones.filter((a: any) => !(a.aulaId === aulaId && a.estudianteNombre === nombreCompleto) && a.estudianteNombre !== nombreCompleto);
+      if (aulaId) {
+        const aulaRef = doc(this.firestore, 'turnosedicion', aulaId);
+        const aulaSnap = await tx.get(aulaRef);
+        if (aulaSnap.exists()) {
+          const aulaData: any = aulaSnap.data();
+          const inscritos = Math.max(0, (aulaData.inscritos || 0) - 1);
+          const porColegio: any = { ...(aulaData.porColegio || {}) };
+          if (colegioId && porColegio[colegioId] !== undefined) {
+            porColegio[colegioId] = Math.max(0, (porColegio[colegioId] || 0) - 1);
+            if (porColegio[colegioId] === 0) delete porColegio[colegioId];
+          }
+          tx.update(aulaRef, { inscritos, porColegio, fechaActualizacion: Timestamp.now() });
+        }
+      }
+      tx.delete(estRef);
+      tx.update(insRef, {
+        estudiantes: remaining,
+        asignacionesAula: nuevasAsignaciones,
+        cantidadEstudiantes: remaining.length,
+        fechaActualizacion: Timestamp.now()
+      });
+    });
+    try {
+      const colRef2 = collection(this.firestore, 'inscripciones', inscripcionId, 'estudiantes');
+      const snap2 = await getDocs(colRef2);
+      const remaining2 = snap2.docs.map(d => ({ ...d.data(), codigo: d.id, id: d.id }));
+      const insSnap2 = await getDoc(insRef);
+      const curArr: any[] = (insSnap2.data() as any)?.estudiantes || [];
+      const needFix = curArr.length !== remaining2.length || curArr.some((e: any, i: number) => String(e.codigo || e.id) !== String((remaining2[i] as any)?.codigo || (remaining2[i] as any)?.id));
+      if (needFix) {
+        await updateDoc(insRef, { estudiantes: remaining2, cantidadEstudiantes: remaining2.length, fechaActualizacion: Timestamp.now() });
+      }
+    } catch {}
   }
 
   async actualizarInscripcion(

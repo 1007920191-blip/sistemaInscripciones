@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Output, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Timestamp } from 'firebase/firestore';
 import { TurnoService } from '../../../../services/turno.service';
 import { Turno, NIVELES, GRADOS_POR_NIVEL, NivelGrado } from '../../../../models/turno.model';
 
@@ -52,10 +53,16 @@ export class TurnoForm implements OnInit {
       // Modo edición
       this.turno = { 
         ...this.turnoEditar,
-        codigo: this.turnoEditar.codigo 
+        codigo: this.turnoEditar.codigo,
+        horaInicioEntrada: this.horaToStr((this.turnoEditar as any).horaInicioEntrada),
+        horaFinEntrada: this.horaToStr((this.turnoEditar as any).horaFinEntrada),
+        horaInicioPrueba: this.horaToStr((this.turnoEditar as any).horaInicioPrueba),
+        horaFinPrueba: this.horaToStr((this.turnoEditar as any).horaFinPrueba),
       };
       
-      this.fechaString = this.formatearFechaParaInput(this.turnoEditar.fecha);
+      const f:any = this.turnoEditar.fecha;
+      const fechaObj = f?.toDate ? f.toDate() : (f?.seconds ? new Date(f.seconds*1000) : new Date(f));
+      this.fechaString = this.formatearFechaParaInput(fechaObj);
       
       // ← CAMBIO CLAVE: Usar nivelesGrados si existe, sino reconstruir
       if (this.turnoEditar.nivelesGrados && this.turnoEditar.nivelesGrados.length > 0) {
@@ -140,12 +147,45 @@ export class TurnoForm implements OnInit {
     this.turno.grados = this.nivelesGrados.map(ng => ng.grado);
   }
 
+  private parseFechaLocal(s: string): Date {
+    if (!s) return new Date();
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+
   onFechaChange(event: any) {
     const valor = event?.target?.value ?? event;
     this.fechaString = valor;
     if (valor) {
-      this.turno.fecha = new Date(valor);
+      this.turno.fecha = this.parseFechaLocal(valor);
     }
+  }
+
+  private toTimestamp(fecha: Date, horaStr: any): Timestamp {
+    if (!horaStr) return Timestamp.fromDate(fecha);
+    if (horaStr && typeof (horaStr as any).toDate === 'function') return horaStr as Timestamp;
+    if (horaStr && typeof (horaStr as any).seconds === 'number') return new Timestamp((horaStr as any).seconds, (horaStr as any).nanoseconds || 0);
+    if (horaStr instanceof Date) return Timestamp.fromDate(horaStr);
+    const s = String(horaStr);
+    const m = s.match(/^(\d{1,2}):(\d{2})/);
+    if (m) {
+      const d = new Date(fecha);
+      d.setHours(parseInt(m[1],10), parseInt(m[2],10), 0, 0);
+      return Timestamp.fromDate(d);
+    }
+    return Timestamp.fromDate(fecha);
+  }
+
+  private horaToStr(v:any): string {
+    if (!v) return '';
+    if (typeof v === 'string') return v.slice(0,5);
+    if (typeof (v as any).toDate === 'function') {
+      const d=(v as any).toDate(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+    if ((v as any).seconds) { const d=new Date((v as any).seconds*1000); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+    return String(v).slice(0,5);
   }
 
   async onGuardar() {
@@ -165,19 +205,32 @@ export class TurnoForm implements OnInit {
       return;
     }
 
-    const codigoFinal = this.turno.codigo.trim();
+    const codigoFinal = this.turno.codigo.trim().toUpperCase();
+    const fechaBaseRaw: any = this.turno.fecha;
+    const fechaBase: Date = fechaBaseRaw instanceof Date ? new Date(fechaBaseRaw.getFullYear(), fechaBaseRaw.getMonth(), fechaBaseRaw.getDate()) : fechaBaseRaw?.toDate ? (()=>{ const d=fechaBaseRaw.toDate(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); })() : fechaBaseRaw?.seconds ? (()=>{ const d=new Date(fechaBaseRaw.seconds*1000); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); })() : this.parseFechaLocal(String(this.fechaString || fechaBaseRaw || ''));
 
     try {
-      const datosTurno = {
+      const datosTurno: any = {
         ...this.turno,
         codigo: codigoFinal,
-        nivelesGrados: this.nivelesGrados,           // ← Guardar estructura completa
+        fecha: fechaBase,
+        horaInicioEntrada: this.toTimestamp(fechaBase, this.turno.horaInicioEntrada),
+        horaFinEntrada: this.toTimestamp(fechaBase, this.turno.horaFinEntrada),
+        horaInicioPrueba: this.toTimestamp(fechaBase, this.turno.horaInicioPrueba),
+        horaFinPrueba: this.toTimestamp(fechaBase, this.turno.horaFinPrueba),
+        nivelesGrados: this.nivelesGrados,
         grados: this.nivelesGrados.map(ng => ng.grado),
         nivel: this.nivelesGrados[0]?.nivel || 'Primaria'
       };
 
       if (this.turnoEditar?.id) {
-        await this.turnoService.actualizarTurno(this.turnoEditar.id, datosTurno);
+        const idReal = this.turnoEditar.id.trim().toUpperCase();
+        if (idReal !== codigoFinal) {
+          await this.turnoService.guardarTurno({ ...datosTurno, id: codigoFinal } as Turno);
+          await this.turnoService.eliminarTurno(idReal);
+        } else {
+          await this.turnoService.actualizarTurno(idReal, datosTurno);
+        }
       } else {
         await this.turnoService.guardarTurno(datosTurno as Turno);
       }

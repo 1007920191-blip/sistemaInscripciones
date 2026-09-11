@@ -38,8 +38,8 @@
     </div>
 
     <div class="form-actions">
-      <button type="button" class="btn-cancelar" (click)="onCancelar()">Cancelar</button>
-      <button type="submit" class="btn-guardar">💾 Guardar</button>
+      <button type="button" class="btn-cancelar" (click)="onCancelar()" [disabled]="cargando">Cancelar</button>
+      <button type="submit" class="btn-guardar" [disabled]="cargando">{{ cargando ? '⏳ Guardando...' : '💾 Guardar' }}</button>
     </div>
   </form>
 </div>

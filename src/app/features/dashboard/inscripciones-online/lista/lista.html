@@ -1,155 +1,375 @@
-<div class="lista-container">
+<div class="lista-container" *ngIf="!mostrarNuevaInscripcion">
   <div *ngIf="cargando" style="text-align: center; padding: 20px;">
-    Cargando inscripciones online...
+    Cargando inscripciones...
   </div>
-
+  
   <div *ngIf="!cargando">
     <h2>Inscripciones Online</h2>
+    
+    <div class="header-acciones">
+      <div class="filtros-container">
+        <!-- Buscador -->
+        <div class="search-box">
+          <input 
+            type="text" 
+            [(ngModel)]="terminoBusqueda" 
+            placeholder="Buscar por DNI, Nombres, IE o Cód. Modular..." 
+            (keyup.enter)="onFiltrar()"
+            class="input-search">
+          <button class="btn-buscar" (click)="onFiltrar()" title="Buscar">🔍</button>
+          <button class="btn-limpiar" *ngIf="terminoBusqueda" (click)="limpiarBusqueda()" title="Limpiar búsqueda">✕</button>
+        </div>
+
+        <!-- Selector de fecha -->
+        <div class="filter-item date-filter">
+          <label for="fechaFiltro">Fecha:</label>
+          <input 
+            id="fechaFiltro"
+            type="date" 
+            [(ngModel)]="fechaSeleccionada" 
+            (change)="onFiltrar()"
+            class="input-date">
+        </div>
+
+        <!-- Toggle Ver Todos -->
+        <div class="filter-item toggle-filter">
+          <label class="switch-container">
+            <input 
+              type="checkbox" 
+              [(ngModel)]="verTodos" 
+              (change)="onFiltrar()">
+            <span class="slider round"></span>
+          </label>
+          <span class="toggle-label" (click)="verTodos = !verTodos; onFiltrar()">Ver Históricos</span>
+        </div>
+      </div>
+    </div>
 
     <table class="tabla-inscripciones" *ngIf="inscripciones.length > 0">
       <thead>
-        <tr>
+         <tr>
           <th>N°</th>
-          <th>Correo del responsable</th>
-          <th>Teléfono</th>
-          <th>Estudiantes</th>
-          <th>Total</th>
+          <th>Estudiante</th>
+          <th>Colegio</th>
           <th>Fecha</th>
           <th>Estado</th>
           <th>Acciones</th>
-        </tr>
+         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let ins of inscripciones; let i = index">
-          <td>{{ i + 1 }}</td>
-          <td>{{ obtenerCorreoResponsable(ins) }}</td>
-          <td>{{ ins.telefonoApoderado }}</td>
-          <td>{{ cantidadEstudiantesValidos(ins) }}</td>
-          <td>S/ {{ ins.montoTotal }}</td>
+        <!-- ← CAMBIO: Usar inscripcionesPaginadas -->
+        <tr *ngFor="let ins of inscripcionesPaginadas; let i = index">
+          <td>{{ getNumeroCorrelativo(i) }}</td>
+          <td>
+            {{ ins.estudiantes[0]?.nombres }} {{ ins.estudiantes[0]?.apellidos }}
+            <span *ngIf="ins.cantidadEstudiantes > 1">
+              (+{{ ins.cantidadEstudiantes - 1 }} más)
+            </span>
+          </td>
+          <td>{{ ins.colegio?.IE }}</td>
           <td>{{ formatearFecha(ins.fechaInscripcion) }}</td>
-          <td><span class="estado-badge" [ngClass]="getEstadoClase(ins.estado)">{{ ins.estado }}</span></td>
+          <td>{{ ins.estado }}</td>
+          
           <td class="acciones">
-            <button class="btn-detalle" (click)="toggleExpandir(ins)" title="Ver detalle">
-              {{ inscripcionExpandida === ins.id ? '▲' : '▼' }}
+            <button class="btn-lista" (click)="verLista(ins)" title="Ver lista y credenciales">
+              Lista
             </button>
-            <button
-              *ngIf="ins.estado === 'pendiente'"
-              class="btn-validar"
-              (click)="abrirModalValidar(ins)">
+            <button class="btn-editar" (click)="editarInscripcion(ins)">
+              Editar
+            </button>
+            <button class="btn-lista" (click)="enviarWhatsapp(ins)" title="Enviar WhatsApp" style="background:#25D366;color:white;margin-left:4px;">
+              WhatsApp
+            </button>
+            <button class="btn-validar" (click)="abrirModalValidar(ins)" *ngIf="ins.estado === 'pendiente'" title="Validar inscripción" style="background:#28a745; color:white; margin-left:4px;">
               Validar
             </button>
           </td>
         </tr>
       </tbody>
     </table>
-
+    
     <div *ngIf="inscripciones.length === 0" style="text-align: center; padding: 20px;">
-      No hay inscripciones online registradas
+      No hay inscripciones registradas
     </div>
 
-    <div *ngIf="inscripcionExpandida" class="detalle-panel">
-      <ng-container *ngFor="let ins of inscripciones">
-        <div *ngIf="ins.id === inscripcionExpandida" class="detalle-contenido">
-          <div class="detalle-grid">
-            <div class="detalle-col">
-              <h4>Datos del Responsable</h4>
-              <p><strong>Correo:</strong> {{ obtenerCorreoResponsable(ins) }}</p>
-              <p><strong>Teléfono:</strong> {{ ins.telefonoApoderado }}</p>
-            </div>
-            <div class="detalle-col">
-              <h4>Datos del Colegio</h4>
-              <p *ngIf="ins.colegio?.IE"><strong>IE:</strong> {{ ins.colegio.IE }}</p>
-              <p *ngIf="ins.colegio?.nivel"><strong>Nivel:</strong> {{ ins.colegio.nivel }}</p>
-              <p *ngIf="ins.colegio?.grado"><strong>Grado:</strong> {{ ins.colegio.grado }}</p>
-              <p><strong>Monto total:</strong> S/ {{ ins.montoTotal }}</p>
-            </div>
-            <div class="detalle-col">
-              <h4>Voucher de Pago</h4>
-              <p><strong>N° Operación:</strong> {{ $any(ins).voucherNumeroOperacion || '-' }}</p>
-              <div *ngIf="tieneVoucher(ins)" class="voucher-preview">
-                <img [src]="obtenerVoucherUrl(ins)" alt="Voucher" class="voucher-img">
-              </div>
-              <p *ngIf="!tieneVoucher(ins)" class="sin-voucher">Sin comprobante de pago</p>
-            </div>
-          </div>
+    <!-- ← NUEVO: Paginación -->
+    <div class="paginacion" *ngIf="totalItems > 0">
+      <span class="info-pagina">
+        {{ (paginaActual - 1) * itemsPorPagina + 1 }} - 
+        {{ Math.min(paginaActual * itemsPorPagina, totalItems) }} de {{ totalItems }}
+      </span>
+      
+      <div class="items-por-pagina">
+        <label>items por página</label>
+        <select [(ngModel)]="itemsPorPagina" (change)="onItemsPorPaginaChange($event)">
+          <option value="5">5</option>
+          <option value="10">10</option>
+          <option value="15">15</option>
+          <option value="25">25</option>
+        </select>
+      </div>
+      
+      <div class="navegacion">
+        <button 
+          class="btn-nav" 
+          [disabled]="paginaActual === 1"
+          (click)="cambiarPagina('anterior')">
+          ‹
+        </button>
+        <button 
+          class="btn-nav" 
+          [disabled]="paginaActual === totalPaginas"
+          (click)="cambiarPagina('siguiente')">
+          ›
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
-          <div class="detalle-estudiantes">
-            <h4>Estudiantes ({{ cantidadEstudiantesValidos(ins) }})</h4>
-            <table class="tabla-estudiantes" *ngIf="ins.estudiantes?.length">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>DNI</th>
-                  <th>Nombres</th>
-                  <th>Apellidos</th>
-                  <th>Nivel</th>
-                  <th>Grado</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let est of ins.estudiantes; let j = index">
-                  <td>{{ j + 1 }}</td>
-                  <td>{{ est.numeroDocumento }}</td>
-                  <td>{{ est.nombres }}</td>
-                  <td>{{ est.apellidos }}</td>
-                  <td>{{ est.nivel }}</td>
-                  <td>{{ est.grado }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+<app-nueva-inscripcion 
+  *ngIf="mostrarNuevaInscripcion"
+  [inscripcionEditar]="inscripcionEditar"
+  [estudiantesEditar]="estudiantesEditar"
+  [estudiantesImportados]="estudiantesImportados"
+  (volverLista)="volverALista()"
+  (inscripcionGuardada)="recargarInscripciones()">
+</app-nueva-inscripcion>
+
+<!-- Modal de Lista de Estudiantes -->
+<div class="modal-overlay" *ngIf="mostrarModalLista" (click)="cerrarModalLista()">
+  <div class="modal-content modal-lista" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>LISTA DE ESTUDIANTES ASIGNADOS</h2>
+      <button class="btn-cerrar" (click)="cerrarModalLista()">×</button>
+    </div>
+
+    <div class="modal-body" *ngIf="cargandoLista">
+      <div class="cargando-container">
+        <span class="spinner">⏳</span> Cargando datos de estudiantes...
+      </div>
+    </div>
+
+    <div class="modal-body" *ngIf="!cargandoLista">
+      <div class="info-resumen" *ngIf="inscripcionParaLista">
+        <div class="info-item">
+          <strong>ID Inscripción:</strong> {{ inscripcionParaLista.id }}
         </div>
-      </ng-container>
+        <div class="info-item">
+          <strong>Colegio:</strong> {{ inscripcionParaLista.colegio?.IE }}
+        </div>
+        <div class="info-item">
+          <strong>Total Estudiantes:</strong> {{ estudiantesParaLista.length }}
+        </div>
+      </div>
+
+      <div class="tabla-container-modal">
+        <table class="tabla-estudiantes">
+          <thead>
+            <tr>
+              <th style="width: 40px; text-align: center;">
+                <input 
+                  type="checkbox" 
+                  [checked]="esTodosSeleccionados()" 
+                  (change)="toggleSeleccionarTodos()"
+                  title="Seleccionar / deseleccionar todos">
+              </th>
+              <th style="width: 50px;">N°</th>
+              <th>Nombres y Apellidos</th>
+              <th>DNI</th>
+              <th>Grado</th>
+              <th>Nivel</th>
+              <th>Aula Asignada</th>
+              <th style="width: 160px; text-align: center;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let est of estudiantesParaLista; let i = index" [class.seleccionado]="esEstudianteSeleccionado(est.numeroDocumento)">
+              <td style="text-align: center;">
+                <input 
+                  type="checkbox" 
+                  [checked]="esEstudianteSeleccionado(est.numeroDocumento)" 
+                  (change)="toggleSeleccionarEstudiante(est.numeroDocumento)"
+                  *ngIf="est.numeroDocumento">
+              </td>
+              <td>{{ i + 1 }}</td>
+              <td>{{ est.nombres }} {{ est.apellidos }}</td>
+              <td>{{ est.numeroDocumento }}</td>
+              <td>{{ est.grado }}</td>
+              <td>{{ est.nivel }}</td>
+              <td>
+                <span class="badge-aula" *ngIf="est.codigoAula">{{ est.codigoAula }}</span>
+                <span class="badge-sin-aula" *ngIf="!est.codigoAula">Sin aula</span>
+              </td>
+              <td style="text-align: center;">
+                <button class="btn-credencial-indiv" (click)="descargarCredencialIndividual(est)" title="Generar credencial individual">
+                  🪪 Credencial
+                </button>
+                <button class="btn-credencial-indiv" (click)="abrirModalImpresionIndividual(est)" title="Imprimir Tarjeta o Cartilla"
+                  style="background: #6c5ce7; margin-top: 4px;">
+                  🖨️
+                </button>
+                <button class="btn-credencial-indiv" (click)="enviarWhatsappEstudiante(est)" title="Enviar WhatsApp" style="background:#25D366;margin-top:4px;">
+                  💬 WhatsApp
+                </button>
+                <button class="btn-credencial-indiv" (click)="abrirModalEliminar(est)" title="Eliminar estudiante" style="background:#dc2626;color:white;margin-top:4px;">
+                  🗑️ Eliminar
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <div class="footer-izq">
+        <span class="seleccionados-count" *ngIf="estudiantesSeleccionados.size > 0">
+          <strong>{{ estudiantesSeleccionados.size }}</strong> estudiantes seleccionados
+        </span>
+      </div>
+      <div class="footer-der">
+        <button class="btn-secundario" (click)="cerrarModalLista()">Cerrar</button>
+        
+        <button 
+          class="btn-pdf-lista" 
+          (click)="descargarPDF()" 
+          [disabled]="cargandoLista || estudiantesParaLista.length === 0"
+          title="Descargar lista de estudiantes en formato tabla">
+          📄 Descargar Lista PDF
+        </button>
+        
+        <button 
+          class="btn-pdf-credenciales" 
+          (click)="descargarCredencialesGrupales()" 
+          [disabled]="cargandoLista || estudiantesSeleccionados.size === 0"
+          title="Generar credenciales tipo tiras de los seleccionados">
+          🪪 Credenciales
+        </button>
+
+        <button 
+          class="btn-pdf-credenciales"
+          (click)="abrirModalImpresionGrupal()"
+          [disabled]="cargandoLista || estudiantesSeleccionados.size === 0"
+          title="Generar Tarjeta o Cartilla de los seleccionados"
+          style="background: #6c5ce7;">
+          🖨️ Cartillas
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Imprimir Tarjeta / Cartilla (individual o grupal) -->
+<div class="modal-overlay modal-asignar" *ngIf="mostrarModalImpresionIndividual" (click)="cerrarModalImpresionIndividual()">
+  <div class="modal-content modal-form" (click)="$event.stopPropagation()" style="max-width: 400px;">
+
+    <div class="header">
+      <h2>OPCIONES DE IMPRESIÓN</h2>
+      <button class="btn-cerrar" (click)="cerrarModalImpresionIndividual()" type="button">×</button>
+    </div>
+
+    <div class="form-container">
+      
+      <!-- Contenido dinámico (Única diferencia permitida) -->
+      <div class="campo campo-full" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea; margin-bottom: 20px;">
+        <ng-container *ngIf="!modoImpresionGrupal && estudianteParaImpresion">
+          <div style="font-weight: 700; color: #333; margin-bottom: 5px;">{{ estudianteParaImpresion.apellidos }}, {{ estudianteParaImpresion.nombres }}</div>
+          <div style="font-size: 0.85rem; color: #666;">DNI: {{ estudianteParaImpresion.numeroDocumento }} | {{ estudianteParaImpresion.grado }} {{ estudianteParaImpresion.nivel }}</div>
+        </ng-container>
+        <ng-container *ngIf="modoImpresionGrupal && estudiantesParaImpresionGrupal.length > 0">
+          <div style="font-weight: 700; color: #333; margin-bottom: 5px;">Impresión Grupal</div>
+          <div style="font-size: 0.85rem; color: #666;">Se generarán documentos para <strong>{{ estudiantesParaImpresionGrupal.length }}</strong> estudiantes seleccionados.</div>
+        </ng-container>
+      </div>
+
+      <div class="campo campo-full">
+        <label>TIPO DE IMPRESIÓN</label>
+        <div style="display: flex; gap: 1rem; margin-top: 0.5rem; justify-content: center; align-items: center; padding: 10px;">
+          <label style="cursor: pointer;">
+            <input type="radio" name="tipoImpresionLista" value="TARJETA" [(ngModel)]="tipoImpresionIndividual"> Tarjeta
+          </label>
+          <label style="cursor: pointer;">
+            <input type="radio" name="tipoImpresionLista" value="CARTILLA" [(ngModel)]="tipoImpresionIndividual"> Cartilla
+          </label>
+        </div>
+      </div>
+
+      <div class="campo campo-full" *ngIf="tipoImpresionIndividual === 'CARTILLA'">
+        <label>CANTIDAD DE ALTERNATIVAS *</label>
+        <input type="number" [(ngModel)]="alternativasImpresionIndividual" min="2" max="5" class="input-busqueda" style="width: 100%;">
+      </div>
+
+      <div class="botones" style="margin-top: 2rem;">
+        <button class="btn-cancelar" (click)="cerrarModalImpresionIndividual()" type="button" [disabled]="cargandoImpresion">Cancelar</button>
+        <button class="btn-guardar" (click)="confirmarImpresionIndividual()" type="button" [disabled]="cargandoImpresion">
+          {{ cargandoImpresion ? 'Generando...' : 'Aceptar' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Confirmar Eliminar Estudiante -->
+<div class="modal-overlay" *ngIf="mostrarModalEliminar" (click)="cerrarModalEliminar()">
+  <div class="modal-content modal-form" (click)="$event.stopPropagation()" style="max-width:360px;">
+    <div class="header" style="background:#fef2f2; border-bottom:2px solid #fecaca;">
+      <h2 style="color:#dc2626; font-size:1rem;">¿Eliminar estudiante?</h2>
+      <button class="btn-cerrar" (click)="cerrarModalEliminar()" type="button" [disabled]="eliminando">×</button>
+    </div>
+    <div class="form-container" *ngIf="estudianteAEliminar as est" style="text-align:center; padding:18px;">
+      <div style="font-weight:700; color:#0f172a; font-size:1rem; margin-bottom:6px;">{{ est.nombres }} {{ est.apellidos }}</div>
+      <div style="font-size:0.92rem; color:#334155;">Código: <strong>{{ $any(est).codigo || $any(est).id }}</strong></div>
+      <div style="font-size:0.92rem; color:#334155; margin-bottom:14px;">Aula asignada: <strong>{{ est.codigoAula || 'Sin aula' }}</strong></div>
+      <div class="botones" style="margin-top:0.8rem; justify-content:center; gap:10px;">
+        <button class="btn-cancelar" (click)="cerrarModalEliminar()" type="button" [disabled]="eliminando" style="min-width:110px; background:#2563eb; color:white; border:none;">Cancelar</button>
+        <button class="btn-guardar" (click)="confirmarEliminarEstudiante()" type="button" [disabled]="eliminando" style="min-width:110px; background:#e5e7eb; color:#374151; border:1px solid #d1d5db;">{{ eliminando ? 'Eliminando...' : 'Eliminar' }}</button>
+      </div>
     </div>
   </div>
 </div>
 
 <div class="modal-overlay" *ngIf="mostrarModalValidar" (click)="cerrarModalValidar()">
-  <div class="modal-content modal-validar" (click)="$event.stopPropagation()">
-    <div class="modal-header">
-      <h2>Validar Inscripción Online</h2>
-      <button class="btn-cerrar" (click)="cerrarModalValidar()">×</button>
+  <div class="modal-content modal-validar" (click)="$event.stopPropagation()" style="max-width:720px; width:92%; max-height:90vh; display:flex; flex-direction:column; border-radius:12px; overflow:hidden; box-shadow:0 12px 32px rgba(0,0,0,0.25);">
+    <div class="modal-header" style="background:linear-gradient(135deg, #005cbf 0%, #0a3d8f 100%); padding:18px 24px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+      <h2 style="margin:0; color:white; font-size:1.15rem; font-weight:700; letter-spacing:0.3px;">Validar Inscripción Online</h2>
+      <button class="btn-cerrar" (click)="cerrarModalValidar()" style="background:rgba(255,255,255,0.2); border:none; color:white; width:32px; height:32px; border-radius:50%; font-size:1.3rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">×</button>
     </div>
-
-    <div class="modal-body" *ngIf="inscripcionAValidar">
-      <div class="validation-grid">
-        <div class="validation-col">
-          <h4>Responsable</h4>
-          <p><strong>Correo:</strong> {{ obtenerCorreoResponsable(inscripcionAValidar) }}</p>
-          <p><strong>Teléfono:</strong> {{ inscripcionAValidar.telefonoApoderado }}</p>
+    <div class="modal-body" *ngIf="inscripcionAValidar" style="padding:20px 24px; background:#f8f9fa; overflow-y:auto; flex:1; min-height:0;">
+      <div class="validation-grid" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:16px;">
+        <div class="validation-col" style="background:white; border:1px solid #e3e8ef; border-radius:10px; padding:14px; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
+          <h4 style="margin:0 0 10px; color:#005cbf; font-size:0.82rem; text-transform:uppercase; border-bottom:2px solid #e3e8ef; padding-bottom:6px;">Responsable</h4>
+          <p style="margin:6px 0; font-size:0.88rem;"><strong>Correo:</strong> {{ $any(inscripcionAValidar).correoApoderado || $any(inscripcionAValidar).apoderado?.correo || $any(inscripcionAValidar).usuarioId }}</p>
+          <p style="margin:6px 0; font-size:0.88rem;"><strong>Teléfono:</strong> {{ $any(inscripcionAValidar).telefonoApoderado }}</p>
+          <p style="margin:6px 0; font-size:0.88rem;"><strong>Código:</strong> <span style="background:#e3f2fd; color:#0d47a1; padding:2px 8px; border-radius:12px; font-weight:700;">{{ $any(inscripcionAValidar).codigo || $any(inscripcionAValidar).id }}</span></p>
         </div>
-        <div class="validation-col">
-          <h4>Pago</h4>
-          <p><strong>N° Operación:</strong> {{ $any(inscripcionAValidar).voucherNumeroOperacion || '-' }}</p>
-          <p><strong>Monto:</strong> S/ {{ inscripcionAValidar.montoTotal }}</p>
-          <p><strong>Método de pago:</strong> {{ $any(inscripcionAValidar).metodoPago }}</p>
-          <div *ngIf="tieneVoucher(inscripcionAValidar)" class="voucher-preview">
-            <img [src]="obtenerVoucherUrl(inscripcionAValidar)" alt="Comprobante de pago" class="voucher-img">
-          </div>
-          <p *ngIf="!tieneVoucher(inscripcionAValidar)" class="sin-voucher">No se ha subido comprobante de pago</p>
+        <div class="validation-col" style="background:white; border:1px solid #e3e8ef; border-radius:10px; padding:14px; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
+          <h4 style="margin:0 0 10px; color:#005cbf; font-size:0.82rem; text-transform:uppercase; border-bottom:2px solid #e3e8ef; padding-bottom:6px;">Colegio</h4>
+          <p style="margin:6px 0; font-size:0.88rem;"><strong>IE:</strong> {{ inscripcionAValidar.colegio?.IE }}</p>
+          <p style="margin:6px 0; font-size:0.88rem;"><strong>Estudiantes:</strong> {{ inscripcionAValidar.cantidadEstudiantes }}</p>
+          <p style="margin:6px 0; font-size:0.88rem;"><strong>Fecha:</strong> {{ formatearFecha(inscripcionAValidar.fechaInscripcion) }}</p>
+          <p style="margin:6px 0; font-size:0.88rem;"><strong>Monto:</strong> S/ {{ $any(inscripcionAValidar).montoTotal }}</p>
         </div>
-        <div class="validation-col">
-          <h4>Colegio</h4>
-          <p><strong>IE:</strong> {{ inscripcionAValidar.colegio?.IE }}</p>
-          <p><strong>Estudiantes:</strong> {{ cantidadEstudiantesValidos(inscripcionAValidar) }}</p>
+        <div class="validation-col" style="background:white; border:1px solid #e3e8ef; border-radius:10px; padding:14px; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
+          <h4 style="margin:0 0 10px; color:#005cbf; font-size:0.82rem; text-transform:uppercase; border-bottom:2px solid #e3e8ef; padding-bottom:6px;">Pago</h4>
+          <p style="margin:6px 0; font-size:0.88rem;"><strong>N° Operación:</strong> {{ $any(inscripcionAValidar).voucherNumeroOperacion || '-' }}</p>
+          <p style="margin:6px 0; font-size:0.88rem;"><strong>Método:</strong> <span style="text-transform:capitalize;">{{ $any(inscripcionAValidar).metodoPago }}</span></p>
         </div>
       </div>
-
-      <div class="validation-confirm">
-        <label class="checkbox-container">
-          <input type="checkbox" [(ngModel)]="confirmacionValidacion">
-          <span class="checkbox-label">Confirmo que he revisado el comprobante de pago y los datos de la inscripción, y autorizo la validación.</span>
-        </label>
+      <div *ngIf="$any(inscripcionAValidar).voucherUrl || $any(inscripcionAValidar).voucherStoragePath" style="background:white; border:1px solid #e3e8ef; border-radius:10px; padding:14px; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,0.06); margin-bottom:16px;">
+        <h4 style="margin:0 0 10px; color:#005cbf; font-size:0.82rem; text-transform:uppercase;">Comprobante de Pago</h4>
+        <img [src]="$any(inscripcionAValidar).voucherUrl || $any(inscripcionAValidar).voucherStoragePath" alt="Comprobante" style="max-width:100%; max-height:320px; border-radius:8px; border:1px solid #ddd; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+      </div>
+      <div *ngIf="!$any(inscripcionAValidar).voucherUrl && !$any(inscripcionAValidar).voucherStoragePath" style="background:#fff3cd; border:1px solid #ffeaa7; border-radius:8px; padding:12px; text-align:center; color:#856404; margin-bottom:16px;">Sin comprobante de pago adjunto</div>
+      <div class="validation-confirm" style="background:white; border:2px solid #e3e8ef; border-radius:8px; padding:14px; display:flex; gap:10px; align-items:center;">
+        <input type="checkbox" [(ngModel)]="confirmacionValidacion" id="chkValidar" style="width:18px; height:18px; accent-color:#28a745;">
+        <label for="chkValidar" style="margin:0; font-size:0.9rem; color:#2d3436; cursor:pointer; font-weight:500;">Confirmo que he revisado el comprobante y los datos, y autorizo la validación.</label>
       </div>
     </div>
-
-    <div class="modal-footer">
-      <button class="btn-cancelar" (click)="cerrarModalValidar()">Cancelar</button>
-      <button
-        class="btn-validar-confirmar"
-        [disabled]="!confirmacionValidacion || validando"
-        (click)="confirmarValidacion()">
-        {{ validando ? 'Validando...' : 'Validar inscripción' }}
+    <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; background:white; border-top:1px solid #e9ecef; flex-shrink:0;">
+      <button class="btn-secundario" (click)="cerrarModalValidar()" style="padding:10px 18px; border:1px solid #dee2e6; background:white; color:#495057; border-radius:8px; font-weight:600; cursor:pointer;">Cancelar</button>
+      <button class="btn-validar" [disabled]="!confirmacionValidacion || validando" (click)="confirmarValidacion()" style="padding:10px 20px; background:linear-gradient(135deg, #28a745 0%, #20c997 100%); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; box-shadow:0 3px 8px rgba(40,167,69,0.3); opacity:1;">
+        {{ validando ? 'Validando...' : '✓ Validar inscripción' }}
       </button>
     </div>
   </div>

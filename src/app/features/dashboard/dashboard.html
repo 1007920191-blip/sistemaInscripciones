@@ -6,6 +6,7 @@
       <li><button (click)="section = 'inscripciones-online'">Inscripciones online</button></li>
       <li><button (click)="section = 'aulas'">Aulas</button></li>
       <li><button (click)="section = 'turnos'">Turnos</button></li>
+      <li><button (click)="section = 'categorias'">Categorías</button></li>
       <li><button (click)="irAConfiguracion()">Configuración</button></li>
       <li><button (click)="logout()">Salir</button></li>
     </ul>
@@ -54,6 +55,9 @@
       (guardar)="onTurnoGuardado()"
       (cancelar)="onCancelarTurno()">
     </app-turno-form>
+
+    <!-- Categorías -->
+    <app-categorias *ngIf="section === 'categorias'"></app-categorias>
     
   </main>
 </div>

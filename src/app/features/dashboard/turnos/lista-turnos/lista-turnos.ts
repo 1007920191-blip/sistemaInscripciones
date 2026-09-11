@@ -160,9 +160,28 @@ export class ListaTurnos implements OnInit {
     return grados.join(', ');
   }
 
-  formatearFecha(fecha: Date): string {
+  formatearFecha(fecha: any): string {
     if (!fecha) return '-';
-    const d = new Date(fecha);
+    let d: Date;
+    if (fecha?.toDate) d = fecha.toDate();
+    else if (fecha?.seconds) d = new Date(fecha.seconds*1000);
+    else d = new Date(fecha);
+    if (isNaN(d.getTime())) return '-';
     return d.toLocaleDateString('es-ES');
+  }
+
+  formatearHora(hora: any): string {
+    if (!hora) return '--:--';
+    if (typeof hora === 'string') return hora.slice(0,5);
+    if (hora?.toDate) {
+      const d = hora.toDate();
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+    if (hora?.seconds) {
+      const d = new Date(hora.seconds*1000);
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+    if (hora instanceof Date) return `${String(hora.getHours()).padStart(2,'0')}:${String(hora.getMinutes()).padStart(2,'0')}`;
+    return String(hora).slice(0,5);
   }
 }

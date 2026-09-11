@@ -6,6 +6,7 @@ import { ListaO } from './inscripciones-online/lista/lista';
 import { NuevaInscripcion } from './inscripciones-presenciales/nueva-inscripcion/nueva-inscripcion';
 import { ListaTurnos } from './turnos/lista-turnos/lista-turnos';
 import { TurnoForm } from './turnos/turno-form/turno-form';
+import { CategoriasComponent } from './categorias/categorias';
 
 import { Turno } from '../../models/turno.model';
 import { ListaAulasComponent } from './aulas/lista-aulas/lista-aulas';
@@ -23,7 +24,8 @@ import { Aula } from '../../models/aula.model';
     ListaTurnos,
     TurnoForm,
     ListaAulasComponent,
-    AulaFormComponent  // <-- AÑADIDO
+    AulaFormComponent,
+    CategoriasComponent
   ],
   templateUrl: './dashboard.html',
   styleUrls: ['./dashboard.css']

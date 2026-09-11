@@ -53,6 +53,9 @@ export class NuevaInscripcion implements OnInit {
   estudiantesRegistrados: Estudiante[] = [];
   estudianteActual: number = 1;
   inscripcionId: string = '';
+  busquedaEstudiante: string = '';
+  cantidadOriginal: number = 0;
+  voucherOriginal: string | null = null;
   
   // Preview de asignación
   previewAsignaciones: PreviewAsignacion[] = [];
@@ -67,7 +70,10 @@ export class NuevaInscripcion implements OnInit {
 
   @Input() inscripcionEditar: Inscripcion | null = null;
   @Input() estudiantesEditar: Estudiante[] = [];
+  @Input() estudiantesImportados: Estudiante[] = [];
   modoEdicion = false;
+  estudiantesExistentes: Estudiante[] = [];
+  private firmasOriginales = new Map<string, string>();
 
   // Cache de turnos encontrados por estudiante
   turnosPorEstudiante: Map<number, Turno> = new Map();
@@ -94,6 +100,8 @@ export class NuevaInscripcion implements OnInit {
     }
     if (this.inscripcionEditar) {
       this.cargarDatosEdicion();
+    } else if (this.estudiantesImportados && this.estudiantesImportados.length > 0) {
+      this.estudiantesRegistrados = this.estudiantesImportados.map(e => ({ ...e }));
     }
   }
 
@@ -131,8 +139,19 @@ export class NuevaInscripcion implements OnInit {
       monto: this.inscripcionEditar!.montoTotal,
       telefono: this.inscripcionEditar!.telefonoApoderado
     };
-    
-    this.estudiantesRegistrados = [...this.estudiantesEditar];
+    // Un documento de la subcolección equivale a un estudiante real. Su
+    // identidad es su código/documentId, nunca el DNI ni su posición visual.
+    this.estudiantesExistentes = this.estudiantesEditar
+      .filter((est: any) => !!(est?.codigo || est?.id))
+      .sort((a: any, b: any) => Number(a.codigo || a.id) - Number(b.codigo || b.id))
+      .map((est: any) => ({ ...est }));
+    this.firmasOriginales.clear();
+    for (const est of this.estudiantesExistentes) {
+      const codigo = String((est as any).codigo || (est as any).id);
+      this.firmasOriginales.set(codigo, this.firmaEstudiante(est));
+    }
+    this.cantidadOriginal = this.estudiantesExistentes.length;
+    this.estudiantesRegistrados = this.estudiantesExistentes.map((est: any) => ({ ...est }));
     this.estudianteActual = 1;
     this.pasoActual = 'colegio';
   }
@@ -208,11 +227,29 @@ export class NuevaInscripcion implements OnInit {
 
   seleccionarColegio(colegio: any) {
     this.colegioSeleccionado = colegio;
-    
+    this.sincronizarNivelConColegio();
     if (this.modoEdicion) {
       this.mostrarBusquedaColegios = false;
     } else {
       this.pasoActual = 'pago';
+    }
+  }
+
+  private sincronizarNivelConColegio() {
+    const nivelNuevo = String(this.colegioSeleccionado?.NIVEL || '').toUpperCase().trim();
+    if (!nivelNuevo) return;
+    const validos = nivelNuevo === 'SECUNDARIA'
+      ? ['PRIMERO','SEGUNDO','TERCERO','CUARTO','QUINTO']
+      : nivelNuevo === 'PRIMARIA'
+      ? ['PRIMERO','SEGUNDO','TERCERO','CUARTO','QUINTO','SEXTO']
+      : [];
+    for (const est of this.estudiantesRegistrados) {
+      if (String(est.nivel).toUpperCase().trim() !== nivelNuevo) {
+        est.nivel = nivelNuevo;
+        if (est.grado && validos.length && !validos.includes(String(est.grado).toUpperCase().trim())) {
+          est.grado = '';
+        }
+      }
     }
   }
 
@@ -232,12 +269,51 @@ export class NuevaInscripcion implements OnInit {
   }
 
   onConfirmarPago(datos: any) {
-    this.datosPago = datos;
-    
-    if (datos.cantidad < this.estudiantesRegistrados.length) {
-      this.estudiantesRegistrados = this.estudiantesRegistrados.slice(0, datos.cantidad);
+    if (this.modoEdicion) {
+      const reales = this.estudiantesExistentes.length;
+      if (datos.cantidad !== reales) {
+        if (datos.cantidad > reales) {
+          if (!confirm(`Cambió la cantidad de ${reales} a ${datos.cantidad}. ¿Desea añadir ${datos.cantidad - reales} estudiante(s) nuevo(s)? Se abrirá un formulario vacío.`)) return;
+        } else {
+          alert(`No se eliminarán estudiantes automáticamente. Tiene ${reales} real(es). Se mantiene en ${reales}.`);
+          datos.cantidad = reales;
+          datos.monto = reales * 5;
+        }
+      }
     }
-    
+    if (this.estudiantesImportados.length > 0 && datos.cantidad !== this.estudiantesRegistrados.length) {
+      datos.cantidad = this.estudiantesRegistrados.length;
+      datos.monto = this.estudiantesRegistrados.length * 5;
+    }
+    this.datosPago = datos;
+    if (this.modoEdicion) {
+      const reales = this.estudiantesExistentes.length;
+      const deseados = datos.cantidad;
+      // Reconstruir slots: existentes + vacíos nuevos (sin clonar existentes)
+      const nuevosSlots: any[] = this.estudiantesExistentes.map((est: any) => ({ ...est }));
+      if (deseados > reales) {
+        for (let i = reales; i < deseados; i++) {
+          nuevosSlots.push({
+            tipoDocumento: 'dni',
+            numeroDocumento: '',
+            nombres: '',
+            apellidos: '',
+            grado: '',
+            nivel: this.colegioSeleccionado?.NIVEL || 'PRIMARIA',
+            colegio: this.colegioSeleccionado,
+            fechaRegistro: new Date(),
+            // Marca de interfaz: este slot jamás puede cargar datos de un
+            // documento histórico, aunque exista uno duplicado en Firebase.
+            __slotNuevo: true
+          } as any);
+        }
+      }
+      this.estudiantesRegistrados = nuevosSlots;
+    } else {
+      if (datos.cantidad < this.estudiantesRegistrados.length) {
+        this.estudiantesRegistrados = this.estudiantesRegistrados.slice(0, datos.cantidad);
+      }
+    }
     this.estudianteActual = 1;
     this.pasoActual = 'estudiante';
   }
@@ -248,46 +324,65 @@ export class NuevaInscripcion implements OnInit {
     this.pasoActual = 'pago';
   }
 
-  onNavegarAnterior(estudiante: Estudiante) {
+  async onNavegarAnterior(estudiante: Estudiante) {
     if (this.guardando || this.finalizando) return;
     this.guardando = true;
-    
     const index = this.estudianteActual - 1;
     this.guardarEnArray(estudiante, index);
-    
+    if (this.modoEdicion && this.inscripcionId && this.tieneDatosEstudiante(estudiante)) {
+      try { await this.guardarSlotEdicion(estudiante, index); } catch {}
+    }
     if (this.estudianteActual > 1) {
       this.estudianteActual--;
     }
-    
     this.guardando = false;
   }
 
-  onNavegarSiguiente(estudiante: Estudiante) {
+  async onNavegarSiguiente(estudiante: Estudiante) {
     if (this.guardando || this.finalizando) return;
     this.guardando = true;
-    
     const index = this.estudianteActual - 1;
     this.guardarEnArray(estudiante, index);
-    
+    if (this.modoEdicion && this.inscripcionId && this.tieneDatosEstudiante(estudiante)) {
+      try { await this.guardarSlotEdicion(estudiante, index); } catch {}
+    }
     if (this.estudianteActual < this.datosPago.cantidad) {
       this.estudianteActual++;
     }
-    
     this.guardando = false;
   }
 
-  onGuardarEstudiante(estudiante: Estudiante) {
+  async onGuardarEstudiante(estudiante: Estudiante) {
     if (this.guardando || this.finalizando) return;
     this.guardando = true;
-    
     const index = this.estudianteActual - 1;
     this.guardarEnArray(estudiante, index);
-    
+    if (this.modoEdicion && this.inscripcionId && this.tieneDatosEstudiante(estudiante)) {
+      try { await this.guardarSlotEdicion(estudiante, index); } catch {}
+    }
     if (this.estudianteActual < this.datosPago.cantidad) {
       this.estudianteActual++;
     }
-    
     this.guardando = false;
+  }
+
+  async onBuscarEstudianteVent(): Promise<void> {
+    if (this.modoEdicion && this.estudiantesRegistrados[this.estudianteActual - 1]) {
+      const cur = this.estudiantesRegistrados[this.estudianteActual - 1];
+      if (this.tieneDatosEstudiante(cur)) {
+        try { await this.guardarSlotEdicion(cur, this.estudianteActual - 1); } catch {}
+      }
+    }
+    const term = (this.busquedaEstudiante || '').toLowerCase().trim();
+    if (!term) return;
+    const idx = this.estudiantesRegistrados.findIndex(e =>
+      String(e.nombres || '').toLowerCase().includes(term) ||
+      String(e.apellidos || '').toLowerCase().includes(term) ||
+      String(e.numeroDocumento || '').toLowerCase().includes(term)
+    );
+    if (idx >= 0) {
+      this.estudianteActual = idx + 1;
+    }
   }
 
   // ============ FINALIZAR CON PREVIEW ============
@@ -321,20 +416,18 @@ export class NuevaInscripcion implements OnInit {
 
   // ============ ASIGNACIÓN AUTOMÁTICA POR GRADO ============
 
-  /**
-   * Normaliza grado de "3° Primaria" → "Tercero"
-   */
   private normalizarGrado(grado: string): string {
-    const lower = grado.toLowerCase().trim();
-    const numeroMatch = lower.match(/(\d+)/);
-    const numero = numeroMatch ? numeroMatch[1] : '';
-    
+    const up = String(grado || '').toUpperCase().trim();
+    const numMatch = up.match(/(\d+)/);
+    const numero = numMatch ? numMatch[1] : '';
     const mapaNumeros: Record<string, string> = {
-      '1': 'Primero', '2': 'Segundo', '3': 'Tercero',
-      '4': 'Cuarto', '5': 'Quinto', '6': 'Sexto'
+      '1': 'PRIMERO', '2': 'SEGUNDO', '3': 'TERCERO',
+      '4': 'CUARTO', '5': 'QUINTO', '6': 'SEXTO'
     };
-    
-    return mapaNumeros[numero] || grado;
+    if (numero && mapaNumeros[numero]) return mapaNumeros[numero];
+    const mapaTexto: Record<string,string> = {'PRIMERO':'PRIMERO','SEGUNDO':'SEGUNDO','TERCERO':'TERCERO','CUARTO':'CUARTO','QUINTO':'QUINTO','SEXTO':'SEXTO'};
+    if (mapaTexto[up]) return mapaTexto[up];
+    return up;
   }
 
   /**
@@ -390,8 +483,20 @@ export class NuevaInscripcion implements OnInit {
     this.turnosPorEstudiante.clear();
 
     try {
-      // Procesar cada estudiante individualmente
-      for (let i = 0; i < this.estudiantesRegistrados.length; i++) {
+      // En edición solo se previsualizan los slots nuevos; los documentos
+      // existentes ya tienen su asignación y no deben volver a contarse.
+      const indices = this.modoEdicion
+        ? this.estudiantesRegistrados
+            .map((est: any, i) => est.__slotNuevo && String(est.numeroDocumento || '').trim() ? i : -1)
+            .filter(i => i >= 0)
+        : this.estudiantesRegistrados.map((_, i) => i);
+
+      if (this.modoEdicion && indices.length === 0) {
+        await this.ejecutarFinalizacionConAsignacion();
+        return;
+      }
+
+      for (const i of indices) {
         const estudiante = this.estudiantesRegistrados[i];
         
         // Buscar turno para este estudiante específico
@@ -486,15 +591,24 @@ export class NuevaInscripcion implements OnInit {
       ...est,
       colegio: this.colegioSeleccionado
     }));
+    const esEdicionOnline = this.modoEdicion && (this.inscripcionEditar as any)?.origen === 'online';
+    const estadoFinal: Inscripcion['estado'] = esEdicionOnline ? ((this.inscripcionEditar as any)?.estado === 'completada' ? 'pendiente' : ((this.inscripcionEditar as any)?.estado || 'pendiente')) as any : 'completada';
 
-    const inscripcionData: Partial<Inscripcion> = {
-      colegio: this.colegioSeleccionado,
-      metodoPago: this.datosPago.metodo,
-      cantidadEstudiantes: this.datosPago.cantidad,
-      montoTotal: this.datosPago.monto,
-      telefonoApoderado: this.datosPago.telefono,
-      estudiantes: estudiantesConColegioActualizado,
-      estado: 'completada',
+    const inscripcionData: any = {
+      colegio: this.colegioSeleccionado || null,
+      metodoPago: this.datosPago?.metodo || 'yape',
+      cantidadEstudiantes: this.datosPago?.cantidad ?? estudiantesConColegioActualizado.length,
+      montoTotal: this.datosPago?.monto ?? (estudiantesConColegioActualizado.length * 5),
+      telefonoApoderado: this.datosPago?.telefono || '',
+      estudiantes: estudiantesConColegioActualizado.map((e:any)=> {
+        const clean: any = {};
+        for (const k of Object.keys(e)) {
+          const v = (e as any)[k];
+          if (v !== undefined) clean[k] = v;
+        }
+        return clean;
+      }),
+      estado: estadoFinal,
       turnoId: '',
       turnoCodigo: '',
       asignacionesAula: [],
@@ -503,40 +617,68 @@ export class NuevaInscripcion implements OnInit {
       inicioInscripcion: new Date(inicio),
       finInscripcion: new Date(fin)
     };
+    // Limpiar undefined top-level
+    for (const k of Object.keys(inscripcionData)) {
+      if ((inscripcionData as any)[k] === undefined) delete (inscripcionData as any)[k];
+    }
+    if (esEdicionOnline) (inscripcionData as any).origen = 'online';
 
     // Usar la lista sincronizada desde ahora en adelante
     this.estudiantesRegistrados = estudiantesConColegioActualizado;
 
-    // 1. Guardar inscripción base
     let inscripcionId: string;
     if (this.modoEdicion) {
-      // Liberar las vacantes previas
-      if (this.inscripcionEditar?.asignacionesAula && this.inscripcionEditar.colegio?.CODIGOMODULAR) {
-        const asignacionesALiberar = this.inscripcionEditar.asignacionesAula.map((a: any) => ({
-          aulaId: a.aulaId,
-          colegioId: this.inscripcionEditar!.colegio.CODIGOMODULAR
-        }));
-        await this.asignacionService.liberarEstudiantes(asignacionesALiberar);
-      }
-
-      await this.inscripcionService.actualizarInscripcion(this.inscripcionId, inscripcionData);
+      const realesCount = this.estudiantesExistentes.length;
+      const slotsLlenos = this.estudiantesRegistrados.filter((s:any)=> String(s.numeroDocumento||'').trim()).length;
+      // Cantidad real es max entre existentes y llenos (no contar vacíos)
+      const cantidadReal = Math.max(realesCount, slotsLlenos);
+      await this.inscripcionService.actualizarInscripcion(this.inscripcionId, {
+        colegio: inscripcionData.colegio,
+        metodoPago: inscripcionData.metodoPago,
+        cantidadEstudiantes: cantidadReal,
+        montoTotal: inscripcionData.montoTotal,
+        telefonoApoderado: inscripcionData.telefonoApoderado,
+        TIEMPO: inscripcionData.TIEMPO,
+        tiempoInscripcion: inscripcionData.tiempoInscripcion,
+        inicioInscripcion: inscripcionData.inicioInscripcion,
+        finInscripcion: inscripcionData.finInscripcion
+      });
       inscripcionId = this.inscripcionId;
-      await this.inscripcionService.eliminarEstudiantes(this.inscripcionId);
     } else {
       inscripcionId = await this.inscripcionService.guardarInscripcion(inscripcionData as Inscripcion);
     }
 
-    // 2. ASIGNAR CADA ESTUDIANTE A SU TURNO/AULA
-    const asignacionesAula: any[] = [];
+    // En edición no se libera ni se reasigna a los existentes: sus aulas y
+    // códigos se conservan. Solo un slot nuevo participa en la asignación.
+    const asignacionesAula: any[] = this.modoEdicion
+      ? [...((this.inscripcionEditar as any)?.asignacionesAula || [])]
+      : [];
     const fallidos: string[] = [];
+    const estudiantesReales = this.estudiantesRegistrados.filter((s:any)=> String(s.numeroDocumento||'').trim());
+    const estudiantesParaAsignar = this.modoEdicion
+      ? estudiantesReales.filter((s: any) => !!s.__slotNuevo)
+      : estudiantesReales;
 
-    for (let i = 0; i < this.estudiantesRegistrados.length; i++) {
-      const estudiante = this.estudiantesRegistrados[i];
-      const turno = this.turnosPorEstudiante.get(i);
+    // UPDATE individual: únicamente el documento existente que cambió.
+    if (this.modoEdicion) {
+      for (const estudiante of estudiantesReales) {
+        if (!(estudiante as any).__slotNuevo && this.debeActualizarExistente(estudiante)) {
+          await this.inscripcionService.guardarEstudiante(estudiante, inscripcionId);
+        }
+      }
+    }
+
+    for (let i = 0; i < estudiantesParaAsignar.length; i++) {
+      const estudiante: any = estudiantesParaAsignar[i];
+      const origIdx = this.estudiantesRegistrados.indexOf(estudiante);
+      const turno = this.turnosPorEstudiante.get(origIdx) || this.turnosPorEstudiante.get(i);
 
       if (!turno) {
         fallidos.push(`${estudiante.nombres} ${estudiante.apellidos}: No hay turno para ${estudiante.grado}`);
-        await this.inscripcionService.guardarEstudiante(estudiante, inscripcionId);
+        (estudiante as any).turnoCodigo = '';
+        const codigo = await this.inscripcionService.guardarEstudiante(estudiante, inscripcionId);
+        estudiante.codigo = codigo;
+        estudiante.id = codigo;
         continue;
       }
 
@@ -560,11 +702,12 @@ export class NuevaInscripcion implements OnInit {
           
           estudiante.aulaAsignadaId = asig.aulaId;
           estudiante.codigoAula = asig.codigoAula;
+          (estudiante as any).turnoCodigo = turno.codigo;
 
           console.log('Asignación creada:', asig);
 
           asignacionesAula.push({
-            estudianteIndex: i,
+            estudianteIndex: origIdx,
             estudianteNombre: `${estudiante.nombres} ${estudiante.apellidos}`,
             aulaId: asig.aulaId,
             codigoAula: asig.codigoAula,
@@ -584,15 +727,20 @@ export class NuevaInscripcion implements OnInit {
       }
 
       // Guardar estudiante (con o sin aula)
-      await this.inscripcionService.guardarEstudiante(estudiante, inscripcionId);
+      const codigo = await this.inscripcionService.guardarEstudiante(estudiante, inscripcionId);
+      estudiante.codigo = codigo;
+      estudiante.id = codigo;
     }
 
-      // 3. Actualizar inscripción con asignaciones y tiempo
+    // 3. Actualizar únicamente el resumen de la inscripción. La fuente de
+    // verdad son los documentos individuales de la subcolección.
     if (this.timerSub) clearInterval(this.timerSub);
     await this.inscripcionService.actualizarInscripcion(inscripcionId, {
-      turnoId: inscripcionData.turnoId || '',
-      turnoCodigo: inscripcionData.turnoCodigo || '',
+      turnoId: this.modoEdicion ? ((this.inscripcionEditar as any)?.turnoId || '') : (inscripcionData.turnoId || ''),
+      turnoCodigo: this.modoEdicion ? ((this.inscripcionEditar as any)?.turnoCodigo || '') : (inscripcionData.turnoCodigo || ''),
       asignacionesAula: asignacionesAula,
+      cantidadEstudiantes: estudiantesReales.length,
+      montoTotal: (this.datosPago?.monto ?? estudiantesReales.length * 5),
       TIEMPO: (inscripcionData as any).TIEMPO,
       tiempoInscripcion: (inscripcionData as any).tiempoInscripcion,
       inicioInscripcion: (inscripcionData as any).inicioInscripcion,
@@ -618,8 +766,10 @@ export class NuevaInscripcion implements OnInit {
 
   private guardarEnArray(estudiante: Estudiante, index: number) {
 
-  // ✅ COPIA PROFUNDA
-  const copia = structuredClone(estudiante);
+  const copia: any = structuredClone(estudiante);
+  // Mantener la naturaleza del slot al navegar. Un alumno nuevo aún no tiene
+  // código; guardarlo en memoria no puede convertirlo en existente.
+  if (this.esSlotNuevo(index)) copia.__slotNuevo = true;
 
   if (index < this.estudiantesRegistrados.length) {
     this.estudiantesRegistrados[index] = copia;
@@ -630,7 +780,7 @@ export class NuevaInscripcion implements OnInit {
   console.log('Estudiantes guardados:', this.estudiantesRegistrados);
 }
 
-tieneAsignacionesExitosas(): boolean {
+  tieneAsignacionesExitosas(): boolean {
   return this.previewAsignaciones?.some(
     p => p?.sugerencia?.exito
   ) ?? false;
@@ -650,6 +800,9 @@ tieneAsignacionesExitosas(): boolean {
     this.colegioSeleccionadoAnterior = null;
     this.datosPago = null;
     this.estudiantesRegistrados = [];
+    this.estudiantesExistentes = [];
+    this.estudiantesImportados = [];
+    this.cantidadOriginal = 0;
     this.estudianteActual = 1;
     this.inscripcionId = '';
     this.modoEdicion = false;
@@ -663,5 +816,55 @@ tieneAsignacionesExitosas(): boolean {
 
   volverALista() {
     this.volverLista.emit();
+  }
+
+  turnoDePreview(indicePreview: number): Turno | undefined {
+    const preview = this.previewAsignaciones[indicePreview];
+    const indiceSlot = preview ? this.estudiantesRegistrados.indexOf(preview.estudiante) : -1;
+    return indiceSlot >= 0 ? this.turnosPorEstudiante.get(indiceSlot) : undefined;
+  }
+
+  private tieneDatosEstudiante(estudiante: Estudiante | null | undefined): boolean {
+    if (!estudiante) return false;
+    const documento = String((estudiante as any).numeroDocumento || '').trim();
+    const nombres = String((estudiante as any).nombres || '').trim();
+    const apellidos = String((estudiante as any).apellidos || '').trim();
+    return !!documento || !!nombres || !!apellidos;
+  }
+
+  esSlotNuevo(indice: number): boolean {
+    return !!(this.estudiantesRegistrados[indice] as any)?.__slotNuevo;
+  }
+
+  private firmaEstudiante(estudiante: Estudiante): string {
+    const e: any = estudiante;
+    return JSON.stringify({
+      tipoDocumento: e.tipoDocumento || '', numeroDocumento: e.numeroDocumento || '',
+      nombres: e.nombres || '', apellidos: e.apellidos || '', nivel: e.nivel || '',
+      grado: e.grado || '', colegio: e.colegio || null
+    });
+  }
+
+  private debeActualizarExistente(estudiante: Estudiante): boolean {
+    const codigo = String((estudiante as any).codigo || (estudiante as any).id || '');
+    return !!codigo && this.firmasOriginales.get(codigo) !== this.firmaEstudiante(estudiante);
+  }
+
+  private async guardarSlotEdicion(estudiante: Estudiante, index: number): Promise<void> {
+    // Los nuevos viven solamente en el slot hasta finalizar la inscripción.
+    // Así no existe un documento vacío ni un código prematuro en Firebase.
+    if (this.esSlotNuevo(index) || !this.debeActualizarExistente(estudiante)) return;
+    const codigo = await this.inscripcionService.guardarEstudiante(
+      { ...estudiante, colegio: this.colegioSeleccionado } as any,
+      this.inscripcionId
+    );
+    estudiante.codigo = codigo;
+    estudiante.id = codigo;
+    const slot = this.estudiantesRegistrados[index] as any;
+    if (slot) {
+      slot.codigo = codigo;
+      slot.id = codigo;
+    }
+    this.firmasOriginales.set(codigo, this.firmaEstudiante(estudiante));
   }
 }

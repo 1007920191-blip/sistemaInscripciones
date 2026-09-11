@@ -72,6 +72,26 @@
           name="eslogan"
           placeholder="Ej: El gran reto">
       </div>
+
+    </section>
+
+    <section class="form-section">
+      <h2> Configuración Yape (validación automática)</h2>
+      <div class="form-group">
+        <label for="telefonoYape">Teléfono Yape destino *</label>
+        <input type="text" id="telefonoYape" [(ngModel)]="config.telefonoYape" name="telefonoYape" placeholder="Ej: 930943272" maxlength="9">
+        <small>Número Yape donde deben pagar los participantes</small>
+      </div>
+      <div class="form-group">
+        <label for="titularYape">Titular Yape (como aparece en Yape) *</label>
+        <input type="text" id="titularYape" [(ngModel)]="config.titularYape" name="titularYape" placeholder="Ej: Yadira Ala*">
+        <small>Nombre EXACTO como aparece tras "¡Yapeaste!" (OCR compara contra este valor)</small>
+      </div>
+      <div class="form-group">
+        <label for="nombreCompletoTitularYape">Nombre completo titular (referencia)</label>
+        <input type="text" id="nombreCompletoTitularYape" [(ngModel)]="config.nombreCompletoTitularYape" name="nombreCompletoTitularYape" placeholder="Ej: Yadira Alarcón Ticlla">
+        <small>Nombre completo administrativo, no usado para OCR</small>
+      </div>
     </section>
 
     <!-- Logos y Fondo - Diseño Compacto -->

@@ -24,6 +24,23 @@ h2 {
   background: #218838;
 }
 
+.btn-excel {
+  background: #0d6efd;
+  color: white;
+  padding: 15px 22px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-bottom: 25px;
+  margin-left: 10px;
+  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+}
+
+.btn-excel:hover {
+  background: #0b5ed7;
+}
+
 .tabla-inscripciones {
   width: 100%;
   border-collapse: collapse;
@@ -317,6 +334,7 @@ tr:nth-child(even) {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
+  color: white !important;
 }
 
 .btn-cerrar {
