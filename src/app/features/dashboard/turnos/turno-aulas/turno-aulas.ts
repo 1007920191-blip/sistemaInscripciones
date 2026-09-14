@@ -200,12 +200,14 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
 
       console.log('Suscribiendo a aulas para turno:', this.turno.id!, 'grado:', this.gradoSeleccionado);
       
-      this.unsubscribeInscripciones = this.inscripcionService.escucharInscripcionesPorTurno(this.turno.id!, (inscripciones) => {
+      // Suscribirse a TODAS las inscripciones para contar inscritos por aula correctamente.
+      // Una inscripción puede tener estudiantes en múltiples turnos.
+      this.unsubscribeInscripciones = this.inscripcionService.escucharTodasLasInscripciones((inscripciones) => {
         this.ngZone.run(() => {
           this.inscripcionesActuales = inscripciones.filter((i:any)=> i.estado==='completada');
           this.procesarDatosCombinados();
         });
-      }, this.turno.codigo);
+      });
 
       this.unsubscribeAulas = this.turnoAulaService.escucharAulasPorTurno(this.turno.id!, (todasLasAulas) => {
         this.ngZone.run(() => {

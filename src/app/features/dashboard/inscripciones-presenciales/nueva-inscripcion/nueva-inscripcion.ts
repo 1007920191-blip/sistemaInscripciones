@@ -1,4 +1,4 @@
-import { Component, OnInit, Output, EventEmitter, Input, NgZone } from '@angular/core';
+import { Component, OnInit, Output, EventEmitter, Input, NgZone, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import colegiosData from '../../../../../assets/data/colegios.json';
@@ -74,6 +74,7 @@ export class NuevaInscripcion implements OnInit {
   modoEdicion = false;
   estudiantesExistentes: Estudiante[] = [];
   private firmasOriginales = new Map<string, string>();
+  private originalesMap = new Map<string, any>();
 
   // Cache de turnos encontrados por estudiante
   turnosPorEstudiante: Map<number, Turno> = new Map();
@@ -88,7 +89,8 @@ export class NuevaInscripcion implements OnInit {
     private asignacionService: AsignacionService,
     private turnoGestion: TurnoGestionService,
     private turnoService: TurnoService,
-    private ngZone: NgZone
+    private ngZone: NgZone,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
@@ -146,9 +148,11 @@ export class NuevaInscripcion implements OnInit {
       .sort((a: any, b: any) => Number(a.codigo || a.id) - Number(b.codigo || b.id))
       .map((est: any) => ({ ...est }));
     this.firmasOriginales.clear();
+    this.originalesMap.clear();
     for (const est of this.estudiantesExistentes) {
       const codigo = String((est as any).codigo || (est as any).id);
       this.firmasOriginales.set(codigo, this.firmaEstudiante(est));
+      this.originalesMap.set(codigo, { ...est });
     }
     this.cantidadOriginal = this.estudiantesExistentes.length;
     this.estudiantesRegistrados = this.estudiantesExistentes.map((est: any) => ({ ...est }));
@@ -324,53 +328,62 @@ export class NuevaInscripcion implements OnInit {
     this.pasoActual = 'pago';
   }
 
-  async onNavegarAnterior(estudiante: Estudiante) {
+  onNavegarAnterior(estudiante: Estudiante) {
     if (this.guardando || this.finalizando) return;
     this.guardando = true;
     const index = this.estudianteActual - 1;
     this.guardarEnArray(estudiante, index);
-    if (this.modoEdicion && this.inscripcionId && this.tieneDatosEstudiante(estudiante)) {
-      try { await this.guardarSlotEdicion(estudiante, index); } catch {}
-    }
+    // Incrementar ANTES para que Angular detecte el cambio de binding
     if (this.estudianteActual > 1) {
       this.estudianteActual--;
     }
+    this.cdr.detectChanges();
+    // Guardar en Firestore en background (sin bloquear navegación)
+    if (this.modoEdicion && this.inscripcionId && this.tieneDatosEstudiante(estudiante)) {
+      this.guardarSlotEdicion(estudiante, index).catch(() => {});
+    }
     this.guardando = false;
   }
 
-  async onNavegarSiguiente(estudiante: Estudiante) {
+  onNavegarSiguiente(estudiante: Estudiante) {
     if (this.guardando || this.finalizando) return;
     this.guardando = true;
     const index = this.estudianteActual - 1;
     this.guardarEnArray(estudiante, index);
-    if (this.modoEdicion && this.inscripcionId && this.tieneDatosEstudiante(estudiante)) {
-      try { await this.guardarSlotEdicion(estudiante, index); } catch {}
-    }
+    // Incrementar ANTES para que Angular detecte el cambio de binding
     if (this.estudianteActual < this.datosPago.cantidad) {
       this.estudianteActual++;
+    }
+    this.cdr.detectChanges();
+    // Guardar en Firestore en background (sin bloquear navegación)
+    if (this.modoEdicion && this.inscripcionId && this.tieneDatosEstudiante(estudiante)) {
+      this.guardarSlotEdicion(estudiante, index).catch(() => {});
     }
     this.guardando = false;
   }
 
-  async onGuardarEstudiante(estudiante: Estudiante) {
+  onGuardarEstudiante(estudiante: Estudiante) {
     if (this.guardando || this.finalizando) return;
     this.guardando = true;
     const index = this.estudianteActual - 1;
     this.guardarEnArray(estudiante, index);
-    if (this.modoEdicion && this.inscripcionId && this.tieneDatosEstudiante(estudiante)) {
-      try { await this.guardarSlotEdicion(estudiante, index); } catch {}
-    }
     if (this.estudianteActual < this.datosPago.cantidad) {
       this.estudianteActual++;
+    }
+    this.cdr.detectChanges();
+    // Guardar en Firestore en background (sin bloquear)
+    if (this.modoEdicion && this.inscripcionId && this.tieneDatosEstudiante(estudiante)) {
+      this.guardarSlotEdicion(estudiante, index).catch(() => {});
     }
     this.guardando = false;
   }
 
-  async onBuscarEstudianteVent(): Promise<void> {
+  onBuscarEstudianteVent() {
+    // Guardar当前 estudiante en background (sin await)
     if (this.modoEdicion && this.estudiantesRegistrados[this.estudianteActual - 1]) {
       const cur = this.estudiantesRegistrados[this.estudianteActual - 1];
       if (this.tieneDatosEstudiante(cur)) {
-        try { await this.guardarSlotEdicion(cur, this.estudianteActual - 1); } catch {}
+        this.guardarSlotEdicion(cur, this.estudianteActual - 1).catch(() => {});
       }
     }
     const term = (this.busquedaEstudiante || '').toLowerCase().trim();
@@ -382,6 +395,7 @@ export class NuevaInscripcion implements OnInit {
     );
     if (idx >= 0) {
       this.estudianteActual = idx + 1;
+      this.cdr.detectChanges();
     }
   }
 
@@ -648,23 +662,95 @@ export class NuevaInscripcion implements OnInit {
       inscripcionId = await this.inscripcionService.guardarInscripcion(inscripcionData as Inscripcion);
     }
 
-    // En edición no se libera ni se reasigna a los existentes: sus aulas y
-    // códigos se conservan. Solo un slot nuevo participa en la asignación.
-    const asignacionesAula: any[] = this.modoEdicion
+    let asignacionesAula: any[] = this.modoEdicion
       ? [...((this.inscripcionEditar as any)?.asignacionesAula || [])]
       : [];
     const fallidos: string[] = [];
     const estudiantesReales = this.estudiantesRegistrados.filter((s:any)=> String(s.numeroDocumento||'').trim());
+    const originalColegioId = String((this.inscripcionEditar as any)?.colegio?.CODIGOMODULAR || this.colegioSeleccionado?.CODIGOMODULAR || '').trim();
+
     const estudiantesParaAsignar = this.modoEdicion
       ? estudiantesReales.filter((s: any) => !!s.__slotNuevo)
       : estudiantesReales;
 
-    // UPDATE individual: únicamente el documento existente que cambió.
+    const movidos = this.modoEdicion ? estudiantesReales.filter((s:any)=> !s.__slotNuevo && this.necesitaReasignacion(s)) : [];
+
     if (this.modoEdicion) {
-      for (const estudiante of estudiantesReales) {
-        if (!(estudiante as any).__slotNuevo && this.debeActualizarExistente(estudiante)) {
-          await this.inscripcionService.guardarEstudiante(estudiante, inscripcionId);
+      const aulaIdsAntes = new Set(asignacionesAula.map((a:any)=> String(a.aulaId||'')));
+      for (const asig of [...asignacionesAula]) {
+        const nombreAsig = String(asig.estudianteNombre||'').trim().toUpperCase();
+        const estDueño = estudiantesReales.find((e:any)=> `${String(e.nombres||'').trim()} ${String(e.apellidos||'').trim()}`.toUpperCase() === nombreAsig);
+        const aulaAsig = String(asig.aulaId||'');
+        const dueñoTieneAula = estDueño ? String((estDueño as any).aulaAsignadaId||'').trim() === aulaAsig : false;
+        const gradoAsig = String(asig.grado||'').toUpperCase().trim();
+        const gradoEst = estDueño ? String((estDueño as any).grado||'').toUpperCase().trim() : '';
+        const desyncGrado = gradoAsig && gradoEst && gradoAsig !== gradoEst;
+        if (!estDueño || !dueñoTieneAula || desyncGrado) {
+          const esDeMovido = movidos.some((m:any)=> `${String(m.nombres||'').trim()} ${String(m.apellidos||'').trim()}`.toUpperCase() === nombreAsig);
+          if (!esDeMovido) {
+            try { if (aulaAsig) await this.asignacionService.liberarEstudiantes([{ aulaId: aulaAsig, colegioId: originalColegioId }]); } catch {}
+            asignacionesAula = asignacionesAula.filter((x:any)=> x !== asig);
+          }
         }
+      }
+      for (const estudiante of estudiantesReales) {
+        if (!(estudiante as any).__slotNuevo && this.debeActualizarExistente(estudiante) && !this.necesitaReasignacion(estudiante)) {
+          await this.inscripcionService.guardarEstudiante({ ...estudiante, colegio: this.colegioSeleccionado } as any, inscripcionId);
+          const cod = String((estudiante as any).codigo || (estudiante as any).id);
+          this.firmasOriginales.set(cod, this.firmaEstudiante(estudiante));
+        }
+      }
+      for (const estudiante of movidos) {
+        const origIdx = this.estudiantesRegistrados.indexOf(estudiante);
+        const codMov = String((estudiante as any).codigo || (estudiante as any).id);
+        const origMov: any = this.originalesMap.get(codMov) || {};
+        const nombreMovNorm = `${String(origMov.nombres||'').trim()} ${String(origMov.apellidos||'').trim()}`.toUpperCase().trim();
+        const nombreActualNorm = `${String(estudiante.nombres||'').trim()} ${String(estudiante.apellidos||'').trim()}`.toUpperCase().trim();
+        let aulaIdALiberar: string | null = origMov.aulaAsignadaId ? String(origMov.aulaAsignadaId) : null;
+        if (!aulaIdALiberar) {
+          const fb = asignacionesAula.find((a:any)=> String(a.estudianteNombre||'').trim().toUpperCase()===nombreMovNorm || a.estudianteIndex===origIdx);
+          if (fb) aulaIdALiberar = String((fb as any).aulaId||'');
+        }
+        if (aulaIdALiberar) {
+          try { await this.asignacionService.liberarEstudiantes([{ aulaId: aulaIdALiberar, colegioId: originalColegioId }]); } catch(e){ console.warn('liberar fallo',e); }
+          const antes = asignacionesAula.length;
+          asignacionesAula = asignacionesAula.filter((a:any)=>{
+            const n = String(a.estudianteNombre||'').trim().toUpperCase();
+            if (n && (n===nombreMovNorm || n===nombreActualNorm)) return false;
+            if (a.estudianteIndex===origIdx) return false;
+            return true;
+          });
+          if (asignacionesAula.length===antes) {
+            asignacionesAula = asignacionesAula.filter((a:any)=> String(a.aulaId||'')!==String(aulaIdALiberar));
+          }
+        }
+        const turno = await this.obtenerTurnoParaEstudiante(estudiante);
+        if (!turno) {
+          fallidos.push(`${estudiante.nombres} ${estudiante.apellidos}: No hay turno para ${estudiante.grado} ${estudiante.nivel}`);
+          (estudiante as any).turnoCodigo = '';
+          (estudiante as any).aulaAsignadaId = '';
+          (estudiante as any).codigoAula = '';
+          await this.inscripcionService.guardarEstudiante({ ...estudiante, colegio: this.colegioSeleccionado } as any, inscripcionId);
+          continue;
+        }
+        const modo = await this.turnoGestion.determinarModoActual(turno);
+        try {
+          const resultado = await this.asignacionService.asignarEstudiantes(turno, [estudiante], this.colegioSeleccionado.CODIGOMODULAR, modo);
+          if (resultado.exito && resultado.asignaciones.length>0) {
+            const asig = resultado.asignaciones[0];
+            (estudiante as any).aulaAsignadaId = asig.aulaId;
+            (estudiante as any).codigoAula = asig.codigoAula;
+            (estudiante as any).turnoCodigo = turno.codigo;
+            asignacionesAula.push({ estudianteIndex: origIdx, estudianteNombre: `${estudiante.nombres} ${estudiante.apellidos}`, aulaId: asig.aulaId, codigoAula: asig.codigoAula, grado: estudiante.grado, nivel: estudiante.nivel, turnoCodigo: turno.codigo });
+          } else {
+            fallidos.push(`${estudiante.nombres}: ${resultado.fallidos[0]?.razon || 'sin aula'}`);
+            (estudiante as any).turnoCodigo = turno.codigo;
+          }
+        } catch(e:any){ fallidos.push(`${estudiante.nombres}: ${e.message}`); }
+        await this.inscripcionService.guardarEstudiante({ ...estudiante, colegio: this.colegioSeleccionado } as any, inscripcionId);
+        const cod2 = String((estudiante as any).codigo || (estudiante as any).id);
+        this.firmasOriginales.set(cod2, this.firmaEstudiante(estudiante));
+        if (!inscripcionData.turnoId) { inscripcionData.turnoId = turno.id!; inscripcionData.turnoCodigo = turno.codigo; }
       }
     }
 
@@ -676,20 +762,18 @@ export class NuevaInscripcion implements OnInit {
       if (!turno) {
         fallidos.push(`${estudiante.nombres} ${estudiante.apellidos}: No hay turno para ${estudiante.grado}`);
         (estudiante as any).turnoCodigo = '';
-        const codigo = await this.inscripcionService.guardarEstudiante(estudiante, inscripcionId);
+        const codigo = await this.inscripcionService.guardarEstudiante({ ...estudiante, colegio: this.colegioSeleccionado } as any, inscripcionId);
         estudiante.codigo = codigo;
         estudiante.id = codigo;
         continue;
       }
 
-      // Actualizar turnoId de la inscripción (usar el del primer estudiante con turno)
       if (!inscripcionData.turnoId) {
         inscripcionData.turnoId = turno.id!;
         inscripcionData.turnoCodigo = turno.codigo;
       }
 
       try {
-        // Asignar estudiante a aula en su turno
         const resultado = await this.asignacionService.asignarEstudiantes(
           turno,
           [estudiante],
@@ -699,13 +783,9 @@ export class NuevaInscripcion implements OnInit {
 
         if (resultado.exito && resultado.asignaciones.length > 0) {
           const asig = resultado.asignaciones[0];
-          
           estudiante.aulaAsignadaId = asig.aulaId;
           estudiante.codigoAula = asig.codigoAula;
           (estudiante as any).turnoCodigo = turno.codigo;
-
-          console.log('Asignación creada:', asig);
-
           asignacionesAula.push({
             estudianteIndex: origIdx,
             estudianteNombre: `${estudiante.nombres} ${estudiante.apellidos}`,
@@ -715,9 +795,6 @@ export class NuevaInscripcion implements OnInit {
             nivel: estudiante.nivel,
             turnoCodigo: turno.codigo
           });
-
-          console.log('Array asignacionesAula:', asignacionesAula);
-          
         } else if (resultado.fallidos.length > 0) {
           fallidos.push(`${estudiante.nombres}: ${resultado.fallidos[0].razon}`);
         }
@@ -726,19 +803,73 @@ export class NuevaInscripcion implements OnInit {
         fallidos.push(`${estudiante.nombres}: ${error.message}`);
       }
 
-      // Guardar estudiante (con o sin aula)
-      const codigo = await this.inscripcionService.guardarEstudiante(estudiante, inscripcionId);
+      const codigo = await this.inscripcionService.guardarEstudiante({ ...estudiante, colegio: this.colegioSeleccionado } as any, inscripcionId);
       estudiante.codigo = codigo;
       estudiante.id = codigo;
     }
 
-    // 3. Actualizar únicamente el resumen de la inscripción. La fuente de
-    // verdad son los documentos individuales de la subcolección.
+    if (this.modoEdicion) {
+      // Reconstruir SOLO las entradas de estudiantes que no están en movidos.
+      // Los movidos ya actualizaron su entrada en el loop anterior (línea 744).
+      const movidosNombres = new Set(movidos.map((m: any) =>
+        `${String(m.nombres || '').trim()} ${String(m.apellidos || '').trim()}`.toUpperCase()
+      ));
+      const entradasNoMovidas = ((this.inscripcionEditar as any)?.asignacionesAula || [])
+        .filter((a: any) => {
+          const nombreAsig = String(a.estudianteNombre || '').trim().toUpperCase();
+          if (movidosNombres.has(nombreAsig)) return false;
+          // Conservar solo si el estudiante sigue existiendo y tiene esa aula
+          const estDueño = estudiantesReales.find((e: any) =>
+            `${String(e.nombres || '').trim()} ${String(e.apellidos || '').trim()}`.toUpperCase() === nombreAsig
+          );
+          return estDueño && String((estDueño as any).aulaAsignadaId || '').trim() === String(a.aulaId || '').trim();
+        });
+      // Las entradas de movidos ya están en asignacionesAula desde el loop.
+      // Agregar las entradas no movidas que no estén ya presentes.
+      for (const entrada of entradasNoMovidas) {
+        const yaExiste = asignacionesAula.some((a: any) =>
+          String(a.estudianteNombre || '').trim().toUpperCase() === String(entrada.estudianteNombre || '').trim().toUpperCase()
+        );
+        if (!yaExiste) {
+          asignacionesAula.push(entrada);
+        }
+      }
+    }
+
+    const estudiantesParaResumen = estudiantesReales.map((e:any)=> {
+      const clean:any={}; for(const k of Object.keys(e)){ const v=(e as any)[k]; if(v!==undefined) clean[k]=v; } clean.colegio = this.colegioSeleccionado; return clean;
+    });
     if (this.timerSub) clearInterval(this.timerSub);
+    // Calcular turnoId/turnoCodigo basado en TODOS los estudiantes, no solo el último movido
+    let turnoIdFinal = (this.inscripcionEditar as any)?.turnoId || '';
+    let turnoCodigoFinal = (this.inscripcionEditar as any)?.turnoCodigo || '';
+    if (this.modoEdicion) {
+      const turnosConteo = new Map<string, { id: string; codigo: string; count: number }>();
+      for (const est of estudiantesReales) {
+        const tc = String((est as any).turnoCodigo || '').trim();
+        const tid = String((est as any).turnoId || '').trim();
+        if (!tc) continue;
+        const existing = turnosConteo.get(tc);
+        if (existing) {
+          existing.count++;
+        } else {
+          turnosConteo.set(tc, { id: tid || tc, codigo: tc, count: 1 });
+        }
+      }
+      if (turnosConteo.size > 0) {
+        const principal = [...turnosConteo.values()].sort((a, b) => b.count - a.count)[0];
+        turnoIdFinal = principal.id || turnoIdFinal;
+        turnoCodigoFinal = principal.codigo || turnoCodigoFinal;
+      }
+    } else {
+      turnoIdFinal = inscripcionData.turnoId || '';
+      turnoCodigoFinal = inscripcionData.turnoCodigo || '';
+    }
     await this.inscripcionService.actualizarInscripcion(inscripcionId, {
-      turnoId: this.modoEdicion ? ((this.inscripcionEditar as any)?.turnoId || '') : (inscripcionData.turnoId || ''),
-      turnoCodigo: this.modoEdicion ? ((this.inscripcionEditar as any)?.turnoCodigo || '') : (inscripcionData.turnoCodigo || ''),
+      turnoId: turnoIdFinal,
+      turnoCodigo: turnoCodigoFinal,
       asignacionesAula: asignacionesAula,
+      estudiantes: estudiantesParaResumen,
       cantidadEstudiantes: estudiantesReales.length,
       montoTotal: (this.datosPago?.monto ?? estudiantesReales.length * 5),
       TIEMPO: (inscripcionData as any).TIEMPO,
@@ -810,6 +941,8 @@ export class NuevaInscripcion implements OnInit {
     this.finalizando = false;
     this.previewAsignaciones = [];
     this.turnosPorEstudiante.clear();
+    this.firmasOriginales.clear();
+    this.originalesMap.clear();
     this.inicioCronometro = null;
     this.limpiarFiltros();
   }
@@ -850,10 +983,22 @@ export class NuevaInscripcion implements OnInit {
     return !!codigo && this.firmasOriginales.get(codigo) !== this.firmaEstudiante(estudiante);
   }
 
+  private necesitaReasignacion(est: Estudiante): boolean {
+    const codigo = String((est as any).codigo || (est as any).id || '');
+    const orig: any = this.originalesMap.get(codigo);
+    if (!orig) return false;
+    const gOrig = String(orig.grado||'').toUpperCase().trim();
+    const gNew = String(est.grado||'').toUpperCase().trim();
+    const nOrig = String(orig.nivel||'').toUpperCase().trim();
+    const nNew = String(est.nivel||'').toUpperCase().trim();
+    const cOrig = String(orig.colegio?.CODIGOMODULAR|| (this.inscripcionEditar as any)?.colegio?.CODIGOMODULAR || '').trim();
+    const cNew = String(this.colegioSeleccionado?.CODIGOMODULAR || (est as any).colegio?.CODIGOMODULAR || '').trim();
+    return gOrig !== gNew || nOrig !== nNew || cOrig !== cNew;
+  }
+
   private async guardarSlotEdicion(estudiante: Estudiante, index: number): Promise<void> {
-    // Los nuevos viven solamente en el slot hasta finalizar la inscripción.
-    // Así no existe un documento vacío ni un código prematuro en Firebase.
     if (this.esSlotNuevo(index) || !this.debeActualizarExistente(estudiante)) return;
+    if (this.necesitaReasignacion(estudiante)) return;
     const codigo = await this.inscripcionService.guardarEstudiante(
       { ...estudiante, colegio: this.colegioSeleccionado } as any,
       this.inscripcionId

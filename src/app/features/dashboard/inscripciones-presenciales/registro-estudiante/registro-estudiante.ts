@@ -51,36 +51,29 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges) {
-    console.log('[Hijo] ngOnChanges:', changes);
-    
-    if (changes['numeroEstudiante'] &&
-  !changes['numeroEstudiante'].firstChange) {
-      console.log('[Hijo] Cambió numeroEstudiante de', 
-        changes['numeroEstudiante'].previousValue, 
-        'a', 
-        changes['numeroEstudiante'].currentValue);
-      console.log('[Hijo] estudianteEdicion recibido:', this.estudianteEdicion);
+    if (changes['numeroEstudiante'] && !changes['numeroEstudiante'].firstChange) {
       this.cargarEstudiante();
+      return;
     }
-    
     if (changes['estudianteEdicion'] && !changes['estudianteEdicion'].firstChange) {
-      console.log('[Hijo] Cambió estudianteEdicion:', this.estudianteEdicion);
       this.cargarEstudiante();
+      return;
     }
     if (changes['slotNuevo'] && !changes['slotNuevo'].firstChange) {
       this.cargarEstudiante();
+      return;
     }
     if (changes['colegio'] && this.estudiante) {
-  this.estudiante.colegio = this.colegio;
-  const nivelNuevo = String(this.colegio?.NIVEL || '').toUpperCase().trim();
-  if (nivelNuevo && String(this.estudiante.nivel).toUpperCase().trim() !== nivelNuevo) {
-    this.estudiante.nivel = nivelNuevo;
-    const validos = this.gradosDisponibles;
-    if (this.estudiante.grado && validos.length && !validos.includes(String(this.estudiante.grado).toUpperCase().trim())) {
-      this.estudiante.grado = '';
+      this.estudiante.colegio = this.colegio;
+      const nivelNuevo = String(this.colegio?.NIVEL || '').toUpperCase().trim();
+      if (nivelNuevo && String(this.estudiante.nivel).toUpperCase().trim() !== nivelNuevo) {
+        this.estudiante.nivel = nivelNuevo;
+        const validos = this.gradosDisponibles;
+        if (this.estudiante.grado && validos.length && !validos.includes(String(this.estudiante.grado).toUpperCase().trim())) {
+          this.estudiante.grado = '';
+        }
+      }
     }
-  }
-}
   }
 
   private cargarEstudiante() {

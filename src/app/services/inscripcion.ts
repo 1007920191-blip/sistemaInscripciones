@@ -396,4 +396,16 @@ export class InscripcionService {
       callback(inscripciones);
     });
   }
+
+  escucharTodasLasInscripciones(
+    callback: (inscripciones: Inscripcion[]) => void
+  ): Unsubscribe {
+    return onSnapshot(this.inscripcionesRef, (snapshot) => {
+      const inscripciones = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      } as Inscripcion));
+      callback(inscripciones);
+    });
+  }
 }
