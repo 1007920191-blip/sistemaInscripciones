@@ -73,6 +73,20 @@
           placeholder="Ej: El gran reto">
       </div>
 
+      <div class="form-group form-switch">
+        <label for="publicarResultados">Publicar Resultados</label>
+        <div class="switch-container">
+          <input 
+            type="checkbox" 
+            id="publicarResultados"
+            [(ngModel)]="config.publicarResultados"
+            name="publicarResultados"
+            class="switch-input">
+          <label for="publicarResultados" class="switch-label"></label>
+        </div>
+        <small>Activa esta opción para que los resultados estén visibles en la plataforma de consulta pública.</small>
+      </div>
+
     </section>
 
     <section class="form-section">

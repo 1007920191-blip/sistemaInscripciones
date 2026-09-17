@@ -23,7 +23,8 @@ export class ConfiguracionComponent implements OnInit {
     costoInscripcion: 15,
     telefonoYape: '',
     titularYape: '',
-    nombreCompletoTitularYape: ''
+    nombreCompletoTitularYape: '',
+    publicarResultados: false
   };
 
   logoIzquierdoFile: File | null = null;
@@ -63,6 +64,7 @@ export class ConfiguracionComponent implements OnInit {
       
       if (configExistente) {
         this.config = { ...configExistente };
+        this.config.publicarResultados = this.config.publicarResultados || false;
         this.logoIzquierdoPreview = this.config.logoIzquierdo || '';
         this.logoDerechoPreview = this.config.logoDerecho || '';
         this.fondoCredencialPreview = this.config.fondoCredencial || '';

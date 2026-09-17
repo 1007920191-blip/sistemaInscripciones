@@ -10,5 +10,6 @@ export interface Configuracion {
   telefonoYape?: string;
   titularYape?: string;
   nombreCompletoTitularYape?: string;
+  publicarResultados?: boolean;
   fechaActualizacion?: Date;
 }
