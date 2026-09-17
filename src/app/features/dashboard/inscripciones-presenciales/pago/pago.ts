@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+﻿import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ConfiguracionService } from '../../../../services/configuracion';
@@ -26,7 +26,8 @@ export class PagoComponent implements OnInit {
   metodoPago = '';
   telefonoApoderado = '';
   cantidadEstudiantes = 1;
-  precioPorEstudiante = 15; // Valor por defecto, se actualizará
+  precioPorEstudiante = 15;
+  config: any = null; // Valor por defecto, se actualizará
 
   metodosPago = [
     { id: 'yape', nombre: 'YAPE', icono: '💜' },
@@ -41,6 +42,7 @@ export class PagoComponent implements OnInit {
     try {
       const costo = await this.configService.obtenerCostoInscripcion();
       this.precioPorEstudiante = costo;
+      this.config = await this.configService.obtenerConfiguracion();
     } catch (error) {
       console.error('Error al cargar costo:', error);
       // Mantener valor por defecto si hay error
@@ -63,8 +65,8 @@ export class PagoComponent implements OnInit {
       case 'yape':
         return {
           titulo: 'Pago con YAPE',
-          telefono: '930943272',
-          nombre: 'Jenny E. S.',
+          telefono: this.config?.telefonoYape || '',
+          nombre: this.config?.nombreCompletoTitularYape || this.config?.titularYape || '',
           monto: monto
         };
       case 'transferencia':

@@ -1,9 +1,9 @@
-<div class="lista-container" *ngIf="!mostrarNuevaInscripcion">
-  <div *ngIf="cargando" style="text-align: center; padding: 20px;">
+﻿<div class="lista-container" *ngIf="!mostrarNuevaInscripcion">
+  <div *ngIf="cargando$ | async" style="text-align: center; padding: 20px;">
     Cargando inscripciones...
   </div>
   
-  <div *ngIf="!cargando">
+  <div *ngIf="!(cargando$ | async)">
     <h2>Inscripciones presenciales</h2>
     
     <div class="header-acciones">
@@ -39,17 +39,7 @@
             class="input-date">
         </div>
 
-        <!-- Toggle Ver Todos -->
-        <div class="filter-item toggle-filter">
-          <label class="switch-container">
-            <input 
-              type="checkbox" 
-              [(ngModel)]="verTodos" 
-              (change)="onFiltrar()">
-            <span class="slider round"></span>
-          </label>
-          <span class="toggle-label" (click)="verTodos = !verTodos; onFiltrar()">Ver Históricos</span>
-        </div>
+
       </div>
     </div>
 
@@ -87,6 +77,9 @@
             </button>
             <button class="btn-lista" (click)="enviarWhatsapp(ins)" title="Enviar WhatsApp" style="background:#25D366;color:white;margin-left:4px;">
               WhatsApp
+            </button>
+            <button class="btn-lista" (click)="descargarRecibo(ins)" title="Descargar recibo" style="background:#0d6efd;color:white;margin-left:4px;">
+              Recibo
             </button>
           </td>
         </tr>

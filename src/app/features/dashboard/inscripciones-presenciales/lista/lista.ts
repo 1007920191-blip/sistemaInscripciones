@@ -1,14 +1,17 @@
-import { Component, OnInit, Output, EventEmitter, NgZone } from '@angular/core';
+﻿import { Component, OnInit, Output, EventEmitter, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { jsPDF } from 'jspdf';
 import { NuevaInscripcion } from '../nueva-inscripcion/nueva-inscripcion';
 import { InscripcionService } from '../../../../services/inscripcion';
 import { ConfiguracionService } from '../../../../services/configuracion';
+import { ReciboService } from '../../../../services/recibo.service';
 import { ImpresionService } from '../../../../services/impresion';
 import { Inscripcion, Estudiante } from '../../../../models/inscripcion.model';
+import { Configuracion } from '../../../../models/configuracion.model';
 import { AulaTurnoDisplay, Turno } from '../../../../models/turno.model';
 import { getAuth } from 'firebase/auth';
+import { BehaviorSubject } from 'rxjs';
 import { getFirestore, doc as firestoreDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { firebaseApp } from '../../../../firebase-config';
 
@@ -22,7 +25,7 @@ import { firebaseApp } from '../../../../firebase-config';
 export class Lista implements OnInit {
   mostrarNuevaInscripcion = false;
   inscripciones: Inscripcion[] = [];
-  cargando = true;
+  cargando$ = new BehaviorSubject<boolean>(true);
   
   inscripcionEditar: Inscripcion | null = null;
   estudiantesEditar: Estudiante[] = [];
@@ -33,15 +36,14 @@ export class Lista implements OnInit {
   estudiantesParaLista: Estudiante[] = [];
   cargandoLista = false;
 
-  // Filtros y Búsqueda
+  // Filtros y BÃºsqueda
   fechaSeleccionada: string = this.obtenerFechaHoyTexto();
-  verTodos = false;
   terminoBusqueda = '';
 
-  // Selección de estudiantes
+  // SelecciÃ³n de estudiantes
   estudiantesSeleccionados: Set<string> = new Set();
 
-  // Modal de Impresión — compartido individual/grupal
+  // Modal de ImpresiÃ³n â€” compartido individual/grupal
   mostrarModalImpresionIndividual = false;
   tipoImpresionIndividual: 'TARJETA' | 'CARTILLA' = 'TARJETA';
   alternativasImpresionIndividual: number = 4;
@@ -50,7 +52,7 @@ export class Lista implements OnInit {
   modoImpresionGrupal = false;
   cargandoImpresion = false;
   
-  // Paginación
+  // PaginaciÃ³n
   itemsPorPagina = this.obtenerItemsPorPagina();
   paginaActual = 1;
   Math = Math;
@@ -62,6 +64,8 @@ export class Lista implements OnInit {
   estudianteAEliminar: Estudiante | null = null;
   eliminando = false;
 
+  configuracion: Configuracion | null = null;
+
   @Output() volver = new EventEmitter<void>();
   @Output() inscripcionGuardada = new EventEmitter<void>();
 
@@ -69,6 +73,7 @@ export class Lista implements OnInit {
     private inscripcionService: InscripcionService,
     private configuracionService: ConfiguracionService,
     private impresionService: ImpresionService,
+    private reciboService: ReciboService,
     private ngZone: NgZone
   ) {}
 
@@ -81,33 +86,33 @@ export class Lista implements OnInit {
   }
 
   async ngOnInit() {
-    this.cargando = true;
+    this.cargando$.next(true);
+    try { this.configuracion = await this.configuracionService.obtenerConfiguracion(); } catch (e) { console.error('Error cargando configuracion', e); }
     await this.cargarInscripciones();
-    this.cargando = false;
+    this.cargando$.next(false);
   }
 
   async cargarInscripciones() {
-    this.cargando = true;
+    this.cargando$.next(true);
     try {
       const auth = getAuth(firebaseApp);
       const uidActual = (auth.currentUser?.email || auth.currentUser?.uid || '').toLowerCase().trim();
       const tieneBusqueda = !!this.terminoBusqueda.trim();
 
-      // Búsqueda global (sin fecha) vs Búsqueda por fecha exacta
-      // - Si hay búsqueda: ignoramos fecha en Firestore (ignorarFecha = true).
-      // - Si no hay búsqueda: filtramos por fecha (ignorarFecha = false).
+      // BÃºsqueda global (sin fecha) vs BÃºsqueda por fecha exacta
+      // - Si hay bÃºsqueda: ignoramos fecha en Firestore (ignorarFecha = true).
+      // - Si no hay bÃºsqueda: filtramos por fecha (ignorarFecha = false).
       let rawDocs: Inscripcion[] = await this.inscripcionService.obtenerInscripcionesFiltradas(
         this.fechaSeleccionada,
         uidActual,
-        this.verTodos,
         tieneBusqueda
       );
 
-      console.log('=== LOGS DETALLADOS DE BÚSQUEDA Y FILTROS ===');
+      console.log('=== LOGS DETALLADOS DE BÃšSQUEDA Y FILTROS ===');
       console.log('UsuarioId autenticado actual:', uidActual);
       console.log('Fecha seleccionada en interfaz:', this.fechaSeleccionada);
-      console.log('¿Existe término de búsqueda?:', tieneBusqueda ? `Sí ("${this.terminoBusqueda}")` : 'No');
-      console.log('¿Buscador trabaja sobre la colección completa permitida?:', tieneBusqueda ? 'SÍ (Colección completa filtrada únicamente por usuarioId si no es modo histórico)' : 'NO (Solo sobre los registros de la fecha seleccionada)');
+      console.log('Â¿Existe tÃ©rmino de bÃºsqueda?:', tieneBusqueda ? `SÃ­ ("${this.terminoBusqueda}")` : 'No');
+      console.log('Â¿Buscador trabaja sobre la colecciÃ³n completa permitida?:', tieneBusqueda ? 'SÃ (ColecciÃ³n completa filtrada Ãºnicamente por usuarioId si no es modo histÃ³rico)' : 'NO (Solo sobre los registros de la fecha seleccionada)');
       console.log('1. Cantidad de registros cargados desde Firestore:', rawDocs.length);
 
       // Excluir inscripciones online del listado presencial
@@ -117,30 +122,24 @@ export class Lista implements OnInit {
       }
       rawDocs = sinOnline;
 
-      // Imprimir la estructura de los primeros documentos para ver sus campos raíz (diagnóstico)
+      // Imprimir la estructura de los primeros documentos para ver sus campos raÃ­z (diagnÃ³stico)
       if (rawDocs.length > 0) {
         console.log('Estructura muestra del primer documento:', JSON.stringify(rawDocs[0]));
-        console.log('Campos raíz del primer documento:', Object.keys(rawDocs[0]));
+        console.log('Campos raÃ­z del primer documento:', Object.keys(rawDocs[0]));
       }
 
       let despuesFecha = [...rawDocs];
 
-      // Filtro de usuario en cliente
-      let despuesUsuario = [...despuesFecha];
-      let descartadosUsuario = 0;
-      // Nota: Si verTodos = false, Firestore ya limitó los registros al usuarioId del usuario autenticado actual.
-      // Si verTodos = true (Histórico/Todos), mostramos todos los registros sin filtro de usuario.
-      console.log('4. Cantidad de registros descartados por filtro de usuario:', descartadosUsuario);
-      console.log('5. Cantidad de registros restantes después del filtro de usuario:', despuesUsuario.length);
+      // Filtro de usuario ya aplicado en Firestore (where usuarioId == uidActual)
 
-      // Filtro de búsqueda por texto
-      let resultado = [...despuesUsuario];
+      // Filtro de bÃºsqueda por texto
+      let resultado = [...despuesFecha];
       let descartadosBusqueda = 0;
       if (tieneBusqueda) {
-        resultado = this.inscripcionService.filtrarInscripcionesLocal(despuesUsuario, this.terminoBusqueda);
-        descartadosBusqueda = despuesUsuario.length - resultado.length;
+        resultado = this.inscripcionService.filtrarInscripcionesLocal(despuesFecha, this.terminoBusqueda);
+        descartadosBusqueda = despuesFecha.length - resultado.length;
       }
-      console.log('6. Cantidad de registros descartados por búsqueda de texto:', descartadosBusqueda);
+      console.log('6. Cantidad de registros descartados por bÃºsqueda de texto:', descartadosBusqueda);
       console.log('7. Cantidad de registros finales en la lista:', resultado.length);
       console.log('============================================');
 
@@ -150,7 +149,7 @@ export class Lista implements OnInit {
       console.error('Error al cargar inscripciones:', error);
       this.inscripciones = [];
     } finally {
-      this.cargando = false;
+      this.cargando$.next(false);
     }
   }
 
@@ -174,7 +173,7 @@ export class Lista implements OnInit {
     return guardado ? parseInt(guardado) : 5;
   }
 
-  // Getters para paginación
+  // Getters para paginaciÃ³n
   get totalItems(): number {
     return this.inscripciones.length;
   }
@@ -189,7 +188,7 @@ export class Lista implements OnInit {
     return this.inscripciones.slice(inicio, fin);
   }
 
-  // Número correlativo considerando paginación
+  // NÃºmero correlativo considerando paginaciÃ³n
   getNumeroCorrelativo(index: number): number {
     return (this.paginaActual - 1) * this.itemsPorPagina + index + 1;
   }
@@ -232,10 +231,10 @@ export class Lista implements OnInit {
   }
 
   // ============================================
-  // BOTÓN LISTA - Abrir Modal
+  // BOTÃ“N LISTA - Abrir Modal
   // ============================================
   async verLista(ins: Inscripcion) {
-    console.log('Abriendo lista para inscripción:', ins.id);
+    console.log('Abriendo lista para inscripciÃ³n:', ins.id);
     this.cargandoLista = true;
     this.inscripcionParaLista = ins;
     this.mostrarModalLista = true;
@@ -277,7 +276,7 @@ export class Lista implements OnInit {
     return this.inscripcionParaLista?.asignacionesAula?.find((a: any) => a.estudianteIndex === indice);
   }
 
-  // Controles de Selección para Checkboxes
+  // Controles de SelecciÃ³n para Checkboxes
   toggleSeleccionarEstudiante(dni: string) {
     if (this.estudiantesSeleccionados.has(dni)) {
       this.estudiantesSeleccionados.delete(dni);
@@ -326,7 +325,7 @@ export class Lista implements OnInit {
     try { config = await this.configuracionService.obtenerConfiguracion(); } catch {}
     const nombreConcurso = config?.nombreConcurso || 'IV CONCURSO PROVINCIAL DE COMPRENSION LECTORA';
     const edicion = config?.edicion || '2026';
-    const eslogan = config?.eslogan || '"ÑAWINCHASUN ALLIN KAWSANAPAQ"';
+    const eslogan = config?.eslogan || '"Ã‘AWINCHASUN ALLIN KAWSANAPAQ"';
     const sedeCfg = config?.sede || 'ANDAHUAYLAS';
     const [logoIzq, logoDer] = await Promise.all([
       this.cargarImagenBase64(config?.logoIzquierdo || ''),
@@ -357,7 +356,7 @@ export class Lista implements OnInit {
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8);
       doc.setFont('Helvetica', 'bold');
-      doc.text(`CÓDIGO: ${codigo}`, 15, 42);
+      doc.text(`CÃ“DIGO: ${codigo}`, 15, 42);
       doc.setFont('Helvetica', 'normal');
       doc.text(`COLEGIO: ${String(colegioNombre).toUpperCase().substring(0, 32)}`, 55, 42);
       doc.text(`FECHA: ${fechaStr}`, 170, 42);
@@ -369,7 +368,7 @@ export class Lista implements OnInit {
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(7);
       doc.setTextColor(0, 0, 0);
-      doc.text('N°', 17, 51);
+      doc.text('NÂ°', 17, 51);
       doc.text('DNI', 28, 51);
       doc.text('APELLIDOS Y NOMBRES', 52, 51);
       doc.text('GRADO', 137, 51);
@@ -386,14 +385,14 @@ export class Lista implements OnInit {
     estudiantes.forEach((est: any, orderIdx: number) => {
       const originalIdx = est.numeroDocumento && indexMap.has(String(est.numeroDocumento)) ? indexMap.get(String(est.numeroDocumento))! : orderIdx;
       if (currentY > 185) { doc.addPage(); currentY = 54; drawHeader(); }
-      const dni = est.numeroDocumento || '—';
+      const dni = est.numeroDocumento || 'â€”';
       const nombres = `${est.apellidos || ''} ${est.nombres || ''}`.trim().toUpperCase().substring(0, 40);
-      const grado = String(est.grado || '—').toUpperCase();
-      const nivel = String(est.nivel || '—').toUpperCase();
+      const grado = String(est.grado || 'â€”').toUpperCase();
+      const nivel = String(est.nivel || 'â€”').toUpperCase();
       const ie = String(colegioIE).toUpperCase().substring(0, 26);
       const asig = (ins as any).asignacionesAula?.find((a: any) => a.estudianteIndex === originalIdx);
-      const aula = asig?.codigoAula || (est as any).codigoAula || '—';
-      const turnoEst = asig?.turnoCodigo || (est as any).turnoCodigo || '—';
+      const aula = asig?.codigoAula || (est as any).codigoAula || 'â€”';
+      const turnoEst = asig?.turnoCodigo || (est as any).turnoCodigo || 'â€”';
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(7);
       doc.setTextColor(0, 0, 0);
@@ -414,19 +413,19 @@ export class Lista implements OnInit {
       doc.setFont('Helvetica', 'bold');
       doc.setTextColor(0, 90, 180);
       doc.text(String(turnoEst).toUpperCase(), 239, currentY + 4.5, { align: 'center' } as any);
-      if (aula !== '—') doc.setTextColor(13, 71, 161); else doc.setTextColor(80, 80, 80);
+      if (aula !== 'â€”') doc.setTextColor(13, 71, 161); else doc.setTextColor(80, 80, 80);
       doc.text(String(aula).toUpperCase(), 262, currentY + 4.5, { align: 'center' } as any);
       doc.setTextColor(0, 0, 0);
       currentY += rowHeight;
     });
     const totalPages = (doc as any).getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) { (doc as any).setPage(i); doc.setFont('Helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 100, 100); doc.text(`Página ${i} de ${totalPages}`, pageWidth - 15, pageHeight - 8, { align: 'right' }); }
+    for (let i = 1; i <= totalPages; i++) { (doc as any).setPage(i); doc.setFont('Helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 100, 100); doc.text(`PÃ¡gina ${i} de ${totalPages}`, pageWidth - 15, pageHeight - 8, { align: 'right' }); }
     const safeColegio = String(colegioNombre).replace(/\s+/g, '_');
     doc.save(`Lista_${safeColegio}_${fechaStr.replace(/\//g, '-')}.pdf`);
   }
 
   // ============================================
-  // GENERACIÓN DE CREDENCIALES PDF (Media Hoja A4, Máx 4 por pág, 1 sola columna)
+  // GENERACIÃ“N DE CREDENCIALES PDF (Media Hoja A4, MÃ¡x 4 por pÃ¡g, 1 sola columna)
   // ============================================
   async generarCredencialesPDF(estudiantesAImprimir: Estudiante[]) {
     if (!estudiantesAImprimir || estudiantesAImprimir.length === 0) {
@@ -449,7 +448,7 @@ export class Lista implements OnInit {
 
     this.cargandoLista = true;
     try {
-      // 0.5 Obtener Información de Turno y Aulas desde Firestore por cada estudiante
+      // 0.5 Obtener InformaciÃ³n de Turno y Aulas desde Firestore por cada estudiante
       const db = getFirestore(firebaseApp);
       const aulaCache = new Map<string, any>();
       const turnoCache = new Map<string, any>();
@@ -478,18 +477,18 @@ export class Lista implements OnInit {
         }
       }
 
-      // 1. Obtener configuración general del sistema
+      // 1. Obtener configuraciÃ³n general del sistema
       let config: any = null;
       try {
         config = await this.configuracionService.obtenerConfiguracion();
       } catch {
-        // Config no disponible — se usarán fallbacks vectoriales
+        // Config no disponible â€” se usarÃ¡n fallbacks vectoriales
       }
-      const nombreConcurso = config?.nombreConcurso || 'Concurso Nacional de Matemática';
+      const nombreConcurso = config?.nombreConcurso || 'Concurso Nacional de MatemÃ¡tica';
       const edicion = config?.edicion || new Date().getFullYear().toString();
-      const eslogan = config?.eslogan || 'Edición Especial';
+      const eslogan = config?.eslogan || 'EdiciÃ³n Especial';
       
-      // 2. Cargar imágenes
+      // 2. Cargar imÃ¡genes
       const [logoIzquierdoB64, logoDerechoB64, fondoCredencialB64] = await Promise.all([
         this.cargarImagenBase64(config?.logoIzquierdo || ''),
         this.cargarImagenBase64(config?.logoDerecho || ''),
@@ -509,7 +508,7 @@ export class Lista implements OnInit {
         const est = estudiantesAImprimir[index];
         const posEnPagina = index % 4;
         
-        // Paginación automática tras 4 credenciales
+        // PaginaciÃ³n automÃ¡tica tras 4 credenciales
         if (index > 0 && posEnPagina === 0) {
           doc.addPage();
         }
@@ -521,49 +520,49 @@ export class Lista implements OnInit {
         
         const aulaAsignadaId = asignacion?.aulaId || est.aulaAsignadaId;
         const codigoAulaEst = asignacion?.codigoAula || est.codigoAula || 'PEND';
-        const turnoCodigoEst = asignacion?.turnoCodigo || est.turnoCodigo || 'T—';
+        const turnoCodigoEst = asignacion?.turnoCodigo || est.turnoCodigo || 'Tâ€”';
 
         const aulaInfo = aulaAsignadaId ? aulaCache.get(aulaAsignadaId) : null;
-        const turnoInfo = turnoCodigoEst !== 'T—' ? turnoCache.get(turnoCodigoEst) : null;
+        const turnoInfo = turnoCodigoEst !== 'Tâ€”' ? turnoCache.get(turnoCodigoEst) : null;
 
-        const sedeVal = aulaInfo?.local || aulaInfo?.sede || '—';
-        const pabellonVal = aulaInfo?.pabellon || '—';
-        const pisoVal = aulaInfo?.piso || '—';
-        const puertaVal = aulaInfo?.puertaAcceso || '—';
+        const sedeVal = aulaInfo?.local || aulaInfo?.sede || 'â€”';
+        const pabellonVal = aulaInfo?.pabellon || 'â€”';
+        const pisoVal = aulaInfo?.piso || 'â€”';
+        const puertaVal = aulaInfo?.puertaAcceso || 'â€”';
         
         const fmtHora = (v:any): string => {
-          if (!v) return '—';
+          if (!v) return 'â€”';
           if (typeof v === 'string') { const m=v.match(/^(\d{1,2}):(\d{2})/); return m ? `${m[1].padStart(2,'0')}:${m[2]}` : v.slice(0,5); }
           let d: Date | null = null;
           if (v?.toDate) d = v.toDate();
           else if (v?.seconds != null) d = new Date(v.seconds*1000 + Math.floor((v.nanoseconds||0)/1e6));
           else if (v instanceof Date) d = v;
           else return String(v).slice(0,5);
-          if (!d || isNaN(d.getTime())) return '—';
+          if (!d || isNaN(d.getTime())) return 'â€”';
           return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
         };
-        const hIniEnt = turnoInfo?.horaInicioEntrada ? fmtHora(turnoInfo.horaInicioEntrada) : '—';
-        const hFinEnt = turnoInfo?.horaFinEntrada ? fmtHora(turnoInfo.horaFinEntrada) : '—';
-        const hIniPru = turnoInfo?.horaInicioPrueba ? fmtHora(turnoInfo.horaInicioPrueba) : '—';
-        const hFinPru = turnoInfo?.horaFinPrueba ? fmtHora(turnoInfo.horaFinPrueba) : '—';
-        const ingresoStr = (hIniEnt !== '—' && hFinEnt !== '—') ? `${hIniEnt} - ${hFinEnt}` : (hIniEnt !== '—' ? hIniEnt : '—');
-        const examenStr = (hIniPru !== '—' && hFinPru !== '—') ? `${hIniPru} - ${hFinPru}` : (hIniPru !== '—' ? hIniPru : '—');
+        const hIniEnt = turnoInfo?.horaInicioEntrada ? fmtHora(turnoInfo.horaInicioEntrada) : 'â€”';
+        const hFinEnt = turnoInfo?.horaFinEntrada ? fmtHora(turnoInfo.horaFinEntrada) : 'â€”';
+        const hIniPru = turnoInfo?.horaInicioPrueba ? fmtHora(turnoInfo.horaInicioPrueba) : 'â€”';
+        const hFinPru = turnoInfo?.horaFinPrueba ? fmtHora(turnoInfo.horaFinPrueba) : 'â€”';
+        const ingresoStr = (hIniEnt !== 'â€”' && hFinEnt !== 'â€”') ? `${hIniEnt} - ${hFinEnt}` : (hIniEnt !== 'â€”' ? hIniEnt : 'â€”');
+        const examenStr = (hIniPru !== 'â€”' && hFinPru !== 'â€”') ? `${hIniPru} - ${hFinPru}` : (hIniPru !== 'â€”' ? hIniPru : 'â€”');
         
         // Siempre usar inscripcion.colegio como fuente maestra (se sincroniza al guardar)
         const colInfo = this.inscripcionParaLista?.colegio || est.colegio;
-        const gestionVal = colInfo?.GESTION || '—';
-        const areaVal = colInfo?.AREA || '—';
+        const gestionVal = colInfo?.GESTION || 'â€”';
+        const areaVal = colInfo?.AREA || 'â€”';
 
         const azul = [0, 51, 102] as any;
         const azulClaro = [14, 99, 180] as any;
         const gris = [100, 100, 100] as any;
         const negro = [20, 20, 20] as any;
         const linea = [210, 210, 210] as any;
-        const codPago = (this.inscripcionParaLista as any)?.codigo || this.inscripcionParaLista?.id || '—';
-        const codEst = (est as any).codigo || (est as any).id || '—';
+        const codPago = (this.inscripcionParaLista as any)?.codigo || this.inscripcionParaLista?.id || 'â€”';
+        const codEst = (est as any).codigo || (est as any).id || 'â€”';
         const codigoUnido = `${codPago}-${codEst}`;
         const colNombre = (colInfo?.IE || 'N/A').toUpperCase();
-        const codModular = colInfo?.CODIGOMODULAR || '—';
+        const codModular = colInfo?.CODIGOMODULAR || 'â€”';
         const ieLugar = aulaInfo?.local || colInfo?.DISTRITO || sedeVal;
         const fechaVal = '22-08-2026';
         const fechaTurno: any = turnoInfo?.fecha;
@@ -594,84 +593,113 @@ export class Lista implements OnInit {
         doc.line(x - l, y + stripHeight, x, y + stripHeight); doc.line(x, y + stripHeight, x, y + stripHeight + l);
         doc.line(x + stripWidth, y + stripHeight, x + stripWidth + l, y + stripHeight); doc.line(x + stripWidth, y + stripHeight, x + stripWidth, y + stripHeight + l);
 
-        doc.setFillColor(azul[0], azul[1], azul[2]);
-        doc.rect(x, y, stripWidth, 16, 'F');
-        doc.setFillColor(255, 193, 7);
-        doc.rect(x, y + 15.1, stripWidth, 0.9, 'F');
         if (logoIzquierdoB64) {
           doc.addImage(logoIzquierdoB64, 'PNG', x + 2, y + 3, 10, 10, undefined, 'FAST');
         }
         if (logoDerechoB64) {
           doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 12, y + 3, 10, 10, undefined, 'FAST');
         }
-        doc.setTextColor(255, 193, 7); doc.setFont('Helvetica', 'bold'); doc.setFontSize(8.8);
-        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 6.5, { align: 'center', maxWidth: stripWidth - 26 });
-        doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8); doc.setTextColor(255, 255, 255);
-        const esloganLine = eslogan ? `${eslogan} - EDICIÓN ${edicion}`.toUpperCase() : `EDICIÓN ${edicion}`.toUpperCase();
-        doc.text(esloganLine, x + stripWidth / 2, y + 12.2, { align: 'center', maxWidth: stripWidth - 26 });
+        doc.setTextColor(azul[0], azul[1], azul[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(11);
+        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 5, { align: 'center', maxWidth: stripWidth - 26 });
+        doc.setFont('Helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(gris[0], gris[1], gris[2]);
+        const esloganLine = eslogan ? `${eslogan} - EDICION ${edicion}`.toUpperCase() : `EDICION ${edicion}`.toUpperCase();
+        doc.text(esloganLine, x + stripWidth / 2, y + 14.5, { align: 'center', maxWidth: stripWidth - 26 });
 
-        let cy = y + 19;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8);
-        doc.text('DNI:', x + 3, cy); doc.text('TURNO:', x + 32, cy); doc.text('PUERTA:', x + 54, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.5);
-        doc.text(est.numeroDocumento || '—', x + 9, cy); doc.text(turnoCodigoEst, x + 42, cy); doc.text(puertaVal || 'C', x + 66, cy);
-        cy += 4.2;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8); doc.text('PARTICIPANTE:', x + 3, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(7);
+        let cy = y + 20.5;
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.5);
+        doc.text('DNI:', x + 2.5, cy); doc.text('TURNO:', x + 27, cy); doc.text('PUERTA:', x + 46, cy); doc.setFontSize(7.5); // Aumenta de 6 a 7.5
+doc.text('FECHA:', x + 64, cy);
+doc.setFont('Helvetica', 'bold'); doc.setFontSize(8);
+doc.text(fechaStr, x + 74, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(10);
+        doc.text(est.numeroDocumento || '\u2014', x + 9, cy); doc.text(turnoCodigoEst, x + 38, cy); doc.text(puertaVal || 'C', x + 58, cy);
+        cy += 4.5;
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8); doc.text('PARTICIPANTE:', x + 3, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(8.5);
         const nomCompleto = `${est.apellidos || ''} ${est.nombres || ''}`.trim().toUpperCase();
-        doc.text(nomCompleto, x + 20, cy, { maxWidth: stripWidth - 23 });
+        doc.text(nomCompleto, x + 27, cy, { maxWidth: stripWidth - 29 });
         cy += 4.2;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8);
         doc.text('CÓDIGO IE:', x + 3, cy); doc.text('ÁREA:', x + 42, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.2);
-        doc.text(codModular, x + 18, cy); doc.text(areaVal.toUpperCase(), x + 50, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(9.5);
+        doc.text(codModular, x + 20, cy); doc.text(areaVal.toUpperCase(), x + 53, cy);
         cy += 4.2;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8); doc.text('IE:', x + 3, cy);
-        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(7);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8); doc.text('IE:', x + 3, cy);
+        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(10.5);
         doc.text(colNombre, x + 15, cy, { maxWidth: stripWidth - 18 });
         cy += 3.8;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8);
-        doc.text('GESTIÓN:', x + 3, cy); doc.text('GRADO:', x + 42, cy);
-        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.5);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8);
+        doc.text('GESTIÓN:', x + 3, cy); doc.text('GRADO:', x + 38, cy);
+        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(10);
         const gradoNivelStr = `${String(est.grado||'').toUpperCase()} ${String(est.nivel||'').toUpperCase()}`.trim();
-        doc.text(gestionVal.toUpperCase(), x + 15, cy); doc.text(gradoNivelStr, x + 54, cy, { maxWidth: 40 });
-        cy += 4;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8);
-        doc.text('LUGAR:', x + 3, cy); doc.text('FECHA:', x + 58, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(5.5);
-        doc.text(ieLugar.substring(0, 22).toUpperCase(), x + 12, cy); doc.text(fechaStr, x + 67, cy);
-        cy += 1.6;
-        doc.setDrawColor(linea[0], linea[1], linea[2]); doc.setLineWidth(0.18); doc.line(x + 2, cy, x + stripWidth - 2, cy);
+        doc.text(gestionVal.toUpperCase(), x + 17, cy); 
+doc.text(gradoNivelStr, x + 50, cy, { maxWidth: stripWidth - 52 });
+        cy += 4.2;
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8);
+        doc.text('LUGAR:', x + 3, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(8.5);
+        // Se quitó substring(0,25) y se añadió maxWidth para que entre completo
+        doc.text(ieLugar.toUpperCase(), x + 15, cy, { maxWidth: stripWidth - 17 });
+        cy += 1.8;
+        //doc.setDrawColor(linea[0], linea[1], linea[2]); doc.setLineWidth(0.18); doc.line(x + 2, cy, x + stripWidth - 2, cy);
         cy += 3.2;
-        const boxW1 = 52; const boxW2 = stripWidth - boxW1 - 8;
-        const boxH2 = 12.5;
-        const bx = x + 2; const by = cy;
-        doc.setFillColor(248, 249, 255); doc.setDrawColor(azul[0], azul[1], azul[2]); doc.setLineWidth(0.38);
-        doc.roundedRect(bx, by, boxW1, boxH2, 1, 1, 'FD');
-        doc.roundedRect(bx + boxW1 + 2, by, boxW2, boxH2, 1, 1, 'FD');
-        doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.5); doc.setTextColor(gris[0], gris[1], gris[2]);
-        doc.text('AULA', bx + boxW1 * 0.25, by + 3.4, { align: 'center' });
-        doc.text('CÓDIGO', bx + boxW1 * 0.75, by + 3.4, { align: 'center' });
-        doc.text('PABELLÓN', bx + boxW1 + 2 + boxW2 * 0.30, by + 3.4, { align: 'center' }); doc.text('PISO', bx + boxW1 + 2 + boxW2 * 0.72, by + 3.4, { align: 'center' });
-        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(11.5);
-        doc.text(codigoAulaEst.toUpperCase(), bx + boxW1 * 0.25, by + 8.2, { align: 'center' });
-        doc.setFontSize(9.5); doc.setTextColor(azul[0], azul[1], azul[2]);
-        doc.text(codigoUnido, bx + boxW1 * 0.75, by + 8.2, { align: 'center' } as any);
-        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(10);
-        doc.text(pabellonVal.toUpperCase(), bx + boxW1 + 2 + boxW2 * 0.30, by + 8.2, { align: 'center' });
-        doc.text(String(pisoVal), bx + boxW1 + 2 + boxW2 * 0.72, by + 8.2, { align: 'center' });
-        const horaY = by + boxH2 + 1.6;
-        const horaH = 9.5;
-        doc.setDrawColor(azul[0], azul[1], azul[2]); doc.setLineWidth(0.38);
-        doc.roundedRect(bx, horaY, stripWidth - 4, horaH, 0.8, 0.8, 'D');
-        doc.setFont('Helvetica', 'normal'); doc.setFontSize(5.2); doc.setTextColor(gris[0], gris[1], gris[2]);
-        doc.text('HORA INGRESO', bx + (stripWidth - 4) * 0.25, horaY + 3.2, { align: 'center' });
-        doc.text('HORA EXAMEN', bx + (stripWidth - 4) * 0.75, horaY + 3.2, { align: 'center' });
-        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(8.5);
-        doc.text(String(ingresoStr).toUpperCase(), bx + (stripWidth - 4) * 0.25, horaY + 7.2, { align: 'center' });
-        doc.text(String(examenStr).toUpperCase(), bx + (stripWidth - 4) * 0.75, horaY + 7.2, { align: 'center' });
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4);
-        doc.text('Código claro para consultar resultados • Conservar', x + stripWidth / 2, y + stripHeight - 1.4, { align: 'center' });
+const boxW1 = 52; 
+const boxW2 = stripWidth - boxW1 - 8;
+const boxH2 = 10.5;
+const bx = x + 2; 
+const by = cy;
+
+// --- CAJAS SUPERIORES (AULA, CÓDIGO, PABELLÓN, PISO) ---
+doc.setDrawColor(azul[0], azul[1], azul[2]); 
+doc.setLineWidth(0.38);
+doc.roundedRect(bx, by, boxW1, boxH2, 1, 1, 'D');
+doc.roundedRect(bx + boxW1 + 2, by, boxW2, boxH2, 1, 1, 'D');
+
+// Encabezados
+doc.setFont('Helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(negro[0], negro[1], negro[2]);
+doc.text('AULA', bx + boxW1 * 0.25, by + 3.0, { align: 'center' });
+doc.text('CODIGO', bx + boxW1 * 0.75, by + 3.0, { align: 'center' });
+doc.text('PABELLON', bx + boxW1 + 2 + boxW2 * 0.30, by + 3.0, { align: 'center' });
+doc.text('PISO', bx + boxW1 + 2 + boxW2 * 0.72, by + 3.0, { align: 'center' });
+
+// Valores ajustados en Y (by + 7.5 para centrar en caja de 10.5)
+doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(12);
+doc.text(codigoAulaEst.toUpperCase(), bx + boxW1 * 0.25, by + 7.5, { align: 'center' });
+
+doc.setFontSize(10); doc.setTextColor(azul[0], azul[1], azul[2]);
+doc.text(codigoUnido, bx + boxW1 * 0.75, by + 7.5, { align: 'center' } as any);
+
+doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(13);
+doc.text(pabellonVal.toUpperCase(), bx + boxW1 + 2 + boxW2 * 0.30, by + 7.5, { align: 'center' });
+doc.text(String(pisoVal), bx + boxW1 + 2 + boxW2 * 0.72, by + 7.5, { align: 'center' });
+
+// --- CAJA DE HORARIOS (Con AM/PM dinámico) ---
+const horaY = by + boxH2 + 1.2;
+const horaH = 11; // Mayor altura para dar espacio vertical a fuente grande
+
+doc.setDrawColor(azul[0], azul[1], azul[2]); 
+doc.setLineWidth(0.38);
+doc.roundedRect(bx, horaY, stripWidth - 4, horaH, 0.8, 0.8, 'D');
+
+doc.setFont('Helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(negro[0], negro[1], negro[2]);
+doc.text('HORA INGRESO', bx + (stripWidth - 4) * 0.25, horaY + 3.2, { align: 'center' });
+doc.text('HORA EXAMEN', bx + (stripWidth - 4) * 0.75, horaY + 3.2, { align: 'center' });
+
+// Función para calcular AM / PM según la hora de inicio
+const obtenerMeridiano = (rangoHoras: string) => {
+  const horaInicial = parseInt(String(rangoHoras).split(':')[0], 10);
+  return horaInicial >= 12 ? 'PM' : 'AM';
+};
+
+const sufijoIngreso = obtenerMeridiano(ingresoStr);
+const sufijoExamen = obtenerMeridiano(examenStr);
+
+// Horas impresas con tamaño 10 para evitar que rocen el marco inferior
+doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(13);
+doc.text(`${ingresoStr} ${sufijoIngreso}`, bx + (stripWidth - 4) * 0.25, horaY + 8.0, { align: 'center' });
+doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8.0, { align: 'center' });
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(9);
+        //doc.text('CÃ³digo claro para consultar resultados â€¢ Conservar', x + stripWidth / 2, y + stripHeight - 1.4, { align: 'center' });
       }
 
       const ieNombre = (this.inscripcionParaLista?.colegio?.IE || 'Credenciales').replace(/\s+/g, '_');
@@ -679,7 +707,7 @@ export class Lista implements OnInit {
       doc.save(`Credenciales_${ieNombre}_${codPagoFinal}.pdf`);
     } catch (error) {
       console.error('Error al generar credenciales:', error);
-      alert('Ocurrió un error al generar las credenciales.');
+      alert('Ocurrio un error al generar las credenciales.');
     } finally {
       this.cargandoLista = false;
     }
@@ -742,7 +770,7 @@ export class Lista implements OnInit {
       try {
         config = await this.configuracionService.obtenerConfiguracion();
       } catch {
-        console.warn('No se pudo cargar la configuración para la impresión');
+        console.warn('No se pudo cargar la configuraciÃ³n para la impresiÃ³n');
       }
 
       // Resolver lista de estudiantes: individual o grupal
@@ -759,11 +787,11 @@ export class Lista implements OnInit {
         const asignacion = this.inscripcionParaLista?.asignacionesAula?.find(a => a.estudianteIndex === indexReal);
         
         const aulaId = asignacion?.aulaId || est.aulaAsignadaId || '';
-        const codigoAula = asignacion?.codigoAula || est.codigoAula || '—';
-        const turnoCodigo = asignacion?.turnoCodigo || '—';
+        const codigoAula = asignacion?.codigoAula || est.codigoAula || 'â€”';
+        const turnoCodigo = asignacion?.turnoCodigo || 'â€”';
         
         let turnoId = '';
-        if (turnoCodigo !== '—') {
+        if (turnoCodigo !== 'â€”') {
           const turnosRef = collection(db, 'turnos');
           const qTurno = query(turnosRef, where('codigo', '==', turnoCodigo));
           const snapTurno = await getDocs(qTurno);
@@ -810,7 +838,7 @@ export class Lista implements OnInit {
         };
       }));
 
-      // Pasar un dummy aula y turno global (el servicio ahora priorizará el de cada estEnriquecido)
+      // Pasar un dummy aula y turno global (el servicio ahora priorizarÃ¡ el de cada estEnriquecido)
       const dummyAula = estudiantesEnriquecidos[0]?.aulaDisplay || {} as AulaTurnoDisplay;
       const dummyTurno = estudiantesEnriquecidos[0]?.turnoObj || {} as Turno;
 
@@ -822,8 +850,8 @@ export class Lista implements OnInit {
 
       this.cerrarModalImpresionIndividual();
     } catch (error) {
-      console.error('Error al generar impresión:', error);
-      alert('Ocurrió un error al generar el documento.');
+      console.error('Error al generar impresiÃ³n:', error);
+      alert('OcurriÃ³ un error al generar el documento.');
     } finally {
       this.cargandoImpresion = false;
     }
@@ -833,7 +861,7 @@ export class Lista implements OnInit {
    * Carga una imagen desde URL y la convierte a Base64 para jsPDF.
    * - Timeout de 5 segundos: si la imagen tarda demasiado, resuelve con ''.
    * - Errores HTTP (402, 403, 404, CORS) se capturan silenciosamente; el PDF
-   *   continuará con el diseño vectorial de respaldo sin lanzar errores en consola.
+   *   continuarÃ¡ con el diseÃ±o vectorial de respaldo sin lanzar errores en consola.
    */
   private cargarImagenBase64(url: string): Promise<string> {
     return new Promise((resolve) => {
@@ -887,10 +915,10 @@ export class Lista implements OnInit {
 
   async enviarWhatsapp(ins: Inscripcion): Promise<void> {
     const telRaw = String((ins as any).telefonoApoderado || '').replace(/\D/g, '');
-    if (!telRaw) { alert('No hay teléfono del apoderado registrado'); return; }
+    if (!telRaw) { alert('No hay telÃ©fono del apoderado registrado'); return; }
     const telefono = telRaw.startsWith('51') ? telRaw : `51${telRaw}`;
     const codigoIns = String((ins as any).codigo || ins.id || '').trim();
-    if (!/^\d{4}$/.test(codigoIns)) { alert('Código de inscripción inválido: ' + codigoIns); return; }
+    if (!/^\d{4}$/.test(codigoIns)) { alert('CÃ³digo de inscripciÃ³n invÃ¡lido: ' + codigoIns); return; }
     let est: any = (ins.estudiantes && ins.estudiantes[0]) ? ins.estudiantes[0] as any : null;
     let codigoEst = String(est?.codigo || (est as any)?.id || '').trim();
     if (!/^\d{5}$/.test(codigoEst)) {
@@ -900,48 +928,61 @@ export class Lista implements OnInit {
         if (primero) { est = primero; codigoEst = String((primero as any).codigo || (primero as any).id || '').trim(); }
       } catch {}
     }
-    if (!/^\d{5}$/.test(codigoEst)) { alert('No se encontró código de 5 dígitos del estudiante. Verifique que la inscripción tenga estudiantes registrados.'); return; }
+    if (!/^\d{5}$/.test(codigoEst)) { alert('No se encontrÃ³ cÃ³digo de 5 dÃ­gitos del estudiante. Verifique que la inscripciÃ³n tenga estudiantes registrados.'); return; }
     const codigo = `${codigoIns}-${codigoEst}`;
     const nombre = est ? `${est.nombres || ''} ${est.apellidos || ''}`.trim() || 'PARTICIPANTE' : 'PARTICIPANTE';
     const baseUrl = 'https://solarislee-resultados.web.app/';
     const enlace = `${baseUrl}?tipo=individual&codigo=${codigo}`;
-    const mensaje = `RESULTADOS SOLARISLEE 2026\nEstimado(a) participante:\nA traves de este enlace puede consultar su resultado:\n${enlace}\nParticipante: ${nombre}\nCódigo: ${codigo}`;
+    const mensaje = `RESULTADOS SOLARISLEE 2026\nEstimado(a) participante:\nA traves de este enlace puede consultar su resultado:\n${enlace}\nParticipante: ${nombre}\nCÃ³digo: ${codigo}`;
     const whatsappUrl = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
     window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+  }
+
+  descargarRecibo(ins: Inscripcion): void {
+    if (!this.configuracion) {
+      alert('ConfiguraciÃ³n no cargada. Intente recargar la pÃ¡gina.');
+      return;
+    }
+    try {
+      this.reciboService.generarRecibo(ins, this.configuracion);
+    } catch (error) {
+      console.error('Error al generar recibo:', error);
+      alert('Error al generar el recibo');
+    }
   }
 
   enviarWhatsappEstudiante(est: Estudiante): void {
     const ins: any = this.inscripcionParaLista;
     if (!ins) return;
     const telRaw = String(ins.telefonoApoderado || '').replace(/\D/g, '');
-    if (!telRaw) { alert('No hay teléfono del apoderado registrado'); return; }
+    if (!telRaw) { alert('No hay telÃ©fono del apoderado registrado'); return; }
     const telefono = telRaw.startsWith('51') ? telRaw : `51${telRaw}`;
     const codigoIns = String(ins.codigo || ins.id || '').trim();
     const codigoEst = String((est as any).codigo || (est as any).id || '').trim();
-    if (!/^\d{4}$/.test(codigoIns) || !/^\d{5}$/.test(codigoEst)) { alert('Código inválido: se esperaba 4 dígitos inscripción y 5 dígitos estudiante. Actual: ' + codigoIns + '-' + codigoEst); return; }
+    if (!/^\d{4}$/.test(codigoIns) || !/^\d{5}$/.test(codigoEst)) { alert('CÃ³digo invÃ¡lido: se esperaba 4 dÃ­gitos inscripciÃ³n y 5 dÃ­gitos estudiante. Actual: ' + codigoIns + '-' + codigoEst); return; }
     const codigo = `${codigoIns}-${codigoEst}`;
     const nombre = `${est.nombres || ''} ${est.apellidos || ''}`.trim();
     const baseUrl = 'https://solarislee-resultados.web.app/';
     const enlace = `${baseUrl}?tipo=individual&codigo=${codigo}`;
-    const mensaje = `RESULTADOS SOLARISLEE 2026\nEstimado(a) participante:\nA traves de este enlace puede consultar su resultado:\n${enlace}\nParticipante: ${nombre}\nCódigo: ${codigo}`;
+    const mensaje = `RESULTADOS SOLARISLEE 2026\nEstimado(a) participante:\nA traves de este enlace puede consultar su resultado:\n${enlace}\nParticipante: ${nombre}\nCÃ³digo: ${codigo}`;
     const whatsappUrl = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
     window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
   }
 
   // ============================================
-  // BOTÓN CREDENCIALES - Icono 🪪 en la tabla principal
+  // BOTÃ“N CREDENCIALES - Icono ðŸªª en la tabla principal
   // ============================================
   async verCredenciales(ins: Inscripcion) {
-    // Al hacer clic en 🪪 en la lista, abre automáticamente el modal de lista
+    // Al hacer clic en ðŸªª en la lista, abre automÃ¡ticamente el modal de lista
     // para que el usuario pueda seleccionar individual o grupalmente de forma intuitiva
     await this.verLista(ins);
   }
 
   // ============================================
-  // BOTÓN EDITAR - Existente
+  // BOTÃ“N EDITAR - Existente
   // ============================================
   async editarInscripcion(ins: Inscripcion) {
-    console.log('Editando inscripción:', ins.id);
+    console.log('Editando inscripciÃ³n:', ins.id);
     
     this.estudiantesEditar = await this.inscripcionService.obtenerEstudiantes(ins.id!);
     console.log('Estudiantes cargados:', this.estudiantesEditar.length);
@@ -973,20 +1014,20 @@ export class Lista implements OnInit {
       const headers: string[] = (rows[headerRow] || []).map((h: any) => String(h).trim().toUpperCase());
       headers.forEach((h, i) => {
         if (h.includes('TIPO')) colMap['TIPO'] = i;
-        else if (h === 'NUMERO' || h.includes('NÚMERO') || h.includes('NUMERO')) colMap['NUMERO'] = i;
+        else if (h === 'NUMERO' || h.includes('NÃšMERO') || h.includes('NUMERO')) colMap['NUMERO'] = i;
         else if (h.includes('NOMBRES')) colMap['NOMBRES'] = i;
         else if (h.includes('APELLIDOS')) colMap['APELLIDOS'] = i;
         else if (h === 'GRADO') colMap['GRADO'] = i;
         else if (h.includes('NIVEL') || h.includes('NIEVL')) colMap['NIVEL'] = i;
       });
       if (colMap['NUMERO'] === undefined || colMap['NOMBRES'] === undefined) {
-        alert('Plantilla no válida: no se encontró cabecera TIPO/NUMERO/NOMBRES en fila 8');
+        alert('Plantilla no vÃ¡lida: no se encontrÃ³ cabecera TIPO/NUMERO/NOMBRES en fila 8');
         input.value = '';
         return;
       }
       const parsed: Estudiante[] = [];
       let omitidos = 0;
-      const gradoMap: Record<string,string> = { '1':'PRIMERO','2':'SEGUNDO','3':'TERCERO','4':'CUARTO','5':'QUINTO','6':'SEXTO','1°':'PRIMERO','2°':'SEGUNDO','3°':'TERCERO','4°':'CUARTO','5°':'QUINTO','6°':'SEXTO','PRIMERO':'PRIMERO','SEGUNDO':'SEGUNDO','TERCERO':'TERCERO','CUARTO':'CUARTO','QUINTO':'QUINTO','SEXTO':'SEXTO' };
+      const gradoMap: Record<string,string> = { '1':'PRIMERO','2':'SEGUNDO','3':'TERCERO','4':'CUARTO','5':'QUINTO','6':'SEXTO','1Â°':'PRIMERO','2Â°':'SEGUNDO','3Â°':'TERCERO','4Â°':'CUARTO','5Â°':'QUINTO','6Â°':'SEXTO','PRIMERO':'PRIMERO','SEGUNDO':'SEGUNDO','TERCERO':'TERCERO','CUARTO':'CUARTO','QUINTO':'QUINTO','SEXTO':'SEXTO' };
       for (let r = headerRow + 1; r < rows.length; r++) {
         const row = rows[r];
         if (!row || row.every((c: any) => String(c).trim() === '')) continue;
@@ -1013,7 +1054,7 @@ export class Lista implements OnInit {
         });
       }
       if (parsed.length === 0) {
-        alert(`No se encontró ningún estudiante válido. Omitidos: ${omitidos}. Verifique que tenga TIPO, NUMERO, NOMBRES, APELLIDOS, GRADO, NIVEL completos.`);
+        alert(`No se encontrÃ³ ningÃºn estudiante vÃ¡lido. Omitidos: ${omitidos}. Verifique que tenga TIPO, NUMERO, NOMBRES, APELLIDOS, GRADO, NIVEL completos.`);
         input.value = '';
         return;
       }
@@ -1044,7 +1085,7 @@ export class Lista implements OnInit {
   async confirmarEliminarEstudiante() {
     if (!this.inscripcionParaLista?.id || !this.estudianteAEliminar) return;
     const codigoEst = String((this.estudianteAEliminar as any).codigo || (this.estudianteAEliminar as any).id);
-    if (!codigoEst) { alert('Código de estudiante inválido'); return; }
+    if (!codigoEst) { alert('CÃ³digo de estudiante invÃ¡lido'); return; }
     const estEliminado: any = { ...this.estudianteAEliminar as any };
     const insId = this.inscripcionParaLista.id!;
     this.mostrarModalEliminar = false;
@@ -1100,3 +1141,4 @@ export class Lista implements OnInit {
     this.mostrarNuevaInscripcion = false;
   }
 }
+

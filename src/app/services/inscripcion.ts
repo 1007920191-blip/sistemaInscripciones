@@ -126,14 +126,15 @@ export class InscripcionService {
     });
   }
 
-  async obtenerInscripcionesFiltradas(fechaTexto: string, usuarioId: string, verTodos: boolean = false, ignorarFecha: boolean = false): Promise<Inscripcion[]> {
+  async obtenerInscripcionesFiltradas(fechaTexto: string, usuarioId: string, ignorarFecha: boolean = false): Promise<Inscripcion[]> {
     try {
       let q;
-      if (verTodos || ignorarFecha) {
-        q = this.inscripcionesRef;
+      if (ignorarFecha) {
+        q = query(this.inscripcionesRef, where('usuarioId', '==', usuarioId));
       } else {
         q = query(
           this.inscripcionesRef,
+          where('usuarioId', '==', usuarioId),
           where('fechaTexto', '==', fechaTexto)
         );
       }
