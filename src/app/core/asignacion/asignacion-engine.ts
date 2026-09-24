@@ -1,15 +1,25 @@
 // src/app/core/asignacion/asignacion-engine.ts
 // Motor puro de asignación. Sin dependencias de Angular ni Firebase.
+import { esCompatibleConGradosPermitidos } from './grados-permitidos';
 
 export type ModoAsignacion = 'normal' | 'contingencia';
 
 export interface AulaAsignable {
   id: string;
+  codigo?: string;
   grado: string;
   nivel: 'Primaria' | 'Secundaria';
   capacidad: number;
   estudiantes: number;
   porColegio: Record<string, number>;
+  gradosPermitidos?: string[];
+}
+
+export interface AulaFisicaDisponible {
+  id: string;
+  codigo?: string;
+  capacidad: number;
+  gradosPermitidos?: string[];
 }
 
 export interface SolicitudInscripcion {
@@ -31,6 +41,7 @@ export interface ResultadoSimulacion {
     espacioDisponible: number;
     inscritosActuales: number;
     capacidad: number;
+    aulaFisicaId?: string;
   };
 }
 
@@ -40,22 +51,31 @@ export class AsignacionEngine {
   private readonly CAPACIDAD_DEFAULT = 30;
   private readonly MAX_AULAS = 9;
 
+  private capacidadDe(capacidad: number): number {
+    return Number.isFinite(capacidad) && capacidad >= 0 ? capacidad : this.CAPACIDAD_DEFAULT;
+  }
+
   simularNormal(
     aulasExistentes: AulaAsignable[],
-    solicitud: SolicitudInscripcion
+    solicitud: SolicitudInscripcion,
+    aulasFisicasDisponibles: AulaFisicaDisponible[] = []
   ): ResultadoSimulacion {
-    const limiteOperativo = Math.floor(this.CAPACIDAD_DEFAULT * this.LIMITE_OPERATIVO);
+    const limiteOperativo = (capacidad: number) =>
+      Math.min(capacidad, Math.max(1, Math.floor(capacidad * this.LIMITE_OPERATIVO)));
     
     const aulasValidas = aulasExistentes.filter(a => 
       a.grado === solicitud.grado &&
       a.nivel === solicitud.nivel &&
-      this.puedeAsignar(a, solicitud.colegioId, solicitud.cantidad, limiteOperativo)
+      esCompatibleConGradosPermitidos(a.gradosPermitidos, solicitud.grado, solicitud.nivel) &&
+      this.puedeAsignar(a, solicitud.colegioId, solicitud.cantidad, limiteOperativo(this.capacidadDe(a.capacidad)))
     );
 
     if (aulasValidas.length > 0) {
-      aulasValidas.sort((a, b) => 
-        (limiteOperativo - a.estudiantes) - (limiteOperativo - b.estudiantes)
-      );
+      aulasValidas.sort((a, b) => {
+        const aLimite = limiteOperativo(this.capacidadDe(a.capacidad));
+        const bLimite = limiteOperativo(this.capacidadDe(b.capacidad));
+        return (b.estudiantes / bLimite) - (a.estudiantes / aLimite);
+      });
       
       const aula = aulasValidas[0];
       return {
@@ -64,21 +84,32 @@ export class AsignacionEngine {
         restante: 0,
         aulaSugerida: {
           id: aula.id,
-          codigo: 'Aula existente',
-          espacioDisponible: limiteOperativo - aula.estudiantes,
+          codigo: aula.codigo || 'Aula existente',
+          espacioDisponible: limiteOperativo(this.capacidadDe(aula.capacidad)) - aula.estudiantes,
           inscritosActuales: aula.estudiantes,
           capacidad: aula.capacidad
         }
       };
     }
 
-    const aulasDelGrado = aulasExistentes.filter(a => a.grado === solicitud.grado);
-    if (aulasDelGrado.length >= this.MAX_AULAS) {
+    if (aulasExistentes.length >= this.MAX_AULAS) {
       return {
         exito: false,
         asignaciones: [],
         restante: solicitud.cantidad,
-        mensaje: `Límite de ${this.MAX_AULAS} aulas alcanzado para ${solicitud.grado}`
+        mensaje: `No hay aulas disponibles para ${solicitud.grado} ${solicitud.nivel}. Se alcanzó el límite de ${this.MAX_AULAS} aulas; habilite otra aula compatible para continuar.`
+      };
+    }
+
+    const aulaFisicaCompatible = aulasFisicasDisponibles.find(a =>
+      a.capacidad >= 1 && esCompatibleConGradosPermitidos(a.gradosPermitidos, solicitud.grado, solicitud.nivel)
+    );
+    if (!aulaFisicaCompatible) {
+      return {
+        exito: false,
+        asignaciones: [],
+        restante: solicitud.cantidad,
+        mensaje: `No hay aulas físicas compatibles disponibles para ${solicitud.grado} ${solicitud.nivel}`
       };
     }
 
@@ -90,10 +121,11 @@ export class AsignacionEngine {
       mensaje: `Se abrirá nueva aula para ${solicitud.grado}`,
       aulaSugerida: {
         id: '__NUEVA__',
-        codigo: 'Nueva aula',
-        espacioDisponible: this.CAPACIDAD_DEFAULT,
+        codigo: aulaFisicaCompatible.codigo || 'Nueva aula',
+        espacioDisponible: this.capacidadDe(aulaFisicaCompatible.capacidad),
         inscritosActuales: 0,
-        capacidad: this.CAPACIDAD_DEFAULT
+        capacidad: this.capacidadDe(aulaFisicaCompatible.capacidad),
+        aulaFisicaId: aulaFisicaCompatible.id
       }
     };
   }
@@ -105,7 +137,8 @@ export class AsignacionEngine {
     const aulasGrado = aulasExistentes.filter(a => 
       a.grado === solicitud.grado &&
       a.nivel === solicitud.nivel &&
-      a.estudiantes < a.capacidad
+      esCompatibleConGradosPermitidos(a.gradosPermitidos, solicitud.grado, solicitud.nivel) &&
+      a.estudiantes < this.capacidadDe(a.capacidad)
     );
 
     if (aulasGrado.length === 0) {
@@ -126,10 +159,11 @@ export class AsignacionEngine {
     for (const aula of aulasGrado) {
       if (restante <= 0) break;
       
-      const espacioReal = aula.capacidad - aula.estudiantes;
+      const capacidad = this.capacidadDe(aula.capacidad);
+      const espacioReal = capacidad - aula.estudiantes;
       if (espacioReal <= 0) continue;
 
-      const limiteColegio = Math.floor(aula.capacidad * this.MAX_POR_COLEGIO);
+      const limiteColegio = Math.floor(capacidad * this.MAX_POR_COLEGIO);
       const actualColegio = aula.porColegio[solicitud.colegioId] || 0;
       const espacioColegio = limiteColegio - actualColegio;
       
@@ -140,10 +174,10 @@ export class AsignacionEngine {
         if (!aulaSugeridaPrincipal) {
           aulaSugeridaPrincipal = {
             id: aula.id,
-            codigo: 'Aula existente',
+            codigo: aula.codigo || 'Aula existente',
             espacioDisponible: espacioReal,
             inscritosActuales: aula.estudiantes,
-            capacidad: aula.capacidad
+            capacidad
           };
         }
         restante -= aAsignar;
@@ -168,9 +202,10 @@ export class AsignacionEngine {
     limite: number
   ): boolean {
     if (aula.estudiantes + cantidad > limite) return false;
-    const limiteColegio = Math.floor(aula.capacidad * this.MAX_POR_COLEGIO);
+    const limiteColegio = Math.floor(this.CAPACIDAD_DEFAULT * this.MAX_POR_COLEGIO);
     const actualColegio = aula.porColegio[colegioId] || 0;
     if (actualColegio + cantidad > limiteColegio) return false;
     return true;
   }
+
 }

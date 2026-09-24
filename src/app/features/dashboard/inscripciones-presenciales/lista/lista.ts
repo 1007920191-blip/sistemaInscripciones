@@ -325,7 +325,7 @@ export class Lista implements OnInit {
     try { config = await this.configuracionService.obtenerConfiguracion(); } catch {}
     const nombreConcurso = config?.nombreConcurso || 'IV CONCURSO PROVINCIAL DE COMPRENSION LECTORA';
     const edicion = config?.edicion || '2026';
-    const eslogan = config?.eslogan || '"Ã‘AWINCHASUN ALLIN KAWSANAPAQ"';
+    const eslogan = config?.eslogan || '"ÑAWINCHASUN ALLIN KAWSANAPAQ"';
     const sedeCfg = config?.sede || 'ANDAHUAYLAS';
     const [logoIzq, logoDer] = await Promise.all([
       this.cargarImagenBase64(config?.logoIzquierdo || ''),
@@ -356,7 +356,7 @@ export class Lista implements OnInit {
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8);
       doc.setFont('Helvetica', 'bold');
-      doc.text(`CÃ“DIGO: ${codigo}`, 15, 42);
+      doc.text(`CÓDIGO: ${codigo}`, 15, 42);
       doc.setFont('Helvetica', 'normal');
       doc.text(`COLEGIO: ${String(colegioNombre).toUpperCase().substring(0, 32)}`, 55, 42);
       doc.text(`FECHA: ${fechaStr}`, 170, 42);
@@ -368,7 +368,7 @@ export class Lista implements OnInit {
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(7);
       doc.setTextColor(0, 0, 0);
-      doc.text('NÂ°', 17, 51);
+      doc.text('N°', 17, 51);
       doc.text('DNI', 28, 51);
       doc.text('APELLIDOS Y NOMBRES', 52, 51);
       doc.text('GRADO', 137, 51);
@@ -385,14 +385,14 @@ export class Lista implements OnInit {
     estudiantes.forEach((est: any, orderIdx: number) => {
       const originalIdx = est.numeroDocumento && indexMap.has(String(est.numeroDocumento)) ? indexMap.get(String(est.numeroDocumento))! : orderIdx;
       if (currentY > 185) { doc.addPage(); currentY = 54; drawHeader(); }
-      const dni = est.numeroDocumento || 'â€”';
+      const dni = est.numeroDocumento || '—';
       const nombres = `${est.apellidos || ''} ${est.nombres || ''}`.trim().toUpperCase().substring(0, 40);
-      const grado = String(est.grado || 'â€”').toUpperCase();
-      const nivel = String(est.nivel || 'â€”').toUpperCase();
+      const grado = String(est.grado || '—').toUpperCase();
+      const nivel = String(est.nivel || '—').toUpperCase();
       const ie = String(colegioIE).toUpperCase().substring(0, 26);
       const asig = (ins as any).asignacionesAula?.find((a: any) => a.estudianteIndex === originalIdx);
-      const aula = asig?.codigoAula || (est as any).codigoAula || 'â€”';
-      const turnoEst = asig?.turnoCodigo || (est as any).turnoCodigo || 'â€”';
+      const aula = asig?.codigoAula || (est as any).codigoAula || '—';
+      const turnoEst = asig?.turnoCodigo || (est as any).turnoCodigo || '—';
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(7);
       doc.setTextColor(0, 0, 0);
@@ -413,13 +413,13 @@ export class Lista implements OnInit {
       doc.setFont('Helvetica', 'bold');
       doc.setTextColor(0, 90, 180);
       doc.text(String(turnoEst).toUpperCase(), 239, currentY + 4.5, { align: 'center' } as any);
-      if (aula !== 'â€”') doc.setTextColor(13, 71, 161); else doc.setTextColor(80, 80, 80);
+      if (aula !== '—') doc.setTextColor(13, 71, 161); else doc.setTextColor(80, 80, 80);
       doc.text(String(aula).toUpperCase(), 262, currentY + 4.5, { align: 'center' } as any);
       doc.setTextColor(0, 0, 0);
       currentY += rowHeight;
     });
     const totalPages = (doc as any).getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) { (doc as any).setPage(i); doc.setFont('Helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 100, 100); doc.text(`PÃ¡gina ${i} de ${totalPages}`, pageWidth - 15, pageHeight - 8, { align: 'right' }); }
+    for (let i = 1; i <= totalPages; i++) { (doc as any).setPage(i); doc.setFont('Helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 100, 100); doc.text(`Página ${i} de ${totalPages}`, pageWidth - 15, pageHeight - 8, { align: 'right' }); }
     const safeColegio = String(colegioNombre).replace(/\s+/g, '_');
     doc.save(`Lista_${safeColegio}_${fechaStr.replace(/\//g, '-')}.pdf`);
   }

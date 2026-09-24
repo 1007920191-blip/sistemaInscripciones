@@ -101,6 +101,7 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
 
   private unsubscribeAulas?: () => void;
   private unsubscribeInscripciones?: () => void;
+  private todasLasInscripciones: any[] = [];
   private inscripcionesActuales: any[] = [];
   private todasLasAulasActuales: AulaTurnoDisplay[] = [];
 
@@ -200,10 +201,11 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
 
       console.log('Suscribiendo a aulas para turno:', this.turno.id!, 'grado:', this.gradoSeleccionado);
       
-      // Suscribirse a TODAS las inscripciones para contar inscritos por aula correctamente.
-      // Una inscripción puede tener estudiantes en múltiples turnos.
+      // Se usan las inscripciones completadas para las listas de impresión.
+      // Los contadores de ocupación provienen de turnosedicion.
       this.unsubscribeInscripciones = this.inscripcionService.escucharTodasLasInscripciones((inscripciones) => {
         this.ngZone.run(() => {
+          this.todasLasInscripciones = inscripciones;
           this.inscripcionesActuales = inscripciones.filter((i:any)=> i.estado==='completada');
           this.procesarDatosCombinados();
         });
@@ -223,29 +225,13 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private procesarDatosCombinados() {
-    // Calcular inscritos por aula a partir de las inscripciones reales
-    const conteoPorAula = new Map<string, number>();
-    
-    for (const inscripcion of this.inscripcionesActuales) {
-      if (inscripcion.asignacionesAula) {
-        for (const asignacion of inscripcion.asignacionesAula) {
-          if (asignacion.aulaId) {
-            const current = conteoPorAula.get(asignacion.aulaId) || 0;
-            conteoPorAula.set(asignacion.aulaId, current + 1);
-          }
-        }
-      }
-    }
-
-    // Actualizar las aulas con el conteo real.
-    // asignacion.aulaId = ID del aula original (colección Aulas)
-    // aula.aulaId       = ID del aula original (campo en turnosedicion)
-    // aula.id           = ID del documento en turnosedicion (NO coincide con asignacion.aulaId)
+    // turnosedicion es la fuente del contador operativo del aula en este turno.
+    // No recalcularlo desde inscripciones completadas: una inscripción puede
+    // quedar pendiente aunque algunos estudiantes sí hayan sido asignados.
     const aulasActualizadas = this.todasLasAulasActuales.map(aula => ({
-  ...aula,
-  inscritos: (conteoPorAula.get(aula.aulaId) || 0) +
-             (conteoPorAula.get(aula.id) || 0)
-}));
+      ...aula,
+      inscritos: Number.isFinite(aula.inscritos) ? aula.inscritos : 0
+    }));
 
     this.ngZone.run(() => {
       this.aulasAsignadas = aulasActualizadas.filter(aula => {
@@ -318,7 +304,19 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
   async abrirModalAsignar() {
     this.cargandoModal = true;
     try {
-      this.aulasDisponibles = await this.turnoAulaService.obtenerAulasDisponibles(this.turno.id!);
+      const grado = this.normalizarGradoDisplay(
+        (this.gradoSeleccionado || '').split(' ')[0] || this.gradoSeleccionado
+      );
+      const nivel = this.gradoSeleccionado.toUpperCase().includes('SECUNDARIA')
+        ? 'Secundaria'
+        : this.gradoSeleccionado.toUpperCase().includes('PRIMARIA')
+          ? 'Primaria'
+          : this.turno.nivel;
+      this.aulasDisponibles = await this.turnoAulaService.obtenerAulasDisponibles(
+        this.turno.id!,
+        grado,
+        nivel
+      );
       this.mostrarModalAsignar = true;
     } catch (error) {
       console.error('Error cargando aulas:', error);
@@ -371,6 +369,10 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
         puertaAcceso: aula.puertaAcceso,
         sede: this.SEDE_DEFAULT
       };
+
+      if (aula.gradosPermitidos !== undefined) {
+        data.gradosPermitidos = [...aula.gradosPermitidos];
+      }
 
       await this.turnoAulaService.asignarAulaATurno(data);
       
@@ -499,9 +501,12 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
         this.cargarImagenBase64(config?.logoDerecho || '')
       ]);
 
-      // 2. Extraer estudiantes validando inscripcionesActuales
-      const inscripcionesRelacionadas = this.inscripcionesActuales.filter(ins => 
-        ins.asignacionesAula?.some((asig: any) => asig.aulaId === aula.aulaId || asig.aulaId === aula.id)
+      // Leer la fuente canónica de la asignación por estudiante, sin filtrar
+      // por el estado global de la inscripción: puede haber asignados en una
+      // inscripción pendiente cuando otros estudiantes quedaron sin aula.
+      const inscripcionesRelacionadas = this.todasLasInscripciones.filter(ins =>
+        ins.asignacionesAula?.some((asig: any) => String(asig.aulaId || '').trim() === String(aula.id).trim()) ||
+        ins.estudiantes?.some((est: any) => String(est.aulaAsignadaId || '').trim() === String(aula.id).trim())
       );
 
       const estudiantesFinales: any[] = [];
@@ -510,7 +515,7 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
         if (ins.id) {
           const estudiantes = await this.inscripcionService.obtenerEstudiantes(ins.id);
           for (const est of estudiantes) {
-            if (est.aulaAsignadaId === aula.aulaId || est.aulaAsignadaId === aula.id) {
+            if (String(est.aulaAsignadaId || '').trim() === String(aula.id).trim()) {
               
               if (est.grado?.trim().toUpperCase() !== aula.grado?.trim().toUpperCase() || 
                   est.nivel?.trim().toUpperCase() !== aula.nivel?.trim().toUpperCase()) {
@@ -715,19 +720,11 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
     this.cargando = true;
 
     try {
-      if (this.aulaEditando.inscritos > this.aulaEditando.capacidad) {
-        alert(`Error: Los inscritos no pueden exceder la capacidad`);
-        this.cargando = false;
-        return;
-      }
-
       await this.turnoAulaService.actualizarAulaTurno(this.aulaEditando.id, {
         codigoAula: this.aulaEditando.codigoAula,
-        capacidad: this.aulaEditando.capacidad,
         pabellon: this.aulaEditando.pabellon,
         piso: this.aulaEditando.piso,
         puertaAcceso: this.aulaEditando.puertaAcceso,
-        inscritos: this.aulaEditando.inscritos,
         local: this.aulaEditando.local,
         sede: this.aulaEditando.sede
       });

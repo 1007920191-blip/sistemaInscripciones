@@ -267,8 +267,9 @@
       <!-- Fila 3: Capacidad, Inscritos, Pabellón -->
       <div class="fila">
         <div class="campo">
-          <label>CAPACIDAD *</label>
-          <input type="number" [(ngModel)]="aulaEditando.capacidad" min="1">
+          <label>CAPACIDAD FÍSICA</label>
+          <input type="number" [(ngModel)]="aulaEditando.capacidad" readonly class="readonly">
+          <small>Se administra desde el módulo maestro de aulas.</small>
         </div>
         <div class="campo">
           <label>INSCRITOS *</label>

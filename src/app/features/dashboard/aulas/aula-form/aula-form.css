@@ -80,3 +80,20 @@
   border-radius: 4px;
   cursor: pointer;
 }
+
+.grados-permitidos {
+  margin: 4px 0 24px;
+  padding: 16px;
+  border: 1px solid #e1e5ee;
+  border-radius: 8px;
+  background: #fafbfe;
+}
+
+.grados-permitidos__encabezado h4 { margin: 0 0 4px; color: #333; font-size: 13px; }
+.grados-permitidos__encabezado p { margin: 0 0 14px; color: #667085; font-size: 12px; line-height: 1.4; }
+.grados-permitidos__niveles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.grados-permitidos__nivel { min-width: 0; margin: 0; padding: 10px 12px; border: 1px solid #dde3ee; border-radius: 6px; }
+.grados-permitidos__nivel legend { padding: 0 4px; color: #5b2a86; font-size: 12px; font-weight: 600; }
+.grado-opcion { display: inline-flex; align-items: center; gap: 6px; margin: 4px 12px 4px 0; color: #344054; font-size: 13px; cursor: pointer; }
+
+@media (max-width: 560px) { .grados-permitidos__niveles { grid-template-columns: 1fr; } }

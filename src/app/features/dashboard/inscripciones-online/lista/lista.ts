@@ -1134,13 +1134,46 @@ export class ListaO implements OnInit {
       const colegioId = (ins.colegio as any)?.CODIGOMODULAR || (ins.colegio as any)?.codigoModular || '';
       for (let i=0;i<estudiantes.length;i++) {
         const est = estudiantes[i];
+        const asignacionGuardada = (ins.asignacionesAula || []).find((a: any) =>
+          a.estudianteIndex === i || String(a.estudianteNombre || '').trim().toUpperCase() === `${est.nombres} ${est.apellidos}`.trim().toUpperCase()
+        );
+        const aulaIdExistente = String((est as any).aulaAsignadaId || asignacionGuardada?.aulaId || '').trim();
+        const codigoAulaExistente = String((est as any).codigoAula || asignacionGuardada?.codigoAula || '').trim();
+        if (aulaIdExistente && codigoAulaExistente) {
+          const turnoCodigoExistente = String((est as any).turnoCodigo || asignacionGuardada?.turnoCodigo || '').trim();
+          asignacionesAula.push({
+            ...(asignacionGuardada || {}),
+            estudianteIndex: i,
+            estudianteNombre: `${est.nombres} ${est.apellidos}`,
+            aulaId: aulaIdExistente,
+            codigoAula: codigoAulaExistente,
+            grado: est.grado,
+            nivel: est.nivel,
+            turnoCodigo: turnoCodigoExistente
+          });
+          if (!primerTurnoCodigo && turnoCodigoExistente) {
+            const turnoExistente = turnos.find(t => t.codigo === turnoCodigoExistente);
+            primerTurnoId = turnoExistente?.id || turnoCodigoExistente;
+            primerTurnoCodigo = turnoCodigoExistente;
+          }
+          continue;
+        }
         const turno = await this.obtenerTurnoParaEstudianteValidar(est, turnos);
-        if (!turno) { alert(`No hay turno para ${est.nombres} ${est.apellidos} (${est.grado} ${est.nivel})`); this.validando=false; return; }
+        if (!turno) {
+          if (asignacionesAula.length) {
+            await this.asignacionService.liberarEstudiantes(asignacionesAula.map(a => ({ aulaId: a.aulaId, colegioId })));
+          }
+          alert(`No hay turno para ${est.nombres} ${est.apellidos} (${est.grado} ${est.nivel})`);
+          this.validando=false; return;
+        }
         if (!primerTurnoId) { primerTurnoId = turno.id!; primerTurnoCodigo = turno.codigo; }
         const modo = await this.turnoGestion.determinarModoActual(turno);
         const resultado = await this.asignacionService.asignarEstudiantes(turno, [est], colegioId, modo);
         if (!resultado.exito || resultado.asignaciones.length===0) {
           const razon = resultado.fallidos[0]?.razon || 'Error desconocido';
+          if (asignacionesAula.length) {
+            await this.asignacionService.liberarEstudiantes(asignacionesAula.map(a => ({ aulaId: a.aulaId, colegioId })));
+          }
           alert(`No se pudo asignar aula para ${est.nombres}: ${razon}`);
           this.validando=false; return;
         }

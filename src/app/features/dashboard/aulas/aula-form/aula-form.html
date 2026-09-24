@@ -37,6 +37,23 @@
       </div>
     </div>
 
+    <section class="grados-permitidos" aria-labelledby="grados-permitidos-titulo">
+      <div class="grados-permitidos__encabezado">
+        <h4 id="grados-permitidos-titulo">GRADOS PERMITIDOS</h4>
+        <p>Seleccione los grados y niveles que pueden utilizar esta aula. Si no selecciona ninguno, el aula no será candidata para asignaciones.</p>
+      </div>
+      <div class="grados-permitidos__niveles">
+        <fieldset class="grados-permitidos__nivel" *ngFor="let nivel of niveles">
+          <legend>{{ nivel }}</legend>
+          <label class="grado-opcion" *ngFor="let grado of gradosPorNivel[nivel]">
+            <input type="checkbox" [checked]="gradoPermitidoSeleccionado(nivel, grado)"
+              (change)="cambiarGradoPermitido(nivel, grado, $any($event.target).checked)">
+            <span>{{ grado }}</span>
+          </label>
+        </fieldset>
+      </div>
+    </section>
+
     <div class="form-actions">
       <button type="button" class="btn-cancelar" (click)="onCancelar()" [disabled]="cargando">Cancelar</button>
       <button type="submit" class="btn-guardar" [disabled]="cargando">{{ cargando ? '⏳ Guardando...' : '💾 Guardar' }}</button>

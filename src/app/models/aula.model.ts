@@ -7,4 +7,5 @@ export interface Aula {
   piso: number;
   puertaAcceso: string;
   sede?: string;
+  gradosPermitidos?: string[];
 }

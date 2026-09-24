@@ -4,11 +4,13 @@ import { AsignacionService } from './asignacion.service';
 import { TurnoGestionService } from './turno-gestion.service';
 import { 
   AsignacionEngine, 
+  AulaFisicaDisponible,
   SolicitudInscripcion,
   ResultadoSimulacion 
 } from '../core/asignacion/asignacion-engine';
 import { Turno, ModoAsignacion } from '../models/turno.model';
 import { Estudiante } from '../models/inscripcion.model';
+import { TurnoAulaService } from './turno-aula.service';
 
 export interface PreviewAsignacion {
   estudiante: Estudiante;
@@ -30,7 +32,8 @@ export class AsignacionPreviewService {
 
   constructor(
     private asignacionService: AsignacionService,
-    private turnoGestion: TurnoGestionService
+    private turnoGestion: TurnoGestionService,
+    private turnoAulaService: TurnoAulaService
   ) {}
 
   /**
@@ -43,7 +46,8 @@ export class AsignacionPreviewService {
     modo: ModoAsignacion
   ): Promise<PreviewAsignacion> {
     
-    const aulas = await this.asignacionService.obtenerAulasParaAsignacion(turno.codigo);
+    const aulas = await this.asignacionService.obtenerAulasParaAsignacion(turno.id || turno.codigo);
+    const aulasFisicas = turno.id ? await this.obtenerAulasFisicasDisponibles(turno.id) : [];
     
     const solicitud: SolicitudInscripcion = {
       grado: this.normalizarGrado(estudiante.grado),
@@ -55,7 +59,7 @@ export class AsignacionPreviewService {
     let resultado: ResultadoSimulacion;
     
     if (modo === 'normal') {
-      resultado = this.engine.simularNormal(aulas, solicitud);
+      resultado = this.engine.simularNormal(aulas, solicitud, aulasFisicas);
     } else {
       resultado = this.engine.simularContingencia(aulas, solicitud);
     }
@@ -68,7 +72,7 @@ export class AsignacionPreviewService {
         codigoAula: resultado.aulaSugerida?.codigo,
         espacioDisponible: resultado.aulaSugerida?.espacioDisponible || 0,
         inscritosActuales: resultado.aulaSugerida?.inscritosActuales || 0,
-        capacidad: resultado.aulaSugerida?.capacidad || 30,
+        capacidad: resultado.aulaSugerida?.capacidad ?? 30,
         mensaje: resultado.mensaje || (resultado.exito ? `Aula asignada: ${resultado.aulaSugerida?.codigo || 'Nueva aula'}` : 'No se puede asignar'),
         exito: resultado.exito
       }
@@ -85,7 +89,8 @@ export class AsignacionPreviewService {
   ): Promise<PreviewAsignacion[]> {
     
     const modo = await this.turnoGestion.determinarModoActual(turno);
-    const aulas = await this.asignacionService.obtenerAulasParaAsignacion(turno.codigo);
+    const aulas = await this.asignacionService.obtenerAulasParaAsignacion(turno.id || turno.codigo);
+    const aulasFisicas = turno.id ? await this.obtenerAulasFisicasDisponibles(turno.id) : [];
     
     const previews: PreviewAsignacion[] = [];
 
@@ -100,7 +105,7 @@ export class AsignacionPreviewService {
       let resultado: ResultadoSimulacion;
       
       if (modo === 'normal') {
-        resultado = this.engine.simularNormal(aulas, solicitud);
+        resultado = this.engine.simularNormal(aulas, solicitud, aulasFisicas);
       } else {
         resultado = this.engine.simularContingencia(aulas, solicitud);
       }
@@ -115,13 +120,18 @@ export class AsignacionPreviewService {
             aula.porColegio[colegioId] = (aula.porColegio[colegioId] || 0) + asig.cantidad;
           }
         } else {
+          const aulaFisicaId = resultado.aulaSugerida?.aulaFisicaId;
+          const indiceFisica = aulasFisicas.findIndex(a => a.id === aulaFisicaId);
+          const aulaFisica = indiceFisica >= 0 ? aulasFisicas.splice(indiceFisica, 1)[0] : undefined;
           aulas.push({
             id: '__NUEVA_SIM__',
             grado: this.normalizarGrado(estudiante.grado),
+            codigo: aulaFisica?.codigo,
             nivel: estudiante.nivel as 'Primaria' | 'Secundaria',
-            capacidad: 30,
+          capacidad: aulaFisica?.capacidad ?? 30,
             estudiantes: 1,
-            porColegio: { [colegioId]: 1 }
+            porColegio: { [colegioId]: 1 },
+            gradosPermitidos: aulaFisica?.gradosPermitidos
           });
         }
       }
@@ -134,7 +144,7 @@ export class AsignacionPreviewService {
           codigoAula: resultado.aulaSugerida?.codigo,
           espacioDisponible: resultado.aulaSugerida?.espacioDisponible || 0,
           inscritosActuales: resultado.aulaSugerida?.inscritosActuales || 0,
-          capacidad: resultado.aulaSugerida?.capacidad || 30,
+          capacidad: resultado.aulaSugerida?.capacidad ?? 30,
           mensaje: resultado.mensaje || (resultado.exito ? 'Listo para asignar' : 'No se puede asignar'),
           exito: resultado.exito
         }
@@ -155,5 +165,17 @@ export class AsignacionPreviewService {
     };
     
     return mapaNumeros[numero] || grado;
+  }
+
+  private async obtenerAulasFisicasDisponibles(turnoId: string): Promise<AulaFisicaDisponible[]> {
+    const aulas = await this.turnoAulaService.obtenerAulasDisponibles(turnoId);
+    return aulas
+      .filter(aula => !!aula.id)
+      .map(aula => ({
+        id: aula.id!,
+        codigo: aula.codigo,
+        capacidad: aula.capacidad,
+        gradosPermitidos: aula.gradosPermitidos
+      }));
   }
 }

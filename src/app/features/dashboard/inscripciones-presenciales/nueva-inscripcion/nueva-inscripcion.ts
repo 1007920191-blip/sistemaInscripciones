@@ -510,14 +510,15 @@ export class NuevaInscripcion implements OnInit {
         return;
       }
 
+      const gruposPorTurno = new Map<string, { turno: Turno; entradas: { indice: number; estudiante: Estudiante }[] }>();
+      const previewsPorIndice = new Map<number, PreviewAsignacion>();
+
       for (const i of indices) {
         const estudiante = this.estudiantesRegistrados[i];
-        
-        // Buscar turno para este estudiante específico
         const turno = await this.obtenerTurnoParaEstudiante(estudiante);
-        
+
         if (!turno) {
-          this.previewAsignaciones.push({
+          previewsPorIndice.set(i, {
             estudiante,
             modo: 'normal',
             sugerencia: {
@@ -531,22 +532,30 @@ export class NuevaInscripcion implements OnInit {
           continue;
         }
 
-        // Guardar turno encontrado
         this.turnosPorEstudiante.set(i, turno);
-
-        // Determinar modo del turno
-        const modo = await this.turnoGestion.determinarModoActual(turno);
-
-        // Generar preview para este estudiante en su turno
-        const preview = await this.previewService.generarPreviewParaEstudiante(
-          turno,
-          estudiante,
-          this.colegioSeleccionado.CODIGOMODULAR,
-          modo
-        );
-
-        this.previewAsignaciones.push(preview);
+        const claveTurno = String(turno.id || turno.codigo);
+        const grupo = gruposPorTurno.get(claveTurno) || { turno, entradas: [] };
+        grupo.entradas.push({ indice: i, estudiante });
+        gruposPorTurno.set(claveTurno, grupo);
       }
+
+      // Simular por turno y en el mismo orden de registro, compartiendo el
+      // estado acumulado de aulas que actualiza AsignacionPreviewService.
+      for (const grupo of gruposPorTurno.values()) {
+        const previews = await this.previewService.generarPreview(
+          grupo.turno,
+          grupo.entradas.map(entrada => entrada.estudiante),
+          this.colegioSeleccionado.CODIGOMODULAR
+        );
+        grupo.entradas.forEach((entrada, posicion) => {
+          const preview = previews[posicion];
+          if (preview) previewsPorIndice.set(entrada.indice, preview);
+        });
+      }
+
+      this.previewAsignaciones = indices
+        .map(i => previewsPorIndice.get(i))
+        .filter((preview): preview is PreviewAsignacion => !!preview);
 
       // Determinar modo global
       const primerExito = this.previewAsignaciones.find(p => p.sugerencia.exito);
@@ -622,7 +631,8 @@ export class NuevaInscripcion implements OnInit {
         }
         return clean;
       }),
-      estado: estadoFinal,
+      // La inscripción nueva permanece pendiente hasta confirmar todas las aulas.
+      estado: this.modoEdicion ? estadoFinal : 'pendiente',
       turnoId: '',
       turnoCodigo: '',
       asignacionesAula: [],
@@ -866,6 +876,7 @@ export class NuevaInscripcion implements OnInit {
       turnoCodigoFinal = inscripcionData.turnoCodigo || '';
     }
     await this.inscripcionService.actualizarInscripcion(inscripcionId, {
+      estado: fallidos.length === 0 ? estadoFinal : 'pendiente',
       turnoId: turnoIdFinal,
       turnoCodigo: turnoCodigoFinal,
       asignacionesAula: asignacionesAula,
@@ -877,6 +888,10 @@ export class NuevaInscripcion implements OnInit {
       inicioInscripcion: (inscripcionData as any).inicioInscripcion,
       finInscripcion: (inscripcionData as any).finInscripcion
     });
+
+    if (fallidos.length > 0) {
+      alert(`La inscripción quedó pendiente porque no se pudo asignar aula a todos los estudiantes.\n\n${fallidos.join('\n')}`);
+    }
 
     // 4. MOSTRAR RESULTADO Y CERRAR
     console.log('Guardado exitoso, cerrando...');

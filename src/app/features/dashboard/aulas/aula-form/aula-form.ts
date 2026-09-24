@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AulaService } from '../../../../services/aula.service';
 import { Aula } from '../../../../models/aula.model';
+import { GRADOS_POR_NIVEL, NIVELES } from '../../../../models/turno.model';
 
 @Component({
   selector: 'app-aula-form',
@@ -12,6 +13,9 @@ import { Aula } from '../../../../models/aula.model';
   styleUrls: ['./aula-form.css']
 })
 export class AulaFormComponent {
+  readonly niveles = NIVELES;
+  readonly gradosPorNivel = GRADOS_POR_NIVEL;
+
   @Input() set aula(value: Aula | undefined) {
     if (value) {
       this.aulaForm = { ...value };
@@ -39,6 +43,18 @@ export class AulaFormComponent {
   constructor(private aulaService: AulaService) {}
 
   cargando = false;
+
+  gradoPermitidoSeleccionado(nivel: string, grado: string): boolean {
+    return this.aulaForm.gradosPermitidos?.includes(this.valorGradoPermitido(nivel, grado)) ?? false;
+  }
+
+  cambiarGradoPermitido(nivel: string, grado: string, seleccionado: boolean) {
+    const valor = this.valorGradoPermitido(nivel, grado);
+    const actuales = new Set(this.aulaForm.gradosPermitidos ?? []);
+    seleccionado ? actuales.add(valor) : actuales.delete(valor);
+    // Una vez que se usa este control, [] es una configuración intencional.
+    this.aulaForm.gradosPermitidos = Array.from(actuales);
+  }
 
   async onSubmit() {
     if (this.cargando) return;
@@ -107,5 +123,9 @@ export class AulaFormComponent {
       piso: 1,
       puertaAcceso: ''
     };
+  }
+
+  private valorGradoPermitido(nivel: string, grado: string): string {
+    return `${grado} ${nivel}`.toUpperCase();
   }
 }

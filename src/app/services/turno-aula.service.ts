@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
-import { Firestore, collection, doc, getDocs, query, where, addDoc, updateDoc, deleteDoc, onSnapshot, Unsubscribe } from '@angular/fire/firestore';
+import { Firestore, collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc, deleteDoc, onSnapshot, Unsubscribe } from '@angular/fire/firestore';
 import { Aula } from '../models/aula.model';
 import { TurnoAulaAsignada, AulaTurnoDisplay } from '../models/turno.model';
+import { esCompatibleConGradosPermitidos } from '../core/asignacion/grados-permitidos';
 
 @Injectable({
   providedIn: 'root'
@@ -11,6 +12,25 @@ export class TurnoAulaService {
 
   constructor(private firestore: Firestore) {
     this.turnosEdicionRef = collection(this.firestore, 'turnosedicion');
+  }
+
+  private async aplicarCapacidadMaestra(aulas: AulaTurnoDisplay[]): Promise<AulaTurnoDisplay[]> {
+    const ids = [...new Set(aulas.map(aula => aula.aulaId).filter(Boolean))];
+    const capacidades = new Map<string, number>();
+
+    await Promise.all(ids.map(async aulaId => {
+      const snapshot = await getDoc(doc(this.firestore, 'aulas', aulaId));
+      if (!snapshot.exists()) return;
+      const capacidad = (snapshot.data() as Aula).capacidad;
+      if (typeof capacidad === 'number' && Number.isFinite(capacidad) && capacidad >= 0) {
+        capacidades.set(aulaId, capacidad);
+      }
+    }));
+
+    return aulas.map(aula => ({
+      ...aula,
+      capacidad: capacidades.get(aula.aulaId) ?? aula.capacidad
+    }));
   }
 
   // Asignar una nueva aula a un turno
@@ -36,7 +56,7 @@ export class TurnoAulaService {
       
       const snapshot = await getDocs(q);
       
-      return snapshot.docs.map(doc => {
+      const aulas = snapshot.docs.map(doc => {
         const data = doc.data() as TurnoAulaAsignada;
         return {
           id: doc.id,
@@ -54,6 +74,7 @@ export class TurnoAulaService {
           turnoId: data.turnoId
         } as AulaTurnoDisplay;
       });
+      return await this.aplicarCapacidadMaestra(aulas);
     } catch (error) {
       console.error('Error en obtenerAulasPorTurno:', error);
       throw error;
@@ -62,15 +83,21 @@ export class TurnoAulaService {
 
   // Escuchar aulas asignadas a un turno en tiempo real
   escucharAulasPorTurno(turnoId: string, callback: (aulas: AulaTurnoDisplay[]) => void, turnoCodigo?: string): Unsubscribe {
-    return onSnapshot(this.turnosEdicionRef, (snapshot) => {
-      const aulas = snapshot.docs.map(doc => {
-        const data = doc.data() as any;
+    let documentosOperativos: { id: string; data: any }[] = [];
+    let capacidadesMaestras = new Map<string, number>();
+    let operativasListas = false;
+    let maestrasListas = false;
+
+    const publicar = () => {
+      if (!operativasListas || !maestrasListas) return;
+      const aulas = documentosOperativos.map(({ id, data }) => {
+        const capacidadMaestra = capacidadesMaestras.get(String(data.aulaId || ''));
         return {
-          id: doc.id,
+          id,
           aulaId: data.aulaId,
           codigoAula: data.codigoAula,
           inscritos: data.inscritos || 0,
-          capacidad: data.capacidad,
+          capacidad: capacidadMaestra ?? data.capacidad,
           grado: data.grado,
           nivel: data.nivel,
           local: data.local,
@@ -87,13 +114,38 @@ export class TurnoAulaService {
         return matchId || matchCodigo;
       });
       callback(aulas);
+    };
+
+    const unsubscribeOperativas = onSnapshot(this.turnosEdicionRef, (snapshot) => {
+      documentosOperativos = snapshot.docs.map(documento => ({ id: documento.id, data: documento.data() }));
+      operativasListas = true;
+      publicar();
     }, (error) => {
       console.error('Error en escucharAulasPorTurno:', error);
     });
+
+    const unsubscribeMaestras = onSnapshot(collection(this.firestore, 'aulas'), (snapshot) => {
+      capacidadesMaestras = new Map();
+      for (const aula of snapshot.docs) {
+        const capacidad = (aula.data() as Aula).capacidad;
+        if (typeof capacidad === 'number' && Number.isFinite(capacidad) && capacidad >= 0) {
+          capacidadesMaestras.set(aula.id, capacidad);
+        }
+      }
+      maestrasListas = true;
+      publicar();
+    }, (error) => {
+      console.error('Error en escucharAulasPorTurno:', error);
+    });
+
+    return (() => {
+      unsubscribeOperativas();
+      unsubscribeMaestras();
+    }) as Unsubscribe;
   }
 
   // Obtener aulas disponibles (las que no están asignadas a este turno)
-  async obtenerAulasDisponibles(turnoId: string): Promise<Aula[]> {
+  async obtenerAulasDisponibles(turnoId: string, grado?: string, nivel?: string): Promise<Aula[]> {
     try {
       const aulasSnapshot = await getDocs(collection(this.firestore, 'aulas'));
       const aulas = aulasSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Aula));
@@ -101,7 +153,10 @@ export class TurnoAulaService {
       const asignadas = await this.obtenerAulasPorTurno(turnoId);
       const asignadasIds = new Set(asignadas.map(a => a.aulaId));
 
-      return aulas.filter(a => !asignadasIds.has(a.id!));
+      return aulas.filter(a =>
+        !asignadasIds.has(a.id!) &&
+        (!grado || !nivel || esCompatibleConGradosPermitidos(a.gradosPermitidos, grado, nivel))
+      );
     } catch (error) {
       console.error('Error en obtenerAulasDisponibles:', error);
       throw error;

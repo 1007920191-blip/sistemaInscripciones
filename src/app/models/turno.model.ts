@@ -28,10 +28,10 @@ export interface NivelGrado {
 
 export const NIVELES = ['Primaria', 'Secundaria'] as const;
 
-export const GRADOS_POR_NIVEL = {
+export const GRADOS_POR_NIVEL: Record<'Primaria' | 'Secundaria', string[]> = {
   'Primaria': ['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto', 'Sexto'],
   'Secundaria': ['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto']
-} as const;
+};
 
 export interface TurnoAulaAsignada {
   id?: string;
@@ -49,6 +49,7 @@ export interface TurnoAulaAsignada {
   sede: string;              // ANDAHUAYLAS
   // NUEVO: Para restricción 50% por colegio
   porColegio?: Record<string, number>;
+  gradosPermitidos?: string[];
 
   fechaCreacion?: Date;
   fechaActualizacion?: Date;
