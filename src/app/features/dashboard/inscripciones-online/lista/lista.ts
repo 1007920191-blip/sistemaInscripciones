@@ -94,6 +94,24 @@ export class ListaO implements OnInit {
     this.cargando = true;
     await this.cargarInscripciones();
     this.cargando = false;
+    // Control de "Ver resultados": lo decide la configuración del sistema presencial.
+    this.resultadosHabilitados = await this.leerPermisoResultados();
+  }
+
+  // --- Control de "Ver resultados" (configuración `configuraciones/general.publicarResultados`) ---
+  resultadosHabilitados = false;
+
+  /**
+   * Lee la configuración compartida (mismo Firebase que la app presencial/online).
+   * Fuente única de verdad: `publicarResultados`. Si no se puede leer, se bloquea.
+   */
+  private async leerPermisoResultados(): Promise<boolean> {
+    try {
+      const config: any = await this.configuracionService.obtenerConfiguracion();
+      return config?.publicarResultados === true;
+    } catch {
+      return false;
+    }
   }
 
   async cargarInscripciones() {
@@ -979,6 +997,10 @@ export class ListaO implements OnInit {
   }
 
   async enviarWhatsapp(ins: Inscripcion): Promise<void> {
+    if (!(await this.leerPermisoResultados())) {
+      alert('La opción "Publicar Resultados" está desactivada en la configuración. Actívela para poder enviar el enlace de resultados.');
+      return;
+    }
     const telRaw = String((ins as any).telefonoApoderado || '').replace(/\D/g, '');
     if (!telRaw) { alert('No hay teléfono del apoderado registrado'); return; }
     const telefono = telRaw.startsWith('51') ? telRaw : `51${telRaw}`;
@@ -1002,6 +1024,19 @@ export class ListaO implements OnInit {
   }
 
   enviarWhatsappEstudiante(est: Estudiante): void {
+    const ins: any = this.inscripcionParaLista;
+    if (!ins) return;
+    // El envío del enlace de resultados depende de la configuración (se re-verifica aquí).
+    void this.leerPermisoResultados().then(permitido => {
+      if (!permitido) {
+        alert('La opción "Publicar Resultados" está desactivada en la configuración. Actívela para poder enviar el enlace de resultados.');
+        return;
+      }
+      this.enviarWhatsappEstudianteConPermiso(est);
+    });
+  }
+
+  private enviarWhatsappEstudianteConPermiso(est: Estudiante): void {
     const ins: any = this.inscripcionParaLista;
     if (!ins) return;
     const telRaw = String(ins.telefonoApoderado || '').replace(/\D/g, '');
@@ -1129,6 +1164,10 @@ export class ListaO implements OnInit {
       if (estudiantes.length===0) { alert('No hay estudiantes para validar.'); this.validando=false; return; }
       const turnos = await this.turnoService.obtenerTurnos();
       const asignacionesAula: any[] = [];
+      // Plazas que SI se reservaron (incrementaron turnosedicion) en esta
+      // ejecucion. El rollback debe liberar unicamente estas: una asignacion
+      // preexistente reutilizada arriba no se incremento ahora.
+      const asignacionesReservadas: any[] = [];
       let primerTurnoId = '';
       let primerTurnoCodigo = '';
       const colegioId = (ins.colegio as any)?.CODIGOMODULAR || (ins.colegio as any)?.codigoModular || '';
@@ -1160,8 +1199,8 @@ export class ListaO implements OnInit {
         }
         const turno = await this.obtenerTurnoParaEstudianteValidar(est, turnos);
         if (!turno) {
-          if (asignacionesAula.length) {
-            await this.asignacionService.liberarEstudiantes(asignacionesAula.map(a => ({ aulaId: a.aulaId, colegioId })));
+          if (asignacionesReservadas.length) {
+            await this.asignacionService.liberarEstudiantes(asignacionesReservadas.map(a => ({ aulaId: a.aulaId, colegioId })));
           }
           alert(`No hay turno para ${est.nombres} ${est.apellidos} (${est.grado} ${est.nivel})`);
           this.validando=false; return;
@@ -1171,8 +1210,8 @@ export class ListaO implements OnInit {
         const resultado = await this.asignacionService.asignarEstudiantes(turno, [est], colegioId, modo);
         if (!resultado.exito || resultado.asignaciones.length===0) {
           const razon = resultado.fallidos[0]?.razon || 'Error desconocido';
-          if (asignacionesAula.length) {
-            await this.asignacionService.liberarEstudiantes(asignacionesAula.map(a => ({ aulaId: a.aulaId, colegioId })));
+          if (asignacionesReservadas.length) {
+            await this.asignacionService.liberarEstudiantes(asignacionesReservadas.map(a => ({ aulaId: a.aulaId, colegioId })));
           }
           alert(`No se pudo asignar aula para ${est.nombres}: ${razon}`);
           this.validando=false; return;
@@ -1181,7 +1220,9 @@ export class ListaO implements OnInit {
         (est as any).aulaAsignadaId = asig.aulaId;
         (est as any).codigoAula = asig.codigoAula;
         (est as any).turnoCodigo = turno.codigo;
-        asignacionesAula.push({ estudianteIndex: i, estudianteNombre: `${est.nombres} ${est.apellidos}`, aulaId: asig.aulaId, codigoAula: asig.codigoAula, grado: est.grado, nivel: est.nivel, turnoCodigo: turno.codigo });
+        const asignacionReservada = { estudianteIndex: i, estudianteNombre: `${est.nombres} ${est.apellidos}`, aulaId: asig.aulaId, codigoAula: asig.codigoAula, grado: est.grado, nivel: est.nivel, turnoCodigo: turno.codigo };
+        asignacionesAula.push(asignacionReservada);
+        asignacionesReservadas.push(asignacionReservada);
       }
       for (const est of estudiantes) { await this.inscripcionService.guardarEstudiante(est, ins.id!); }
       await this.inscripcionService.actualizarInscripcion(ins.id!, { estado: 'completada', asignacionesAula, turnoId: primerTurnoId, turnoCodigo: primerTurnoCodigo, estudiantes });

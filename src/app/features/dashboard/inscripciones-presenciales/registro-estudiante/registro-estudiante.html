@@ -29,7 +29,7 @@
     <div class="fila">
       <div class="campo">
         <label>TIPO DE DOCUMENTO *</label>
-        <select [(ngModel)]="estudiante.tipoDocumento" name="tipoDocumento" required>
+        <select [(ngModel)]="estudiante.tipoDocumento" name="tipoDocumento" required (change)="onTipoDocumentoChange()">
           <option value="">Seleccione...</option>
           <option *ngFor="let tipo of tiposDocumento" [value]="tipo.id">{{tipo.nombre}}</option>
         </select>
@@ -46,7 +46,14 @@
           pattern="[0-9]*"
           maxlength="12"
           (input)="onDocumentoInput($event)"
+          (blur)="consultarPersonaAlPerderFoco()"
           (keypress)="soloNumeros($event)">
+        <small *ngIf="buscandoPersona" class="persona-aviso buscando">Buscando persona...</small>
+        <small *ngIf="!buscandoPersona && mensajePersona"
+               class="persona-aviso"
+               [class.ok]="estadoPersona === 'encontrada'"
+               [class.no-encontrada]="estadoPersona === 'no-encontrada'"
+               [class.error]="estadoPersona === 'error'">{{ mensajePersona }}</small>
       </div>
     </div>
 

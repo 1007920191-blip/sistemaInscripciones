@@ -157,3 +157,9 @@
   font-weight: bold;
   color: #333;
 }
+/* Aviso de la consulta automática de personas (colección `personas`) */
+.persona-aviso { display:block; margin-top:6px; font-size:12px; line-height:1.35; }
+.persona-aviso.buscando { color:#6b7280; }
+.persona-aviso.ok { color:#15803d; font-weight:600; }
+.persona-aviso.no-encontrada { color:#b45309; }
+.persona-aviso.error { color:#b91c1c; }

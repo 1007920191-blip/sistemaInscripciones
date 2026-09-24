@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChange
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Estudiante } from '../../../../models/inscripcion.model';
+import { PersonasService } from '../../../../services/personas.service';
 
 @Component({
   selector: 'app-registro-estudiante',
@@ -37,6 +38,15 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
 
   estudiante!: Estudiante;
   procesando = false;
+
+  // --- Consulta automática de personas por documento (colección `personas`) ---
+  buscandoPersona = false;
+  mensajePersona = '';
+  estadoPersona: 'inactivo' | 'encontrada' | 'no-encontrada' | 'error' = 'inactivo';
+  private personaTimer: any = null;
+  private personaAutocompletada: { numero: string; nombres: string; apellidos: string } | null = null;
+
+  constructor(private personasService: PersonasService) {}
 
   // ✅ DEBUG: Para mostrar en pantalla qué está pasando
   debugInfo = {
@@ -78,6 +88,12 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
 
   private cargarEstudiante() {
     this.procesando = false;
+    // Al cambiar de estudiante se reinicia el estado de la consulta de personas.
+    this.mensajePersona = '';
+    this.estadoPersona = 'inactivo';
+    this.buscandoPersona = false;
+    this.personaAutocompletada = null;
+    if (this.personaTimer) { clearTimeout(this.personaTimer); this.personaTimer = null; }
     const ed: any = this.estudianteEdicion as any;
     if (this.slotNuevo) {
       // Un slot agregado no representa un documento existente. Esta bandera
@@ -218,6 +234,92 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
     else if (this.estudiante.tipoDocumento === 'ce') v = v.replace(/\D/g, '').slice(0, 12);
     e.target.value = v;
     this.estudiante.numeroDocumento = v;
+    this.programarBusquedaPersona();
+  }
+
+  /** El tipo de documento cambió: se reinicia el estado de la consulta. */
+  onTipoDocumentoChange() {
+    this.mensajePersona = '';
+    this.estadoPersona = 'inactivo';
+    this.limpiarAutocompletadoSiCorresponde();
+  }
+
+  /** Al salir del campo se consulta de inmediato (cubre tipos de longitud libre). */
+  consultarPersonaAlPerderFoco() {
+    if (this.personaTimer) { clearTimeout(this.personaTimer); this.personaTimer = null; }
+    void this.consultarPersona();
+  }
+
+  /**
+   * Programa la consulta en la colección `personas` SOLO cuando el número ya
+   * tiene una longitud válida para su tipo y el usuario dejó de teclear. Así
+   * nunca se hace una consulta por cada tecla.
+   */
+  private programarBusquedaPersona() {
+    const numero = String(this.estudiante.numeroDocumento || '').trim();
+    this.mensajePersona = '';
+    this.estadoPersona = 'inactivo';
+    this.limpiarAutocompletadoSiCorresponde();
+
+    if (this.personaTimer) { clearTimeout(this.personaTimer); this.personaTimer = null; }
+    if (!this.personasService.longitudSuficiente(this.estudiante.tipoDocumento, numero)) return;
+
+    this.personaTimer = setTimeout(() => {
+      this.personaTimer = null;
+      void this.consultarPersona();
+    }, 450);
+  }
+
+  private async consultarPersona() {
+    const numero = String(this.estudiante.numeroDocumento || '').trim();
+    if (!numero) return;
+    if (!this.personasService.longitudSuficiente(this.estudiante.tipoDocumento, numero)) return;
+    // Ya resuelto para este mismo documento: no se repite la consulta.
+    if (this.estadoPersona === 'encontrada' && this.personaAutocompletada?.numero === numero) return;
+
+    this.buscandoPersona = true;
+    const resultado = await this.personasService.buscarPorDocumento(numero);
+    this.buscandoPersona = false;
+
+    // Si el documento cambió mientras se consultaba, se descarta el resultado.
+    if (String(this.estudiante.numeroDocumento || '').trim() !== numero) return;
+
+    if (resultado.estado === 'encontrada') {
+      const { nombres, apellidos, tipoDocumentoId } = resultado.persona;
+      this.estudiante.nombres = nombres;
+      this.estudiante.apellidos = apellidos;
+      // El tipo de documento solo se ajusta si corresponde a una opción del formulario.
+      if (tipoDocumentoId && tipoDocumentoId !== this.estudiante.tipoDocumento) {
+        this.estudiante.tipoDocumento = tipoDocumentoId;
+      }
+      this.personaAutocompletada = { numero, nombres, apellidos };
+      this.estadoPersona = 'encontrada';
+      this.mensajePersona = `✓ Persona encontrada: ${nombres} ${apellidos}`;
+      return;
+    }
+
+    if (resultado.estado === 'no-encontrada') {
+      this.estadoPersona = 'no-encontrada';
+      this.mensajePersona = 'No se encontró una persona registrada con ese documento. Puede continuar escribiendo los datos manualmente.';
+      return;
+    }
+
+    this.estadoPersona = 'error';
+    this.mensajePersona = 'No se pudo consultar la persona registrada. Puede continuar escribiendo los datos manualmente.';
+  }
+
+  /**
+   * Si el documento cambió, borra los datos que vinieron de la persona anterior
+   * (solo si el operador no los modificó a mano).
+   */
+  private limpiarAutocompletadoSiCorresponde() {
+    const auto = this.personaAutocompletada;
+    if (!auto) return;
+    const numero = String(this.estudiante.numeroDocumento || '').trim();
+    if (auto.numero === numero) return;
+    if (String(this.estudiante.nombres || '').trim() === auto.nombres) this.estudiante.nombres = '';
+    if (String(this.estudiante.apellidos || '').trim() === auto.apellidos) this.estudiante.apellidos = '';
+    this.personaAutocompletada = null;
   }
   validarFormulario(): boolean {
     if (!this.estudiante.tipoDocumento) {

@@ -17,7 +17,7 @@ import { Turno, TurnoAulaAsignada, ModoAsignacion } from '../models/turno.model'
 import { Estudiante } from '../models/inscripcion.model';
 import { Aula } from '../models/aula.model';
 import { AsignacionEngine, AulaAsignable, SolicitudInscripcion } from '../core/asignacion/asignacion-engine';
-import { esCompatibleConGradosPermitidos } from '../core/asignacion/grados-permitidos';
+import { esCompatibleConGradosPermitidos, gradosPermitidosEfectivos } from '../core/asignacion/grados-permitidos';
 
 const db = getFirestore(firebaseApp);
 
@@ -62,6 +62,33 @@ export class AsignacionService {
     return typeof valor === 'number' && Number.isFinite(valor) && valor >= 0
       ? valor
       : undefined;
+  }
+
+  /**
+   * Grados permitidos efectivos de una copia operacional (colección turnosedicion).
+   *
+   * - Copia con el campo definido (incluido []): se respeta tal cual, es el
+   *   snapshot que tenía cuando fue creada.
+   * - Copia sin el campo (creada antes de esta funcionalidad): se consulta el
+   *   aula maestra solo para decidir compatibilidad. Es una lectura dentro de la
+   *   transacción: no se escribe nada y no se convierte undefined en [].
+   * - Si la maestra tampoco lo define, se devuelve undefined (legacy).
+   */
+  private async obtenerGradosPermitidosParaOperacion(
+    transaction: any,
+    aulaOperacion: TurnoAulaAsignada
+  ): Promise<string[] | undefined> {
+    if (aulaOperacion.gradosPermitidos !== undefined) {
+      return aulaOperacion.gradosPermitidos;
+    }
+    if (!aulaOperacion.aulaId) return undefined;
+
+    const aulaMaestra = await transaction.get(doc(db, 'aulas', aulaOperacion.aulaId));
+    const gradosMaestra = aulaMaestra.exists()
+      ? (aulaMaestra.data() as Aula).gradosPermitidos
+      : undefined;
+
+    return gradosPermitidosEfectivos(undefined, gradosMaestra);
   }
 
   private async obtenerCapacidadMaestraEnTransaccion(
@@ -123,10 +150,10 @@ export class AsignacionService {
                 gradoAula === gradoEstudiante &&
                 data.nivel?.toLowerCase() === estudiante.nivel?.toLowerCase() &&
                 esCompatibleConGradosPermitidos(
-  data.gradosPermitidos,
-  gradoEstudiante,
-  estudiante.nivel
-)
+                  await this.obtenerGradosPermitidosParaOperacion(transaction, data),
+                  gradoEstudiante,
+                  estudiante.nivel
+                )
               ) {
                 aulasDelGrado.push({ ref: aula.ref, data });
               }
@@ -414,9 +441,11 @@ export class AsignacionService {
     const snapshot = await getDocs(q);
     const aulasMaestras = await getDocs(collection(db, 'aulas'));
     const capacidadesMaestras = new Map<string, number>();
+    const gradosPermitidosMaestros = new Map<string, string[] | undefined>();
     for (const aula of aulasMaestras.docs) {
       const capacidad = this.capacidadValida(aula.data()['capacidad']);
       if (capacidad !== undefined) capacidadesMaestras.set(aula.id, capacidad);
+      gradosPermitidosMaestros.set(aula.id, (aula.data() as Aula).gradosPermitidos);
     }
     
     return snapshot.docs.map(d => {
@@ -430,7 +459,8 @@ export class AsignacionService {
     capacidad: capacidadesMaestras.get(data.aulaId) ?? this.capacidadValida(data.capacidad) ?? 30,
     estudiantes: data.inscritos,
     porColegio: data.porColegio || {},
-    gradosPermitidos: data.gradosPermitidos
+    // Misma resolución que la asignación real: copia sin campo -> maestra actual.
+    gradosPermitidos: gradosPermitidosEfectivos(data.gradosPermitidos, gradosPermitidosMaestros.get(data.aulaId))
   };
 });
   }

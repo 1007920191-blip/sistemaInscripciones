@@ -755,6 +755,11 @@ export class NuevaInscripcion implements OnInit {
           } else {
             fallidos.push(`${estudiante.nombres}: ${resultado.fallidos[0]?.razon || 'sin aula'}`);
             (estudiante as any).turnoCodigo = turno.codigo;
+            // La plaza anterior ya fue liberada arriba: no dejar el aula vieja
+            // apuntando al estudiante. Si no, una edición posterior volvería a
+            // liberar la misma plaza y descuadraría el contador de turnosedicion.
+            (estudiante as any).aulaAsignadaId = '';
+            (estudiante as any).codigoAula = '';
           }
         } catch(e:any){ fallidos.push(`${estudiante.nombres}: ${e.message}`); }
         await this.inscripcionService.guardarEstudiante({ ...estudiante, colegio: this.colegioSeleccionado } as any, inscripcionId);

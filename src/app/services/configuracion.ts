@@ -74,6 +74,7 @@ export class ConfiguracionService {
         telefonoYape: data['telefonoYape'] || '',
         titularYape: data['titularYape'] || data['nombreYape'] || '',
         nombreCompletoTitularYape: data['nombreCompletoTitularYape'] || data['titularYape'] || '',
+        publicarResultados: data['publicarResultados'] === true,
         fechaActualizacion: data['fechaActualizacion']?.toDate?.() || new Date()
       } as Configuracion;
     }
@@ -120,11 +121,13 @@ export class ConfiguracionService {
       telefonoYape: (config as any).telefonoYape || '',
       titularYape: (config as any).titularYape || '',
       nombreCompletoTitularYape: (config as any).nombreCompletoTitularYape || '',
+      publicarResultados: config.publicarResultados === true,
       fechaActualizacion: Timestamp.now()
     };
     
     console.log('✅ Service: Guardando datos en configuraciones/general:', data); // ← DEBUG
-    await setDoc(this.configRef, data);
+    // merge: true -> no se borran los campos que escribe la app online (p. ej. publicarResultados).
+    await setDoc(this.configRef, data, { merge: true });
     console.log('✅ Service: Datos guardados en configuraciones/general'); // ← DEBUG
   } catch (error) {
     console.error('❌ Service: Error al guardar:', error); // ← DEBUG

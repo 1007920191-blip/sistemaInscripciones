@@ -104,6 +104,10 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
   private todasLasInscripciones: any[] = [];
   private inscripcionesActuales: any[] = [];
   private todasLasAulasActuales: AulaTurnoDisplay[] = [];
+  // Control del recálculo automático de contadores: una vez por turno y por visita,
+  // sin repetirse si ya está en curso.
+  private recalculoEnCurso = false;
+  private turnosRecalculados = new Set<string>();
 
   constructor(
     private turnoAulaService: TurnoAulaService,
@@ -117,12 +121,44 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
   async ngOnInit() {
     this.actualizarGradosDelTurno();
     await this.cargarAulasAsignadas();
+    await this.recalcularInscritosDelTurno();
   }
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['turno'] && !changes['turno'].firstChange) {
       this.actualizarGradosDelTurno();
       this.cargarAulasAsignadas();
+      this.recalcularInscritosDelTurno();
+    }
+  }
+
+  /**
+   * Deja al día los contadores (INSCRITOS / reparto por colegio) de las aulas de
+   * este turno, contando a los alumnos realmente asignados. Es el respaldo para
+   * que un borrado hecho por fuera de la app (consola de Firebase, borrado del
+   * aula maestra, etc.) no deje el número descuadrado para siempre.
+   *
+   * Se ejecuta una sola vez por turno y por visita. Si los números ya están
+   * correctos no escribe nada.
+   */
+  private async recalcularInscritosDelTurno() {
+    const turnoId = String(this.turno?.id || '').trim();
+    if (!turnoId || this.recalculoEnCurso || this.turnosRecalculados.has(turnoId)) return;
+
+    this.recalculoEnCurso = true;
+    try {
+      const resultado = await this.turnoAulaService.recalcularInscritosDelTurno(turnoId);
+      this.turnosRecalculados.add(turnoId);
+      if (resultado.cambiadas > 0) {
+        console.log(
+          `[turno-aulas] Contadores corregidos: ${resultado.cambiadas} de ${resultado.aulas} aulas ` +
+          `del turno ${turnoId} (${resultado.estudiantes} alumnos contados).`
+        );
+      }
+    } catch (error) {
+      console.warn('No se pudieron recalcular los inscritos del turno:', error);
+    } finally {
+      this.recalculoEnCurso = false;
     }
   }
 

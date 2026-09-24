@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Firestore, collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc, deleteDoc, onSnapshot, Unsubscribe } from '@angular/fire/firestore';
+import { Firestore, collection, doc, getDoc, getDocs, query, where, addDoc, updateDoc, deleteDoc, onSnapshot, runTransaction, Timestamp, Unsubscribe } from '@angular/fire/firestore';
 import { Aula } from '../models/aula.model';
 import { TurnoAulaAsignada, AulaTurnoDisplay } from '../models/turno.model';
 import { esCompatibleConGradosPermitidos } from '../core/asignacion/grados-permitidos';
@@ -201,5 +201,109 @@ export class TurnoAulaService {
       console.error('Error en verificarInscritos:', error);
       return true; // Por seguridad, si hay error asumimos que tiene inscritos
     }
+  }
+
+  /**
+   * Mantiene cuadrados los contadores de las aulas de un turno.
+   *
+   * Recalcula `inscritos` y `porColegio` de cada aula operativa del turno a partir
+   * de los alumnos realmente asignados (campo `aulaAsignadaId` de cada estudiante).
+   * Sirve para que el número no quede descuadrado cuando se borraron documentos por
+   * fuera de la app (consola de Firebase, borrar un aula maestra, etc.), casos en los
+   * que nadie ejecuta el +1/-1 de la asignación.
+   *
+   * Garantías:
+   * - Solo toca documentos de `turnosedicion` de ESTE turno.
+   * - Solo escribe el aula cuyo valor calculado difiere del guardado (si no difiere
+   *   no escribe nada, así que repetirlo no genera escrituras ni bucles).
+   * - Si el aula cambió entre el cálculo y la escritura, no la pisa.
+   * - Si no puede leer alguna inscripción, aborta antes de escribir nada.
+   */
+  async recalcularInscritosDelTurno(
+    turnoId: string
+  ): Promise<{ aulas: number; cambiadas: number; estudiantes: number }> {
+    const resultado = { aulas: 0, cambiadas: 0, estudiantes: 0 };
+    if (!turnoId) return resultado;
+
+    // 1) Aulas operativas del turno
+    const aulasSnap = await getDocs(
+      query(this.turnosEdicionRef, where('turnoId', '==', turnoId))
+    );
+    if (aulasSnap.empty) return resultado;
+
+    const aulas = aulasSnap.docs.map(documento => ({
+      ref: documento.ref,
+      data: documento.data() as TurnoAulaAsignada
+    }));
+    resultado.aulas = aulas.length;
+    const idsAulasDelTurno = new Set(aulasSnap.docs.map(documento => documento.id));
+
+    // 2) Conteo real: un estudiante asignado equivale a un cupo ocupado
+    const conteo = new Map<string, { total: number; porColegio: Record<string, number> }>();
+    const inscripcionesSnap = await getDocs(collection(this.firestore, 'inscripciones'));
+
+    for (const inscripcion of inscripcionesSnap.docs) {
+      const estudiantesSnap = await getDocs(
+        collection(this.firestore, 'inscripciones', inscripcion.id, 'estudiantes')
+      );
+      for (const estudianteDoc of estudiantesSnap.docs) {
+        const estudiante = estudianteDoc.data() as any;
+        const aulaId = String(estudiante?.aulaAsignadaId || '').trim();
+        // Ignora apuntes a aulas inexistentes o de otros turnos.
+        if (!aulaId || !idsAulasDelTurno.has(aulaId)) continue;
+
+        const colegioId = String(
+          estudiante?.colegio?.CODIGOMODULAR || estudiante?.colegio?.codigoModular || ''
+        ).trim();
+        const acumulado = conteo.get(aulaId) || { total: 0, porColegio: {} };
+        acumulado.total++;
+        if (colegioId) {
+          acumulado.porColegio[colegioId] = (acumulado.porColegio[colegioId] || 0) + 1;
+        }
+        conteo.set(aulaId, acumulado);
+        resultado.estudiantes++;
+      }
+    }
+
+    // 3) Escribir únicamente las aulas cuyo contador cambia
+    for (const aula of aulas) {
+      const nuevo = conteo.get(String(aula.ref.id)) || { total: 0, porColegio: {} };
+      const inscritosGuardados = Number(aula.data.inscritos || 0);
+      const porColegioGuardado = aula.data.porColegio || {};
+
+      if (
+        inscritosGuardados === nuevo.total &&
+        this.mismoPorColegio(porColegioGuardado, nuevo.porColegio)
+      ) {
+        continue;
+      }
+
+      const aplicado = await runTransaction(this.firestore, async (transaccion) => {
+        const actualSnap = await transaccion.get(aula.ref);
+        if (!actualSnap.exists()) return false;
+        const actual = actualSnap.data() as TurnoAulaAsignada;
+        // Si alguien lo cambió mientras calculábamos, no lo pisamos.
+        if (Number(actual.inscritos || 0) !== inscritosGuardados) return false;
+
+        transaccion.update(aula.ref, {
+          inscritos: nuevo.total,
+          porColegio: nuevo.porColegio,
+          fechaActualizacion: Timestamp.now()
+        });
+        return true;
+      });
+
+      if (aplicado) resultado.cambiadas++;
+    }
+
+    return resultado;
+  }
+
+  private mismoPorColegio(a: Record<string, number>, b: Record<string, number>): boolean {
+    const normalizar = (origen: Record<string, number>) =>
+      Object.entries(origen || {})
+        .filter(([, cantidad]) => Number(cantidad) > 0)
+        .sort(([x], [y]) => x.localeCompare(y));
+    return JSON.stringify(normalizar(a)) === JSON.stringify(normalizar(b));
   }
 }

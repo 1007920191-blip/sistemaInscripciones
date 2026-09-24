@@ -77,7 +77,7 @@
             <button class="btn-editar" (click)="editarInscripcion(ins)">
               Editar
             </button>
-            <button class="btn-lista" (click)="enviarWhatsapp(ins)" title="Enviar WhatsApp" style="background:#25D366;color:white;margin-left:4px;">
+            <button class="btn-lista" (click)="enviarWhatsapp(ins)" *ngIf="resultadosHabilitados" title="Enviar WhatsApp" style="background:#25D366;color:white;margin-left:4px;">
               WhatsApp
             </button>
             <button class="btn-validar" (click)="abrirModalValidar(ins)" *ngIf="ins.estado === 'pendiente'" title="Validar inscripción" style="background:#28a745; color:white; margin-left:4px;">
@@ -209,7 +209,7 @@
                   style="background: #6c5ce7; margin-top: 4px;">
                   🖨️
                 </button>
-                <button class="btn-credencial-indiv" (click)="enviarWhatsappEstudiante(est)" title="Enviar WhatsApp" style="background:#25D366;margin-top:4px;">
+                <button class="btn-credencial-indiv" (click)="enviarWhatsappEstudiante(est)" *ngIf="resultadosHabilitados" title="Enviar WhatsApp" style="background:#25D366;margin-top:4px;">
                   💬 WhatsApp
                 </button>
                 <button class="btn-credencial-indiv" (click)="abrirModalEliminar(est)" title="Eliminar estudiante" style="background:#dc2626;color:white;margin-top:4px;">
