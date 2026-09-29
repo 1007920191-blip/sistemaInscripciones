@@ -541,6 +541,16 @@ export class Lista implements OnInit {
           if (!d || isNaN(d.getTime())) return 'â€”';
           return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
         };
+        // Reduce el tamaño de la fuente (sin bajar del mínimo) para que un texto
+        // largo entre en UNA sola línea y no se monte sobre la fila de abajo.
+        const ajustarFuente = (texto: string, maxWidth: number, tamMax: number, tamMin: number) => {
+          let t = tamMax;
+          doc.setFontSize(t);
+          while (t > tamMin && doc.getTextWidth(texto) > maxWidth) {
+            t = Math.round((t - 0.2) * 10) / 10;
+            doc.setFontSize(t);
+          }
+        };
         const hIniEnt = turnoInfo?.horaInicioEntrada ? fmtHora(turnoInfo.horaInicioEntrada) : 'â€”';
         const hFinEnt = turnoInfo?.horaFinEntrada ? fmtHora(turnoInfo.horaFinEntrada) : 'â€”';
         const hIniPru = turnoInfo?.horaInicioPrueba ? fmtHora(turnoInfo.horaInicioPrueba) : 'â€”';
@@ -593,17 +603,38 @@ export class Lista implements OnInit {
         doc.line(x - l, y + stripHeight, x, y + stripHeight); doc.line(x, y + stripHeight, x, y + stripHeight + l);
         doc.line(x + stripWidth, y + stripHeight, x + stripWidth + l, y + stripHeight); doc.line(x + stripWidth, y + stripHeight, x + stripWidth, y + stripHeight + l);
 
+        // Logos: más arriba, en caja de 13 mm y SIN deformar (se respeta la
+        // proporción real de cada imagen para que no salgan "delgados").
+        const cajaLogo = 13;
+        const medidasLogo = (b64: string): { w: number; h: number } => {
+          try {
+            const props: any = (doc as any).getImageProperties(b64);
+            const ancho = Number(props?.width) || 0;
+            const alto = Number(props?.height) || 0;
+            if (!ancho || !alto) return { w: cajaLogo, h: cajaLogo };
+            const ratio = ancho / alto;
+            let w = cajaLogo;
+            let h = cajaLogo / ratio;
+            if (h > cajaLogo) { h = cajaLogo; w = cajaLogo * ratio; }
+            return { w, h };
+          } catch { return { w: cajaLogo, h: cajaLogo }; }
+        };
         if (logoIzquierdoB64) {
-          doc.addImage(logoIzquierdoB64, 'PNG', x + 2, y + 3, 10, 10, undefined, 'FAST');
+          const m = medidasLogo(logoIzquierdoB64);
+          doc.addImage(logoIzquierdoB64, 'PNG', x + 2, y + 1.5, m.w, m.h, undefined, 'FAST');
         }
         if (logoDerechoB64) {
-          doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 12, y + 3, 10, 10, undefined, 'FAST');
+          const m = medidasLogo(logoDerechoB64);
+          doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 2 - m.w, y + 1.5, m.w, m.h, undefined, 'FAST');
         }
+        // Título y eslogan centrados, como estaban antes: tamaño 11 y con ancho
+        // máximo, de modo que un nombre largo se parta en DOS líneas centradas
+        // (no se encoge la letra). El ancho deja libre el espacio de los logos.
         doc.setTextColor(azul[0], azul[1], azul[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(11);
-        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 5, { align: 'center', maxWidth: stripWidth - 26 });
+        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 5, { align: 'center', maxWidth: stripWidth - 30 });
         doc.setFont('Helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(gris[0], gris[1], gris[2]);
         const esloganLine = eslogan ? `${eslogan} - EDICION ${edicion}`.toUpperCase() : `EDICION ${edicion}`.toUpperCase();
-        doc.text(esloganLine, x + stripWidth / 2, y + 14.5, { align: 'center', maxWidth: stripWidth - 26 });
+        doc.text(esloganLine, x + stripWidth / 2, y + 14.5, { align: 'center', maxWidth: stripWidth - 30 });
 
         let cy = y + 20.5;
         doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.5);
@@ -625,21 +656,27 @@ doc.text(fechaStr, x + 74, cy);
         doc.text(codModular, x + 20, cy); doc.text(areaVal.toUpperCase(), x + 53, cy);
         cy += 4.2;
         doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8); doc.text('IE:', x + 3, cy);
-        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(10.5);
-        doc.text(colNombre, x + 15, cy, { maxWidth: stripWidth - 18 });
+        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold');
+        // El nombre de la IE va más a la izquierda y en una sola línea (si es muy
+        // largo se reduce el tamaño de fuente en vez de montarse sobre la fila de abajo).
+        ajustarFuente(colNombre, stripWidth - 14, 10.5, 8.5);
+        doc.text(colNombre, x + 11, cy);
         cy += 3.8;
         doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8);
-        doc.text('GESTIÓN:', x + 3, cy); doc.text('GRADO:', x + 38, cy);
+        doc.text('GESTIÓN:', x + 3, cy); doc.text('GRADO:', x + 40, cy);
         doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(10);
         const gradoNivelStr = `${String(est.grado||'').toUpperCase()} ${String(est.nivel||'').toUpperCase()}`.trim();
-        doc.text(gestionVal.toUpperCase(), x + 17, cy); 
-doc.text(gradoNivelStr, x + 50, cy, { maxWidth: stripWidth - 52 });
+        ajustarFuente(gestionVal.toUpperCase(), 16, 10, 8);
+        doc.text(gestionVal.toUpperCase(), x + 20, cy);
+        ajustarFuente(gradoNivelStr, stripWidth - 54, 10, 8);
+        doc.text(gradoNivelStr, x + 52, cy);
         cy += 4.2;
         doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8);
         doc.text('LUGAR:', x + 3, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(8.5);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold');
         // Se quitó substring(0,25) y se añadió maxWidth para que entre completo
-        doc.text(ieLugar.toUpperCase(), x + 15, cy, { maxWidth: stripWidth - 17 });
+        ajustarFuente(ieLugar.toUpperCase(), stripWidth - 17, 8.5, 7);
+        doc.text(ieLugar.toUpperCase(), x + 15, cy);
         cy += 1.8;
         //doc.setDrawColor(linea[0], linea[1], linea[2]); doc.setLineWidth(0.18); doc.line(x + 2, cy, x + stripWidth - 2, cy);
         cy += 3.2;
@@ -1026,6 +1063,8 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
         return;
       }
       const parsed: Estudiante[] = [];
+      const documentosEnArchivo = new Map<string, number>();
+      let repetidosEnArchivo = 0;
       let omitidos = 0;
       const gradoMap: Record<string,string> = { '1':'PRIMERO','2':'SEGUNDO','3':'TERCERO','4':'CUARTO','5':'QUINTO','6':'SEXTO','1Â°':'PRIMERO','2Â°':'SEGUNDO','3Â°':'TERCERO','4Â°':'CUARTO','5Â°':'QUINTO','6Â°':'SEXTO','PRIMERO':'PRIMERO','SEGUNDO':'SEGUNDO','TERCERO':'TERCERO','CUARTO':'CUARTO','QUINTO':'QUINTO','SEXTO':'SEXTO' };
       for (let r = headerRow + 1; r < rows.length; r++) {
@@ -1039,6 +1078,10 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
         const nivelRaw = String(row[colMap['NIVEL']] || '').trim().toUpperCase();
         if (!numero || !nombres || !apellidos || !gradoRaw || !nivelRaw) { omitidos++; continue; }
         if (!/^\d{6,9}$/.test(numero)) { omitidos++; continue; }
+        // Fila repetida dentro del mismo Excel: se omite (no se inscribe dos veces).
+        const claveArchivo = `${tipo.toLowerCase()}|${numero}`;
+        if (documentosEnArchivo.has(claveArchivo)) { repetidosEnArchivo++; continue; }
+        documentosEnArchivo.set(claveArchivo, r);
         const nivel = nivelRaw.includes('SEC') ? 'SECUNDARIA' : 'PRIMARIA';
         const gradoNum = gradoMap[gradoRaw] || gradoMap[gradoRaw.replace(/[^A-Z0-9]/g,'')] || '';
         const grado = gradoNum || gradoRaw.toUpperCase().trim();
@@ -1058,9 +1101,36 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
         input.value = '';
         return;
       }
-      if (omitidos > 0) alert(`Se importaron ${parsed.length} estudiantes. Se omitieron ${omitidos} filas incompletas.`);
+
+      // Alumnos que ya tienen una inscripción en esta edición: se avisa y se omiten
+      // (no se puede inscribir dos veces al mismo alumno).
+      let yaInscritos: { numeroDocumento: string; inscripcionCodigo: string }[] = [];
+      try {
+        const config: any = await this.configuracionService.obtenerConfiguracion();
+        yaInscritos = await this.inscripcionService.buscarAlumnosYaInscritos(
+          parsed.map(e => ({ tipoDocumento: e.tipoDocumento, numeroDocumento: e.numeroDocumento })),
+          String(config?.edicion || '')
+        );
+      } catch (e) { console.warn('No se pudo verificar alumnos ya inscritos:', e); }
+
+      let finales = parsed;
+      if (yaInscritos.length > 0) {
+        const claves = new Set(yaInscritos.map(d => String(d.numeroDocumento)));
+        finales = parsed.filter(e => !claves.has(String(e.numeroDocumento)));
+        alert(
+          'Se omitieron alumnos que ya tienen una inscripción en este concurso:\n' +
+          yaInscritos.map(d => `• ${d.numeroDocumento} → inscripción ${d.inscripcionCodigo}`).join('\n')
+        );
+      }
+      if (repetidosEnArchivo > 0) alert(`Se omitieron ${repetidosEnArchivo} fila(s) repetida(s) dentro del mismo archivo Excel.`);
+      if (omitidos > 0) alert(`Se importaron ${finales.length} estudiantes. Se omitieron ${omitidos} filas incompletas.`);
+      if (finales.length === 0) {
+        alert('No quedaron estudiantes por inscribir: todos los del archivo ya están inscritos en este concurso.');
+        input.value = '';
+        return;
+      }
       this.ngZone.run(() => {
-        this.estudiantesImportados = parsed;
+        this.estudiantesImportados = finales;
         this.inscripcionEditar = null;
         this.estudiantesEditar = [];
         this.mostrarNuevaInscripcion = true;

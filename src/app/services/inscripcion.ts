@@ -31,6 +31,124 @@ export class InscripcionService {
     this.inscripcionesRef = collection(this.firestore, 'inscripciones');
   }
 
+  /**
+   * Busca alumnos que YA tienen una inscripción en la misma edición del concurso.
+   *
+   * - Con documento (DNI/Carnet): se compara `tipoDocumento + numeroDocumento`.
+   * - SIN documento (`sd` o sin número): no hay nada que comparar por número, así que
+   *   se compara el NOMBRE COMPLETO normalizado (sin tildes, sin signos y en cualquier
+   *   orden) junto con el COLEGIO. Esas coincidencias se devuelven como `'nombre'`
+   *   para que el operador confirme (podría ser un homónimo).
+   * - Una inscripción CANCELADA no cuenta. Los registros históricos sin tipo se
+   *   comparan solo por número.
+   * - No crea colecciones nuevas: lee `inscripciones` y su subcolección `estudiantes`.
+   */
+  async buscarAlumnosYaInscritos(
+    estudiantes: { tipoDocumento?: string; numeroDocumento?: string; nombres?: string; apellidos?: string; colegio?: any }[],
+    edicion?: string,
+    excluirInscripcionId?: string
+  ): Promise<{
+    numeroDocumento: string; nombre: string; inscripcionCodigo: string; estado: string;
+    tipoCoincidencia: 'documento' | 'nombre'; detalle: string;
+  }[]> {
+    const objetivoDoc = new Map<string, Set<string>>();          // numero -> tipos ('' = sin tipo)
+    const objetivoNombre = new Map<string, { nombre: string }>(); // colegio|nombre -> datos
+    for (const est of estudiantes || []) {
+      const numero = String(est?.numeroDocumento || '').trim();
+      const tipo = String(est?.tipoDocumento || '').trim().toLowerCase();
+      if (numero && tipo !== 'sd') {
+        const tipos = objetivoDoc.get(numero) || new Set<string>();
+        tipos.add(tipo);
+        objetivoDoc.set(numero, tipos);
+        continue;
+      }
+      const nombre = this.normalizarNombreCompleto(est?.nombres, est?.apellidos);
+      if (!nombre) continue;
+      objetivoNombre.set(`${this.normalizarColegio(est?.colegio)}|${nombre}`, {
+        nombre: `${String(est?.nombres || '').trim()} ${String(est?.apellidos || '').trim()}`.trim().toUpperCase()
+      });
+    }
+    if (objetivoDoc.size === 0 && objetivoNombre.size === 0) return [];
+
+    const encontrados: {
+      numeroDocumento: string; nombre: string; inscripcionCodigo: string; estado: string;
+      tipoCoincidencia: 'documento' | 'nombre'; detalle: string;
+    }[] = [];
+    const yaReportado = new Set<string>();
+    const edicionBuscada = String(edicion || '').trim() || String(new Date().getFullYear());
+
+    const inscripcionesSnap = await getDocs(collection(this.firestore, 'inscripciones'));
+    for (const insDoc of inscripcionesSnap.docs) {
+      if (excluirInscripcionId && insDoc.id === excluirInscripcionId) continue;
+      const ins: any = insDoc.data() || {};
+      const estado = String(ins.estado || '').toLowerCase();
+      if (estado === 'cancelada') continue;   // cancelada: el alumno puede volver a inscribirse
+
+      let edicionIns = String(ins.edicion || '').trim();
+      if (!edicionIns) {
+        const f = ins.fechaInscripcion?.toDate ? ins.fechaInscripcion.toDate() : (ins.fechaInscripcion ? new Date(ins.fechaInscripcion) : null);
+        if (f && !isNaN(f.getTime())) edicionIns = String(f.getFullYear());
+      }
+      if (!edicionIns) {
+        const m = String(ins.fechaTexto || '').match(/^(\d{4})/);
+        if (m) edicionIns = m[1];
+      }
+      if (edicionIns && edicionIns !== edicionBuscada) continue;
+
+      let alumnos: any[] = Array.isArray(ins.estudiantes) && ins.estudiantes.length ? ins.estudiantes : [];
+      if (alumnos.length === 0) {
+        try { alumnos = await this.obtenerEstudiantes(insDoc.id); } catch { alumnos = []; }
+      }
+
+      for (const alumno of alumnos) {
+        const numero = String(alumno?.numeroDocumento || '').trim();
+        const tipoAlumno = String(alumno?.tipoDocumento || '').trim().toLowerCase();
+        const codigo = String(ins.codigo || insDoc.id || '').trim();
+        const detalle = `${String(alumno?.grado || '').toUpperCase()} ${String(alumno?.nivel || '').toUpperCase()}`.trim();
+
+        // 1) Coincidencia por documento
+        const tipos = objetivoDoc.get(numero);
+        if (numero && tipoAlumno !== 'sd' && tipos && (tipos.has('') || !tipoAlumno || tipos.has(tipoAlumno))) {
+          const clave = `doc|${numero}|${codigo}`;
+          if (!yaReportado.has(clave)) {
+            yaReportado.add(clave);
+            encontrados.push({ numeroDocumento: numero, nombre: '', inscripcionCodigo: codigo, estado: String(ins.estado || ''), tipoCoincidencia: 'documento', detalle });
+          }
+          continue;
+        }
+
+        // 2) Coincidencia por nombre + colegio (alumnos sin documento)
+        if (objetivoNombre.size > 0) {
+          const nombreAlumno = this.normalizarNombreCompleto(alumno?.nombres, alumno?.apellidos);
+          if (!nombreAlumno) continue;
+          const colegioAlumno = this.normalizarColegio(alumno?.colegio) || this.normalizarColegio(ins?.colegio);
+          const claveObjetivo = `${colegioAlumno}|${nombreAlumno}`;
+          const objetivo = objetivoNombre.get(claveObjetivo);
+          if (!objetivo) continue;
+          const clave = `nom|${claveObjetivo}|${codigo}`;
+          if (yaReportado.has(clave)) continue;
+          yaReportado.add(clave);
+          encontrados.push({ numeroDocumento: '', nombre: objetivo.nombre, inscripcionCodigo: codigo, estado: String(ins.estado || ''), tipoCoincidencia: 'nombre', detalle });
+        }
+      }
+    }
+    return encontrados;
+  }
+
+  /** Nombre completo normalizado: sin tildes, sin signos y sin importar el orden. */
+  private normalizarNombreCompleto(nombres?: string, apellidos?: string): string {
+    return `${String(nombres || '')} ${String(apellidos || '')}`
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase().replace(/[^A-Z0-9 ]/g, ' ')
+      .replace(/\s+/g, ' ').trim()
+      .split(' ').filter(Boolean).sort().join(' ');
+  }
+
+  /** Código modular del colegio normalizado (para comparar nombres dentro del mismo colegio). */
+  private normalizarColegio(colegio: any): string {
+    return String(colegio?.CODIGOMODULAR || colegio?.codigoModular || colegio?.codigo || '').trim().toUpperCase();
+  }
+
   private async siguienteCodigo(nombre: 'pagos' | 'estudiantes', inicial: number): Promise<string> {
     const ref = doc(this.firestore, 'contadores', nombre);
     return runTransaction(this.firestore, async (tx) => {

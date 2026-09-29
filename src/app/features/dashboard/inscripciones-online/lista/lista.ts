@@ -997,8 +997,10 @@ export class ListaO implements OnInit {
   }
 
   async enviarWhatsapp(ins: Inscripcion): Promise<void> {
+    // El botón siempre está visible y clickeable: la configuración decide qué
+    // ocurre al hacer clic (no se oculta ni se deshabilita).
     if (!(await this.leerPermisoResultados())) {
-      alert('La opción "Publicar Resultados" está desactivada en la configuración. Actívela para poder enviar el enlace de resultados.');
+      alert('Los resultados aún no están disponibles.');
       return;
     }
     const telRaw = String((ins as any).telefonoApoderado || '').replace(/\D/g, '');
@@ -1029,7 +1031,7 @@ export class ListaO implements OnInit {
     // El envío del enlace de resultados depende de la configuración (se re-verifica aquí).
     void this.leerPermisoResultados().then(permitido => {
       if (!permitido) {
-        alert('La opción "Publicar Resultados" está desactivada en la configuración. Actívela para poder enviar el enlace de resultados.');
+        alert('Los resultados aún no están disponibles.');
         return;
       }
       this.enviarWhatsappEstudianteConPermiso(est);

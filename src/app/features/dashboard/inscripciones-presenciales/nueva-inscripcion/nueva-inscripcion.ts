@@ -12,6 +12,7 @@ import { AsignacionPreviewService, PreviewAsignacion } from '../../../../service
 import { AsignacionService, ResultadoAsignacion } from '../../../../services/asignacion.service';
 import { TurnoGestionService } from '../../../../services/turno-gestion.service';
 import { TurnoService } from '../../../../services/turno.service';
+import { ConfiguracionService } from '../../../../services/configuracion';
 
 type PasoInscripcion = 'colegio' | 'pago' | 'estudiante' | 'preview' | 'resumen';
 
@@ -95,6 +96,7 @@ export class NuevaInscripcion implements OnInit {
     private asignacionService: AsignacionService,
     private turnoGestion: TurnoGestionService,
     private turnoService: TurnoService,
+    private configService: ConfiguracionService,
     private ngZone: NgZone,
     private cdr: ChangeDetectorRef
   ) {}
@@ -618,6 +620,72 @@ export class NuevaInscripcion implements OnInit {
 
   // ============ GUARDAR CON ASIGNACIÓN REAL ============
 
+  /**
+   * Alumnos del formulario que no se pueden guardar por duplicado.
+   *
+   * - `bloqueantes`: coincidencia por DOCUMENTO (o repetido en el mismo formulario) → no se guarda.
+   * - `advertencias`: alumno SIN documento que coincide por NOMBRE + COLEGIO → se pide confirmación
+   *   (puede ser un homónimo; no se bloquea automáticamente una inscripción legítima).
+   * Ante cualquier error de lectura NO bloquea.
+   */
+  private async verificarAlumnosDuplicados(estudiantes: any[]): Promise<{ bloqueantes: string[]; advertencias: string[] }> {
+    const bloqueantes: string[] = [];
+    const advertencias: string[] = [];
+    const normalizarNombre = (n: any, a: any) => `${String(n || '')} ${String(a || '')}`
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+      .split(' ').filter(Boolean).sort().join(' ');
+
+    const conDocumento: any[] = [];
+    const sinDocumento: any[] = [];
+    for (const e of estudiantes || []) {
+      const numero = String(e?.numeroDocumento || '').trim();
+      const tipo = String(e?.tipoDocumento || '').trim().toLowerCase();
+      const colegio = e?.colegio || this.colegioSeleccionado;
+      if (numero && tipo !== 'sd') {
+        conDocumento.push({ tipoDocumento: e.tipoDocumento, numeroDocumento: numero, nombres: e.nombres, apellidos: e.apellidos, colegio });
+      } else {
+        const nombre = normalizarNombre(e?.nombres, e?.apellidos);
+        if (nombre) sinDocumento.push({ tipoDocumento: e.tipoDocumento, numeroDocumento: '', nombres: e.nombres, apellidos: e.apellidos, colegio });
+      }
+    }
+    if (conDocumento.length === 0 && sinDocumento.length === 0) return { bloqueantes, advertencias };
+
+    // Repetidos dentro del mismo formulario
+    const vistosDoc = new Set<string>();
+    for (const e of conDocumento) {
+      const clave = `${String(e.tipoDocumento || '').toLowerCase()}|${e.numeroDocumento}`;
+      if (vistosDoc.has(clave)) bloqueantes.push(`${e.numeroDocumento} — está repetido en esta misma inscripción`);
+      vistosDoc.add(clave);
+    }
+    const vistosNombre = new Set<string>();
+    for (const e of sinDocumento) {
+      const clave = `${String((e.colegio as any)?.CODIGOMODULAR || '').toUpperCase()}|${normalizarNombre(e.nombres, e.apellidos)}`;
+      if (vistosNombre.has(clave)) {
+        advertencias.push(`${String(e.nombres || '')} ${String(e.apellidos || '')} (sin documento) — está repetido en esta misma inscripción`);
+      }
+      vistosNombre.add(clave);
+    }
+
+    try {
+      let edicion = '';
+      try { edicion = String((await this.configService.obtenerConfiguracion())?.edicion || ''); } catch {}
+      const hallados = await this.inscripcionService.buscarAlumnosYaInscritos(
+        [...conDocumento, ...sinDocumento] as any, edicion, this.inscripcionId || this.inscripcionEditar?.id
+      );
+      for (const d of hallados) {
+        if (d.tipoCoincidencia === 'documento') {
+          bloqueantes.push(`${d.numeroDocumento} — ya tiene una inscripción en este concurso (código ${d.inscripcionCodigo})`);
+        } else {
+          advertencias.push(`${d.nombre} (sin documento) — ya existe una inscripción con el mismo nombre en su colegio: código ${d.inscripcionCodigo}${d.detalle ? ' · ' + d.detalle : ''}`);
+        }
+      }
+    } catch (e) {
+      console.warn('No se pudo verificar duplicados:', e);
+    }
+    return { bloqueantes, advertencias };
+  }
+
   private async ejecutarFinalizacionConAsignacion() {
     const fin = Date.now();
     const inicio = this.inicioCronometro || fin;
@@ -628,6 +696,25 @@ export class NuevaInscripcion implements OnInit {
     }));
     const esEdicionOnline = this.modoEdicion && (this.inscripcionEditar as any)?.origen === 'online';
     const estadoFinal: Inscripcion['estado'] = esEdicionOnline ? ((this.inscripcionEditar as any)?.estado === 'completada' ? 'pendiente' : ((this.inscripcionEditar as any)?.estado || 'pendiente')) as any : 'completada';
+
+    // No se permite inscribir dos veces al mismo alumno en la misma edición.
+    const duplicados = await this.verificarAlumnosDuplicados(estudiantesConColegioActualizado);
+    if (duplicados.bloqueantes.length > 0) {
+      this.finalizando = false;
+      this.ngZone.run(() => alert(
+        'No se puede guardar la inscripción:\n' +
+        duplicados.bloqueantes.map(m => `• ${m}`).join('\n')
+      ));
+      return;
+    }
+    if (duplicados.advertencias.length > 0) {
+      const continuar = this.ngZone.run(() => confirm(
+        'Atención: posible alumno ya inscrito (no tiene documento, se comparó por nombre y colegio):\n' +
+        duplicados.advertencias.map(m => `• ${m}`).join('\n') +
+        '\n\n¿Desea inscribirlo de todas formas?'
+      ));
+      if (!continuar) { this.finalizando = false; return; }
+    }
 
     const inscripcionData: any = {
       colegio: this.colegioSeleccionado || null,

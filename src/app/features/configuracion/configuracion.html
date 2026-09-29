@@ -190,6 +190,11 @@
           <button type="button" class="btn-seleccionar" (click)="fileInputFondo.click()">
             Seleccionar
           </button>
+
+          <!-- La imagen vive en Firebase Storage (`configuracion/...`); aquí se puede abrir/descargar -->
+          <a *ngIf="config.fondoCredencial" [href]="config.fondoCredencial" target="_blank" rel="noopener" class="btn-ver-imagen">
+            Ver / descargar imagen guardada
+          </a>
           
           <button 
             *ngIf="fondoCredencialFile || config.fondoCredencial" 
@@ -201,14 +206,20 @@
           </button>
         </div>
       </div>
+      <small class="nota-fondo">
+        <strong>Recomendado:</strong> sube como fondo <strong>solo el diseño</strong> (sin logos ni textos).
+        La credencial ya coloca los logos que cargas arriba —más arriba y proporcionados— y todos los datos
+        encima. Si el fondo trae logos impresos, se verán <strong>duplicados</strong> y chocarán con el título.
+      </small>
     </section>
 
     <section class="form-section preview-section" *ngIf="config.nombreConcurso">
       <h2> Vista Previa de Credencial (igual a impresión)</h2>
       <p class="pv-hint">
         Así se imprime cada credencial: franja de 95 × 72.5 mm en hoja de 105 × 297 mm
-        (4 credenciales por hoja). Se actualiza al cambiar los datos y al subir o quitar
-        los logos y el fondo.
+        (4 credenciales por hoja). Los logos que cargas arriba se colocan en las esquinas
+        superiores respetando su proporción y el título se ajusta para no chocar con ellos.
+        El fondo conviene que sea <strong>solo el diseño</strong> (sin logos ni textos).
       </p>
       <div class="credencial-preview">
         <div class="credencial-strip"
