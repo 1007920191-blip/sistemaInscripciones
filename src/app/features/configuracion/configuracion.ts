@@ -80,6 +80,14 @@ export class ConfiguracionComponent implements OnInit {
     }
   }
 
+  /** Teléfono Yape: solo dígitos, máximo 9 (sin letras ni espacios). */
+  onInputTelefonoYape(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const val = input.value.replace(/\D/g, '').slice(0, 9);
+    input.value = val;
+    this.config.telefonoYape = val;
+  }
+
   onFileSelected(event: any, tipo: 'logoIzquierdo' | 'logoDerecho' | 'fondoCredencial') {
     const file = event.target.files[0];
     if (!file) return;

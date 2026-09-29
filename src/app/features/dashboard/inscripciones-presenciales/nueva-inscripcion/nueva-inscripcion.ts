@@ -50,6 +50,12 @@ export class NuevaInscripcion implements OnInit {
   colegioSeleccionadoAnterior: any = null;
   
   datosPago: any = null;
+  /**
+   * Costo por estudiante ya confirmado en el paso de pago (lo calcula el
+   * componente de pago desde la configuración). Se usa solo como respaldo si
+   * alguna vez faltara `datosPago.monto`.
+   */
+  private precioPorEstudianteActual = 15;
   estudiantesRegistrados: Estudiante[] = [];
   estudianteActual: number = 1;
   inscripcionId: string = '';
@@ -273,6 +279,12 @@ export class NuevaInscripcion implements OnInit {
   }
 
   onConfirmarPago(datos: any) {
+    // Precio por estudiante según la configuración (el componente de pago lo
+    // resuelve y lo envía): evita montos inventados al recalcular la cantidad.
+    const precioPorEstudiante = (Number(datos?.cantidad) > 0 && Number(datos?.monto) > 0)
+      ? Number(datos.monto) / Number(datos.cantidad)
+      : 15;
+    this.precioPorEstudianteActual = precioPorEstudiante;
     if (this.modoEdicion) {
       const reales = this.estudiantesExistentes.length;
       if (datos.cantidad !== reales) {
@@ -281,13 +293,13 @@ export class NuevaInscripcion implements OnInit {
         } else {
           alert(`No se eliminarán estudiantes automáticamente. Tiene ${reales} real(es). Se mantiene en ${reales}.`);
           datos.cantidad = reales;
-          datos.monto = reales * 5;
+          datos.monto = reales * precioPorEstudiante;
         }
       }
     }
     if (this.estudiantesImportados.length > 0 && datos.cantidad !== this.estudiantesRegistrados.length) {
       datos.cantidad = this.estudiantesRegistrados.length;
-      datos.monto = this.estudiantesRegistrados.length * 5;
+      datos.monto = this.estudiantesRegistrados.length * precioPorEstudiante;
     }
     this.datosPago = datos;
     if (this.modoEdicion) {
@@ -621,7 +633,7 @@ export class NuevaInscripcion implements OnInit {
       colegio: this.colegioSeleccionado || null,
       metodoPago: this.datosPago?.metodo || 'yape',
       cantidadEstudiantes: this.datosPago?.cantidad ?? estudiantesConColegioActualizado.length,
-      montoTotal: this.datosPago?.monto ?? (estudiantesConColegioActualizado.length * 5),
+      montoTotal: this.datosPago?.monto ?? (estudiantesConColegioActualizado.length * this.precioPorEstudianteActual),
       telefonoApoderado: this.datosPago?.telefono || '',
       estudiantes: estudiantesConColegioActualizado.map((e:any)=> {
         const clean: any = {};
@@ -887,7 +899,7 @@ export class NuevaInscripcion implements OnInit {
       asignacionesAula: asignacionesAula,
       estudiantes: estudiantesParaResumen,
       cantidadEstudiantes: estudiantesReales.length,
-      montoTotal: (this.datosPago?.monto ?? estudiantesReales.length * 5),
+      montoTotal: (this.datosPago?.monto ?? estudiantesReales.length * this.precioPorEstudianteActual),
       TIEMPO: (inscripcionData as any).TIEMPO,
       tiempoInscripcion: (inscripcionData as any).tiempoInscripcion,
       inicioInscripcion: (inscripcionData as any).inicioInscripcion,

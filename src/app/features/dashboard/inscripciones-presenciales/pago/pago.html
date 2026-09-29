@@ -18,7 +18,7 @@
   <div class="fila-datos" *ngIf="metodoPago">
     <div class="campo">
       <label>Teléfono del apoderado</label>
-      <input type="tel" [(ngModel)]="telefonoApoderado" placeholder="Ej: 987654321">
+      <input type="tel" inputmode="numeric" maxlength="9" [(ngModel)]="telefonoApoderado" (input)="onInputTelefono($event)" placeholder="Ej: 987654321">
     </div>
     
     <div class="campo cantidad">

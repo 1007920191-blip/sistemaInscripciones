@@ -93,7 +93,7 @@
       <h2> Configuración Yape (validación automática)</h2>
       <div class="form-group">
         <label for="telefonoYape">Teléfono Yape destino *</label>
-        <input type="text" id="telefonoYape" [(ngModel)]="config.telefonoYape" name="telefonoYape" placeholder="Ej: 930943272" maxlength="9">
+        <input type="tel" inputmode="numeric" id="telefonoYape" [(ngModel)]="config.telefonoYape" name="telefonoYape" (input)="onInputTelefonoYape($event)" placeholder="Ej: 930943272" maxlength="9">
         <small>Número Yape donde deben pagar los participantes</small>
       </div>
       <div class="form-group">
@@ -205,31 +205,59 @@
 
     <section class="form-section preview-section" *ngIf="config.nombreConcurso">
       <h2> Vista Previa de Credencial (igual a impresión)</h2>
+      <p class="pv-hint">
+        Así se imprime cada credencial: franja de 95 × 72.5 mm en hoja de 105 × 297 mm
+        (4 credenciales por hoja). Se actualiza al cambiar los datos y al subir o quitar
+        los logos y el fondo.
+      </p>
       <div class="credencial-preview">
-        <div class="credencial-mockup-real" [style.background-image]="fondoCredencialPreview ? 'url(' + fondoCredencialPreview + ')' : 'linear-gradient(to bottom, white 82%, #fef08a 100%)'">
-          <div class="pv-header">
-            <img *ngIf="logoIzquierdoPreview" [src]="logoIzquierdoPreview" class="pv-logo">
-            <div class="pv-title">
-              <div class="pv-concurso">CONCURSO REGIONAL DE MATEMÁTICA</div>
-              <div class="pv-nombre">{{ config.nombreConcurso || 'SOLARIS LEE' }}</div>
-              <div class="pv-eslogan">{{ config.eslogan || 'IV CONCURSO DE COMPRENSIÓN LECTORA' }} - EDICIÓN {{ config.edicion || '2026' }}</div>
+        <div class="credencial-strip"
+             [style.background-image]="fondoCredencialPreview ? 'url(' + fondoCredencialPreview + ')' : 'none'">
+
+          <!-- Encabezado: logos en las esquinas y título, igual que en la impresión -->
+          <img *ngIf="logoIzquierdoPreview" [src]="logoIzquierdoPreview" class="pv-logo pv-logo-izq" alt="Logo izquierdo">
+          <img *ngIf="logoDerechoPreview" [src]="logoDerechoPreview" class="pv-logo pv-logo-der" alt="Logo derecho">
+          <div class="pv-title">{{ config.nombreConcurso }}</div>
+          <div class="pv-eslogan">{{ config.eslogan || '' }}{{ config.edicion ? ' - EDICIÓN ' + config.edicion : '' }}</div>
+
+          <!-- Filas del participante (mismo orden que la impresión) -->
+          <div class="pv-rows">
+            <div class="pv-row">
+              <span class="pv-lab">DNI:</span><span class="pv-val">65346769</span>
+              <span class="pv-lab">TURNO:</span><span class="pv-val">T3</span>
+              <span class="pv-lab">PUERTA:</span><span class="pv-val">1</span>
+              <span class="pv-lab">FECHA:</span><span class="pv-val">29-08-2026</span>
             </div>
-            <img *ngIf="logoDerechoPreview" [src]="logoDerechoPreview" class="pv-logo">
-          </div>
-          <div class="pv-body">
-            <div class="pv-row"><span class="pv-lab">DNI:</span><span class="pv-val">65346769</span><span class="pv-lab">TURNO:</span><span class="pv-val">T3</span><span class="pv-lab">PUERTA:</span><span class="pv-val">1</span></div>
             <div class="pv-row"><span class="pv-lab">PARTICIPANTE:</span><span class="pv-val">PEREZ QUISPE ANA</span></div>
             <div class="pv-row"><span class="pv-lab">CÓDIGO IE:</span><span class="pv-val">0237990</span><span class="pv-lab">ÁREA:</span><span class="pv-val">URBANA</span></div>
             <div class="pv-row"><span class="pv-lab">IE:</span><span class="pv-val pv-blue">54104 CRISTO REY</span></div>
-            <div class="pv-row"><span class="pv-lab">GESTIÓN:</span><span class="pv-val pv-blue">PÚBLICA</span><span class="pv-lab">GRADO:</span><span class="pv-val pv-blue">5° PRIMARIA</span></div>
-            <div class="pv-row"><span class="pv-lab">LUGAR:</span><span class="pv-val">I.E.I. N° 55006-20 "E"</span><span class="pv-lab">FECHA:</span><span class="pv-val">29-08-2026</span></div>
-            <div class="pv-boxes">
-              <div class="pv-box"><div class="pv-box-lab">AULA</div><div class="pv-box-val">A4</div><div class="pv-box-lab">CÓDIGO</div><div class="pv-box-cod">1001-10001</div></div>
-              <div class="pv-box pv-box-small"><div class="pv-box-lab">PABELLÓN</div><div class="pv-box-val-small">A</div><div class="pv-box-lab">PISO</div><div class="pv-box-val-small">2</div></div>
-            </div>
-            <div class="pv-horas"><div><span class="pv-lab">Hora ingreso</span><br><span class="pv-val">10:30 - 10:50</span></div><div><span class="pv-lab">Hora examen</span><br><span class="pv-val">11:00 - 12:00</span></div></div>
+            <div class="pv-row"><span class="pv-lab">GESTIÓN:</span><span class="pv-val pv-blue">PÚBLICA</span><span class="pv-lab">GRADO:</span><span class="pv-val pv-blue">QUINTO PRIMARIA</span></div>
+            <div class="pv-row"><span class="pv-lab">LUGAR:</span><span class="pv-val">I.E.I. N° 55006-20 "E"</span></div>
           </div>
-          <div class="pv-footer">Código claro para consultar resultados • Conservar</div>
+
+          <!-- Cajas AULA / CODIGO y PABELLON / PISO -->
+          <div class="pv-boxes">
+            <div class="pv-box">
+              <div class="pv-box-head"><span>AULA</span><span>CODIGO</span></div>
+              <div class="pv-box-body"><span class="pv-aula">A4</span><span class="pv-cod">1001-10001</span></div>
+            </div>
+            <div class="pv-box">
+              <div class="pv-box-head"><span>PABELLON</span><span>PISO</span></div>
+              <div class="pv-box-body"><span class="pv-pab">A</span><span class="pv-piso">2</span></div>
+            </div>
+          </div>
+
+          <!-- Horarios con AM/PM, como en la impresión -->
+          <div class="pv-horas">
+            <div class="pv-hora-col">
+              <div class="pv-lab">HORA INGRESO</div>
+              <div class="pv-hora-val">10:30 - 10:50 AM</div>
+            </div>
+            <div class="pv-hora-col">
+              <div class="pv-lab">HORA EXAMEN</div>
+              <div class="pv-hora-val">11:00 - 12:00 PM</div>
+            </div>
+          </div>
         </div>
       </div>
     </section>

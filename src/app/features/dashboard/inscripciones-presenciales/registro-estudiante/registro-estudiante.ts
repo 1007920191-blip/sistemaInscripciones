@@ -229,9 +229,11 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
     if (this.estudiante.tipoDocumento === 'dni' && !/[0-9]/.test(e.key) && !['Backspace','Delete','Tab','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
   }
   onDocumentoInput(e: any) {
-    let v = e.target.value || '';
-    if (this.estudiante.tipoDocumento === 'dni') v = v.replace(/\D/g, '').slice(0, 8);
-    else if (this.estudiante.tipoDocumento === 'ce') v = v.replace(/\D/g, '').slice(0, 12);
+    // Sin espacios nunca; para DNI (8) y Carnet de Extranjería (12) solo dígitos.
+    let v = String(e.target.value || '').replace(/\s+/g, '');
+    const tipo = this.estudiante.tipoDocumento;
+    if (tipo === 'dni') v = v.replace(/\D/g, '').slice(0, 8);
+    else if (tipo === 'ce') v = v.replace(/\D/g, '').slice(0, 12);
     e.target.value = v;
     this.estudiante.numeroDocumento = v;
     this.programarBusquedaPersona();

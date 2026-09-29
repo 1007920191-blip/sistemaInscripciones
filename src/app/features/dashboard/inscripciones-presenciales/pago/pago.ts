@@ -14,6 +14,12 @@ export class PagoComponent implements OnInit {
   @Input() colegioSeleccionado: any;
   @Input() datosEdicion: any = null;
   @Input() modoEdicion = false;
+  /**
+   * Estudiantes ya reconocidos al abrir el paso de pago (p. ej. los cargados
+   * desde un Excel). Sirve para que la cantidad y el monto salgan ya calculados
+   * sin que el operador tenga que volver a escribir la cantidad.
+   */
+  @Input() cantidadInicial = 1;
   
   @Output() volver = new EventEmitter<void>();
   @Output() confirmarPago = new EventEmitter<{
@@ -52,7 +58,20 @@ export class PagoComponent implements OnInit {
       this.metodoPago = this.datosEdicion.metodo;
       this.cantidadEstudiantes = this.datosEdicion.cantidad;
       this.telefonoApoderado = this.datosEdicion.telefono;
+    } else {
+      // Inscripción nueva: si ya hay estudiantes reconocidos (caso Excel), la
+      // cantidad aparece ya puesta y el monto (cantidad x costo) ya calculado.
+      const inicial = Number(this.cantidadInicial);
+      if (Number.isFinite(inicial) && inicial > 0) this.cantidadEstudiantes = inicial;
     }
+  }
+
+  /** Teléfono del apoderado: solo dígitos, máximo 9 (sin letras ni espacios). */
+  onInputTelefono(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const val = input.value.replace(/\D/g, '').slice(0, 9);
+    input.value = val;
+    this.telefonoApoderado = val;
   }
 
   get montoTotal(): number {

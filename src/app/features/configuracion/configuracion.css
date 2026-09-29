@@ -219,27 +219,45 @@
 .preview-section { background: linear-gradient(135deg, #0f172a 0%, #1e40af 100%); }
 .preview-section h2 { color: white; border-bottom-color: rgba(255,255,255,0.3); }
 .credencial-preview { display: flex; justify-content: center; padding: 20px; }
-.credencial-mockup-real { width: 460px; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 6px 18px rgba(0,0,0,0.35); background-size: cover; background-position: center; background-repeat: no-repeat; border: 1.6px solid #0f2a5e; }
-.pv-header { background: #0a2a5e; color: white; display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; gap: 8px; border-bottom: 3px solid #facc15; }
-.pv-logo { width: 48px; height: 48px; object-fit: contain; background: transparent; border-radius: 6px; }
-.pv-title { text-align: center; flex: 1; }
-.pv-concurso { font-size: 7px; letter-spacing: 0.8px; opacity: 0.9; }
-.pv-nombre { font-size: 13px; font-weight: 800; color: #facc15; }
-.pv-eslogan { font-size: 7px; opacity: 0.85; }
-.pv-body { padding: 10px 12px; font-size: 9px; background: transparent; }
-.pv-row { display: flex; gap: 6px; margin: 3px 0; flex-wrap: wrap; align-items: baseline; }
-.pv-lab { font-size: 7px; color: #64748b; font-weight: 600; }
-.pv-val { font-size: 8px; color: #0f172a; font-weight: 700; }
-.pv-blue { color: #1e40af; font-weight: 800; }
-.pv-boxes { display: grid; grid-template-columns: 1.5fr 0.9fr; gap: 8px; margin-top: 8px; }
-.pv-box-small { display: grid; place-content: center; }
-.pv-box { border: 1.5px solid #0f2a5e; border-radius: 8px; background: #f8fafc; padding: 6px; text-align: center; }
-.pv-box-lab { font-size: 6px; color: #64748b; }
-.pv-box-val { font-size: 20px; font-weight: 900; color: #0f172a; }
-.pv-box-cod { font-size: 11px; font-weight: 900; color: #0f2a5e; margin-top: 3px; }
-.pv-box-val-small { font-size: 13px; font-weight: 800; color: #0f172a; }
-.pv-horas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; border: 1.5px solid #0f2a5e; border-radius: 8px; padding: 8px; text-align: center; background: transparent; font-size: 9px; }
-.pv-footer { text-align: center; font-size: 6px; color: #64748b; padding: 6px; }
+/* Vista previa: replica la impresión real.
+   Escala: franja de 95 x 72.5 mm -> 460 x 351 px (1 mm ≈ 4.84 px). */
+.credencial-strip {
+  position: relative;
+  width: 460px;
+  max-width: 100%;
+  height: 351px;
+  box-sizing: border-box;
+  background-color: #fff;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border: 2px solid #003366;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  font-family: Helvetica, Arial, sans-serif;
+}
+.pv-hint { color: rgba(255,255,255,0.85); font-size: 12px; margin: 0 0 6px; }
+.pv-logo { position: absolute; top: 14px; width: 48px; height: 48px; object-fit: contain; }
+.pv-logo-izq { left: 10px; }
+.pv-logo-der { right: 10px; }
+.pv-title { position: absolute; left: 58px; right: 58px; top: 10px; text-align: center; color: #003366; font-weight: 800; font-size: 19px; line-height: 1.05; text-transform: uppercase; }
+.pv-eslogan { position: absolute; left: 58px; right: 58px; top: 60px; text-align: center; color: #646464; font-size: 10px; text-transform: uppercase; }
+.pv-rows { position: absolute; left: 10px; right: 10px; top: 88px; }
+.pv-row { display: flex; flex-wrap: wrap; align-items: baseline; margin-bottom: 4px; }
+.pv-lab { color: #141414; font-weight: 700; font-size: 12px; margin-right: 3px; }
+.pv-val { color: #141414; font-weight: 700; font-size: 14px; margin-right: 10px; }
+.pv-blue { color: #0e63b4; }
+.pv-boxes { position: absolute; left: 10px; right: 10px; top: 224px; display: grid; grid-template-columns: 52fr 35fr; gap: 10px; }
+.pv-box { border: 2px solid #003366; border-radius: 5px; background: #fff; padding: 3px 6px; }
+.pv-box-head { display: flex; justify-content: space-around; color: #141414; font-size: 11px; }
+.pv-box-body { display: flex; justify-content: space-around; align-items: baseline; }
+.pv-aula { color: #141414; font-weight: 800; font-size: 20px; }
+.pv-cod { color: #003366; font-weight: 800; font-size: 16px; }
+.pv-pab, .pv-piso { color: #141414; font-weight: 800; font-size: 22px; }
+.pv-horas { position: absolute; left: 10px; right: 10px; bottom: 10px; height: 53px; border: 2px solid #003366; border-radius: 4px; display: grid; grid-template-columns: 1fr 1fr; align-items: center; text-align: center; }
+.pv-hora-col { line-height: 1.1; }
+.pv-hora-val { color: #141414; font-weight: 800; font-size: 22px; }
 
 /* Responsive */
 @media (max-width: 768px) {
