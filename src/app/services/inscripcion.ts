@@ -244,10 +244,16 @@ export class InscripcionService {
     });
   }
 
-  async obtenerInscripcionesFiltradas(fechaTexto: string, usuarioId: string, ignorarFecha: boolean = false): Promise<Inscripcion[]> {
+  async obtenerInscripcionesFiltradas(fechaTexto: string, usuarioId: string, ignorarFecha: boolean = false, buscarEnTodas: boolean = false): Promise<Inscripcion[]> {
     try {
       let q;
-      if (ignorarFecha) {
+      if (buscarEnTodas) {
+        // Búsqueda en TODA la colección (para el día del concurso: encontrar
+        // cualquier inscripción por código, nombre, apellido o DNI).
+        q = ignorarFecha
+          ? query(this.inscripcionesRef)
+          : query(this.inscripcionesRef, where('fechaTexto', '==', fechaTexto));
+      } else if (ignorarFecha) {
         q = query(this.inscripcionesRef, where('usuarioId', '==', usuarioId));
       } else {
         q = query(

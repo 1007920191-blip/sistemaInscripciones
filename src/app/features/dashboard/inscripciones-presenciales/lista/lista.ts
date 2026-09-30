@@ -8,6 +8,7 @@ import { ConfiguracionService } from '../../../../services/configuracion';
 import { ReciboService } from '../../../../services/recibo.service';
 import { ImpresionService } from '../../../../services/impresion';
 import { Inscripcion, Estudiante } from '../../../../models/inscripcion.model';
+import { AvisoModalComponent } from '../../../../shared/aviso-modal/aviso-modal';
 import { Configuracion } from '../../../../models/configuracion.model';
 import { AulaTurnoDisplay, Turno } from '../../../../models/turno.model';
 import { getAuth } from 'firebase/auth';
@@ -18,7 +19,7 @@ import { firebaseApp } from '../../../../firebase-config';
 @Component({
   selector: 'app-lista-presenciales',
   standalone: true,
-  imports: [CommonModule, NuevaInscripcion, FormsModule],
+  imports: [CommonModule, NuevaInscripcion, FormsModule, AvisoModalComponent],
   templateUrl: './lista.html',
   styleUrls: ['./lista.css']
 })
@@ -35,6 +36,28 @@ export class Lista implements OnInit {
   inscripcionParaLista: Inscripcion | null = null;
   estudiantesParaLista: Estudiante[] = [];
   cargandoLista = false;
+  /** Generación de credenciales: NO usa cargandoLista para que el modal siga
+   *  mostrando la lista de estudiantes mientras se arma el PDF. */
+  generandoCredenciales = false;
+
+  // Aviso con el diseño del sistema (reemplaza los alert del navegador)
+  aviso = { visible: false, tipo: 'info' as 'error' | 'alerta' | 'info', titulo: '', mensaje: '', detalles: [] as string[], textoAceptar: 'Entendido', textoCancelar: '' };
+
+  mostrarAviso(cfg: { titulo: string; mensaje?: string; detalles?: string[]; tipo?: 'error' | 'alerta' | 'info'; textoAceptar?: string }): void {
+    this.aviso = {
+      visible: true,
+      tipo: cfg.tipo ?? 'info',
+      titulo: cfg.titulo,
+      mensaje: cfg.mensaje ?? '',
+      detalles: cfg.detalles ?? [],
+      textoAceptar: cfg.textoAceptar ?? 'Entendido',
+      textoCancelar: ''
+    };
+  }
+
+  cerrarAviso(): void {
+    this.aviso = { ...this.aviso, visible: false };
+  }
 
   // Filtros y BÃºsqueda
   fechaSeleccionada: string = this.obtenerFechaHoyTexto();
@@ -105,7 +128,8 @@ export class Lista implements OnInit {
       let rawDocs: Inscripcion[] = await this.inscripcionService.obtenerInscripcionesFiltradas(
         this.fechaSeleccionada,
         uidActual,
-        tieneBusqueda
+        tieneBusqueda,
+        tieneBusqueda   // Al buscar: se consulta toda la colección (todos los usuarios)
       );
 
       console.log('=== LOGS DETALLADOS DE BÃšSQUEDA Y FILTROS ===');
@@ -115,12 +139,17 @@ export class Lista implements OnInit {
       console.log('Â¿Buscador trabaja sobre la colecciÃ³n completa permitida?:', tieneBusqueda ? 'SÃ (ColecciÃ³n completa filtrada Ãºnicamente por usuarioId si no es modo histÃ³rico)' : 'NO (Solo sobre los registros de la fecha seleccionada)');
       console.log('1. Cantidad de registros cargados desde Firestore:', rawDocs.length);
 
-      // Excluir inscripciones online del listado presencial
-      const sinOnline = rawDocs.filter(ins => (ins as any).origen !== 'online');
-      if (sinOnline.length !== rawDocs.length) {
-        console.log(`1b. Excluidas ${rawDocs.length - sinOnline.length} inscripciones online`);
+      // Sin búsqueda: el listado presencial muestra solo inscripciones presenciales.
+      // Con búsqueda: se muestran TODAS (también las online), porque el día del
+      // concurso se debe poder encontrar a cualquier inscrito por código, nombre,
+      // apellido o DNI; la columna "Origen" indica si vino de ventanilla u online.
+      if (!tieneBusqueda) {
+        const sinOnline = rawDocs.filter(ins => (ins as any).origen !== 'online');
+        if (sinOnline.length !== rawDocs.length) {
+          console.log(`1b. Excluidas ${rawDocs.length - sinOnline.length} inscripciones online`);
+        }
+        rawDocs = sinOnline;
       }
-      rawDocs = sinOnline;
 
       // Imprimir la estructura de los primeros documentos para ver sus campos raÃ­z (diagnÃ³stico)
       if (rawDocs.length > 0) {
@@ -446,7 +475,7 @@ export class Lista implements OnInit {
       return;
     }
 
-    this.cargandoLista = true;
+    this.generandoCredenciales = true;
     try {
       // 0.5 Obtener InformaciÃ³n de Turno y Aulas desde Firestore por cada estudiante
       const db = getFirestore(firebaseApp);
@@ -484,9 +513,9 @@ export class Lista implements OnInit {
       } catch {
         // Config no disponible â€” se usarÃ¡n fallbacks vectoriales
       }
-      const nombreConcurso = config?.nombreConcurso || 'Concurso Nacional de MatemÃ¡tica';
+      const nombreConcurso = config?.nombreConcurso || 'Concurso Nacional de Comprensión Lectora';
       const edicion = config?.edicion || new Date().getFullYear().toString();
-      const eslogan = config?.eslogan || 'EdiciÃ³n Especial';
+      const eslogan = config?.eslogan || 'Edición Especial';
       
       // 2. Cargar imÃ¡genes
       const [logoIzquierdoB64, logoDerechoB64, fondoCredencialB64] = await Promise.all([
@@ -520,10 +549,10 @@ export class Lista implements OnInit {
         
         const aulaAsignadaId = asignacion?.aulaId || est.aulaAsignadaId;
         const codigoAulaEst = asignacion?.codigoAula || est.codigoAula || 'PEND';
-        const turnoCodigoEst = asignacion?.turnoCodigo || est.turnoCodigo || 'Tâ€”';
+        const turnoCodigoEst = asignacion?.turnoCodigo || est.turnoCodigo || 'T—';
 
         const aulaInfo = aulaAsignadaId ? aulaCache.get(aulaAsignadaId) : null;
-        const turnoInfo = turnoCodigoEst !== 'Tâ€”' ? turnoCache.get(turnoCodigoEst) : null;
+        const turnoInfo = turnoCodigoEst !== 'T—' ? turnoCache.get(turnoCodigoEst) : null;
 
         const sedeVal = aulaInfo?.local || aulaInfo?.sede || 'â€”';
         const pabellonVal = aulaInfo?.pabellon || 'â€”';
@@ -627,11 +656,21 @@ export class Lista implements OnInit {
           const m = medidasLogo(logoDerechoB64);
           doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 2 - m.w, y + 1.5, m.w, m.h, undefined, 'FAST');
         }
-        // Título y eslogan centrados, como estaban antes: tamaño 11 y con ancho
-        // máximo, de modo que un nombre largo se parta en DOS líneas centradas
-        // (no se encoge la letra). El ancho deja libre el espacio de los logos.
-        doc.setTextColor(azul[0], azul[1], azul[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(11);
-        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 5, { align: 'center', maxWidth: stripWidth - 30 });
+        // Título y eslogan centrados. El título se reduce de tamaño si el nombre
+        // del concurso es largo, para que entre en 2-3 líneas sin tapar el eslogan
+        // ni las filas de datos.
+        doc.setFont('Helvetica', 'bold');
+        let tamTitulo = 11;
+        let lineasTitulo: string[] = [];
+        while (tamTitulo > 6.5) {
+          doc.setFontSize(tamTitulo);
+          lineasTitulo = doc.splitTextToSize(nombreConcurso.toUpperCase(), stripWidth - 30) as string[];
+          if (lineasTitulo.length <= 2) break;
+          tamTitulo = Math.round((tamTitulo - 0.5) * 10) / 10;
+        }
+        doc.setFontSize(tamTitulo);
+        doc.setTextColor(azul[0], azul[1], azul[2]);
+        doc.text(lineasTitulo, x + stripWidth / 2, y + 4.5, { align: 'center' });
         doc.setFont('Helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(gris[0], gris[1], gris[2]);
         const esloganLine = eslogan ? `${eslogan} - EDICION ${edicion}`.toUpperCase() : `EDICION ${edicion}`.toUpperCase();
         doc.text(esloganLine, x + stripWidth / 2, y + 14.5, { align: 'center', maxWidth: stripWidth - 30 });
@@ -746,7 +785,7 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
       console.error('Error al generar credenciales:', error);
       alert('Ocurrio un error al generar las credenciales.');
     } finally {
-      this.cargandoLista = false;
+      this.generandoCredenciales = false;
     }
   }
 
@@ -1097,7 +1136,11 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
         });
       }
       if (parsed.length === 0) {
-        alert(`No se encontrÃ³ ningÃºn estudiante vÃ¡lido. Omitidos: ${omitidos}. Verifique que tenga TIPO, NUMERO, NOMBRES, APELLIDOS, GRADO, NIVEL completos.`);
+        this.ngZone.run(() => this.mostrarAviso({
+          tipo: 'alerta',
+          titulo: 'No se encontraron estudiantes válidos',
+          mensaje: `Se omitieron ${omitidos} fila(s). Verifique que el archivo tenga TIPO, NÚMERO, NOMBRES, APELLIDOS, GRADO y NIVEL completos.`
+        }));
         input.value = '';
         return;
       }
@@ -1114,20 +1157,39 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
       } catch (e) { console.warn('No se pudo verificar alumnos ya inscritos:', e); }
 
       let finales = parsed;
+      const avisosImportacion: string[] = [];
       if (yaInscritos.length > 0) {
         const claves = new Set(yaInscritos.map(d => String(d.numeroDocumento)));
         finales = parsed.filter(e => !claves.has(String(e.numeroDocumento)));
-        alert(
-          'Se omitieron alumnos que ya tienen una inscripción en este concurso:\n' +
-          yaInscritos.map(d => `• ${d.numeroDocumento} → inscripción ${d.inscripcionCodigo}`).join('\n')
-        );
       }
-      if (repetidosEnArchivo > 0) alert(`Se omitieron ${repetidosEnArchivo} fila(s) repetida(s) dentro del mismo archivo Excel.`);
-      if (omitidos > 0) alert(`Se importaron ${finales.length} estudiantes. Se omitieron ${omitidos} filas incompletas.`);
+      if (repetidosEnArchivo > 0) avisosImportacion.push(`Se omitieron ${repetidosEnArchivo} fila(s) repetida(s) dentro del mismo archivo Excel.`);
+      if (omitidos > 0) avisosImportacion.push(`Se importaron ${finales.length} estudiantes. Se omitieron ${omitidos} filas incompletas.`);
+
       if (finales.length === 0) {
-        alert('No quedaron estudiantes por inscribir: todos los del archivo ya están inscritos en este concurso.');
+        this.ngZone.run(() => this.mostrarAviso({
+          tipo: 'alerta',
+          titulo: 'No quedaron estudiantes por inscribir',
+          mensaje: 'Todos los estudiantes del archivo ya tienen una inscripción en este concurso, por eso no se agregó ninguno.',
+          detalles: yaInscritos.map(d => `${d.numeroDocumento} → inscripción ${d.inscripcionCodigo}`)
+        }));
         input.value = '';
         return;
+      }
+
+      if (yaInscritos.length > 0 || avisosImportacion.length > 0) {
+        this.ngZone.run(() => this.mostrarAviso({
+          tipo: yaInscritos.length > 0 ? 'alerta' : 'info',
+          titulo: yaInscritos.length > 0
+            ? 'Alumnos que ya estaban inscritos (se omitieron)'
+            : 'Resultado de la importación',
+          mensaje: yaInscritos.length > 0
+            ? 'Estos alumnos ya tienen una inscripción en esta edición, así que no se volvieron a inscribir:'
+            : '',
+          detalles: [
+            ...yaInscritos.map(d => `${d.numeroDocumento} → inscripción ${d.inscripcionCodigo}`),
+            ...avisosImportacion
+          ]
+        }));
       }
       this.ngZone.run(() => {
         this.estudiantesImportados = finales;

@@ -6,6 +6,7 @@ import { PagoComponent } from '../pago/pago';
 import { RegistroEstudianteComponent } from '../registro-estudiante/registro-estudiante';
 import { InscripcionService } from '../../../../services/inscripcion';
 import { Inscripcion, Estudiante } from '../../../../models/inscripcion.model';
+import { AvisoModalComponent } from '../../../../shared/aviso-modal/aviso-modal';
 import { Turno } from '../../../../models/turno.model';
 
 import { AsignacionPreviewService, PreviewAsignacion } from '../../../../services/asignacion-preview.service';
@@ -23,7 +24,8 @@ type PasoInscripcion = 'colegio' | 'pago' | 'estudiante' | 'preview' | 'resumen'
     CommonModule, 
     FormsModule,
     PagoComponent,
-    RegistroEstudianteComponent
+    RegistroEstudianteComponent,
+    AvisoModalComponent
   ],
   templateUrl: './nueva-inscripcion.html',
   styleUrls: ['./nueva-inscripcion.css']
@@ -686,6 +688,73 @@ export class NuevaInscripcion implements OnInit {
     return { bloqueantes, advertencias };
   }
 
+  // ============ AVISOS CON EL DISEÑO DEL SISTEMA (reemplazan alert/confirm) ============
+  aviso = {
+    visible: false,
+    tipo: 'error' as 'error' | 'alerta' | 'info',
+    titulo: '',
+    mensaje: '',
+    detalles: [] as string[],
+    textoAceptar: 'Entendido',
+    textoCancelar: ''
+  };
+  private avisoAccion: (() => void) | null = null;
+  private avisoCancelar: (() => void) | null = null;
+  /** Evita volver a avisar por homónimos sin documento al reintentar el guardado. */
+  private advertenciasDuplicadosAceptadas = false;
+
+  mostrarAviso(cfg: { titulo: string; mensaje?: string; detalles?: string[]; tipo?: 'error' | 'alerta' | 'info'; textoAceptar?: string }): void {
+    this.avisoAccion = null;
+    this.avisoCancelar = null;
+    this.ngZone.run(() => {
+      this.aviso = {
+        visible: true,
+        tipo: cfg.tipo ?? 'info',
+        titulo: cfg.titulo,
+        mensaje: cfg.mensaje ?? '',
+        detalles: cfg.detalles ?? [],
+        textoAceptar: cfg.textoAceptar ?? 'Entendido',
+        textoCancelar: ''
+      };
+    });
+  }
+
+  pedirConfirmacion(
+    cfg: { titulo: string; mensaje?: string; detalles?: string[]; tipo?: 'error' | 'alerta' | 'info'; textoAceptar?: string; textoCancelar?: string },
+    alAceptar: () => void,
+    alCancelar?: () => void
+  ): void {
+    this.avisoAccion = alAceptar;
+    this.avisoCancelar = alCancelar ?? null;
+    this.ngZone.run(() => {
+      this.aviso = {
+        visible: true,
+        tipo: cfg.tipo ?? 'alerta',
+        titulo: cfg.titulo,
+        mensaje: cfg.mensaje ?? '',
+        detalles: cfg.detalles ?? [],
+        textoAceptar: cfg.textoAceptar ?? 'Aceptar',
+        textoCancelar: cfg.textoCancelar ?? 'Cancelar'
+      };
+    });
+  }
+
+  onAvisoAceptar(): void {
+    const accion = this.avisoAccion;
+    this.avisoAccion = null;
+    this.avisoCancelar = null;
+    this.aviso = { ...this.aviso, visible: false };
+    if (accion) accion();
+  }
+
+  onAvisoCancelar(): void {
+    const accion = this.avisoCancelar;
+    this.avisoAccion = null;
+    this.avisoCancelar = null;
+    this.aviso = { ...this.aviso, visible: false };
+    if (accion) accion();
+  }
+
   private async ejecutarFinalizacionConAsignacion() {
     const fin = Date.now();
     const inicio = this.inicioCronometro || fin;
@@ -701,20 +770,34 @@ export class NuevaInscripcion implements OnInit {
     const duplicados = await this.verificarAlumnosDuplicados(estudiantesConColegioActualizado);
     if (duplicados.bloqueantes.length > 0) {
       this.finalizando = false;
-      this.ngZone.run(() => alert(
-        'No se puede guardar la inscripción:\n' +
-        duplicados.bloqueantes.map(m => `• ${m}`).join('\n')
-      ));
+      this.mostrarAviso({
+        tipo: 'error',
+        titulo: 'Alumno ya inscrito en este concurso',
+        mensaje: 'La inscripción no se guardó porque estos estudiantes ya tienen un registro en esta edición:',
+        detalles: duplicados.bloqueantes,
+        textoAceptar: 'Entendido'
+      });
       return;
     }
-    if (duplicados.advertencias.length > 0) {
-      const continuar = this.ngZone.run(() => confirm(
-        'Atención: posible alumno ya inscrito (no tiene documento, se comparó por nombre y colegio):\n' +
-        duplicados.advertencias.map(m => `• ${m}`).join('\n') +
-        '\n\n¿Desea inscribirlo de todas formas?'
-      ));
-      if (!continuar) { this.finalizando = false; return; }
+    if (duplicados.advertencias.length > 0 && !this.advertenciasDuplicadosAceptadas) {
+      this.pedirConfirmacion(
+        {
+          tipo: 'alerta',
+          titulo: 'Posible alumno ya inscrito',
+          mensaje: 'Estos estudiantes no tienen documento registrado; la coincidencia es por nombre y colegio:',
+          detalles: duplicados.advertencias,
+          textoAceptar: 'Inscribir de todas formas',
+          textoCancelar: 'Cancelar'
+        },
+        () => {
+          this.advertenciasDuplicadosAceptadas = true;
+          void this.ejecutarFinalizacionConAsignacion();
+        },
+        () => { this.finalizando = false; }
+      );
+      return;
     }
+    this.advertenciasDuplicadosAceptadas = false;
 
     const inscripcionData: any = {
       colegio: this.colegioSeleccionado || null,

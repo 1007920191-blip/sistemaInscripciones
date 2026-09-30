@@ -228,7 +228,7 @@
           <!-- Encabezado: logos en las esquinas y título, igual que en la impresión -->
           <img *ngIf="logoIzquierdoPreview" [src]="logoIzquierdoPreview" class="pv-logo pv-logo-izq" alt="Logo izquierdo">
           <img *ngIf="logoDerechoPreview" [src]="logoDerechoPreview" class="pv-logo pv-logo-der" alt="Logo derecho">
-          <div class="pv-title">{{ config.nombreConcurso }}</div>
+          <div class="pv-title" [style.font-size.px]="tamanoTituloPreview">{{ config.nombreConcurso }}</div>
           <div class="pv-eslogan">{{ config.eslogan || '' }}{{ config.edicion ? ' - EDICIÓN ' + config.edicion : '' }}</div>
 
           <!-- Filas del participante (mismo orden que la impresión) -->

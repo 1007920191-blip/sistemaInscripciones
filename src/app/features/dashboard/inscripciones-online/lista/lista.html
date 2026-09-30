@@ -51,6 +51,7 @@
           <th>N°</th>
           <th>Estudiante</th>
           <th>Colegio</th>
+          <th>Usuario</th>
           <th>Fecha</th>
           <th>Estado</th>
           <th>Acciones</th>
@@ -67,6 +68,9 @@
             </span>
           </td>
           <td>{{ ins.colegio?.IE }}</td>
+          <td [title]="usuarioInscripcion(ins)" style="font-size:0.82rem; color:#475569;">
+            {{ usuarioInscripcion(ins) }}
+          </td>
           <td>{{ formatearFecha(ins.fechaInscripcion) }}</td>
           <td>{{ ins.estado }}</td>
           
@@ -79,6 +83,9 @@
             </button>
             <button class="btn-lista" (click)="enviarWhatsapp(ins)" title="Enviar WhatsApp" style="background:#25D366;color:white;margin-left:4px;">
               WhatsApp
+            </button>
+            <button class="btn-lista" (click)="verComprobante(ins)" title="Ver el comprobante (voucher Yape) que subió el usuario" style="background:#0ea5e9;color:white;margin-left:4px;">
+              VER VOUCHER
             </button>
             <button class="btn-validar" (click)="abrirModalValidar(ins)" *ngIf="ins.estado === 'pendiente'" title="Validar inscripción" style="background:#28a745; color:white; margin-left:4px;">
               Validar
@@ -202,8 +209,8 @@
                 <span class="badge-sin-aula" *ngIf="!est.codigoAula">Sin aula</span>
               </td>
               <td style="text-align: center;">
-                <button class="btn-credencial-indiv" (click)="descargarCredencialIndividual(est)" title="Generar credencial individual">
-                  🪪 Credencial
+                <button class="btn-credencial-indiv" (click)="descargarCredencialIndividual(est)" [disabled]="generandoCredenciales" title="Generar credencial individual">
+                  {{ generandoCredenciales ? '⏳' : '🪪 Credencial' }}
                 </button>
                 <button class="btn-credencial-indiv" (click)="abrirModalImpresionIndividual(est)" title="Imprimir Tarjeta o Cartilla"
                   style="background: #6c5ce7; margin-top: 4px;">
@@ -242,15 +249,15 @@
         <button 
           class="btn-pdf-credenciales" 
           (click)="descargarCredencialesGrupales()" 
-          [disabled]="cargandoLista || estudiantesSeleccionados.size === 0"
+          [disabled]="cargandoLista || generandoCredenciales || estudiantesSeleccionados.size === 0"
           title="Generar credenciales tipo tiras de los seleccionados">
-          🪪 Credenciales
+          {{ generandoCredenciales ? '⏳ Generando...' : '🪪 Credenciales' }}
         </button>
 
         <button 
           class="btn-pdf-credenciales"
           (click)="abrirModalImpresionGrupal()"
-          [disabled]="cargandoLista || estudiantesSeleccionados.size === 0"
+          [disabled]="cargandoLista || generandoCredenciales || estudiantesSeleccionados.size === 0"
           title="Generar Tarjeta o Cartilla de los seleccionados"
           style="background: #6c5ce7;">
           🖨️ Cartillas
@@ -301,9 +308,13 @@
       </div>
 
       <div class="botones" style="margin-top: 2rem;">
-        <button class="btn-cancelar" (click)="cerrarModalImpresionIndividual()" type="button" [disabled]="cargandoImpresion">Cancelar</button>
-        <button class="btn-guardar" (click)="confirmarImpresionIndividual()" type="button" [disabled]="cargandoImpresion">
+        <button class="btn-guardar" (click)="confirmarImpresionIndividual()" type="button" [disabled]="cargandoImpresion"
+                style="background:#2563eb; color:#fff; border:none; min-width:120px;">
           {{ cargandoImpresion ? 'Generando...' : 'Aceptar' }}
+        </button>
+        <button class="btn-cancelar" (click)="cerrarModalImpresionIndividual()" type="button" [disabled]="cargandoImpresion"
+                style="background:#e5e7eb; color:#374151; border:1px solid #d1d5db; min-width:120px;">
+          Cancelar
         </button>
       </div>
     </div>
@@ -371,6 +382,33 @@
       <button class="btn-validar" [disabled]="!confirmacionValidacion || validando" (click)="confirmarValidacion()" style="padding:10px 20px; background:linear-gradient(135deg, #28a745 0%, #20c997 100%); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; box-shadow:0 3px 8px rgba(40,167,69,0.3); opacity:1;">
         {{ validando ? 'Validando...' : '✓ Validar inscripción' }}
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Ver Comprobante (voucher Yape) de una inscripción online ya validada -->
+<div class="modal-overlay" *ngIf="voucherVisible" (click)="cerrarComprobante()">
+  <div class="modal-content" (click)="$event.stopPropagation()" style="max-width:680px; width:94%;">
+    <div class="modal-header">
+      <h2>COMPROBANTE DE PAGO</h2>
+      <button class="btn-cerrar" (click)="cerrarComprobante()" type="button">×</button>
+    </div>
+    <div class="modal-body" style="text-align:center;">
+      <p style="margin:0 0 10px; font-size:0.86rem; color:#475569;">
+        {{ voucherNombreVer }}<span *ngIf="voucherFechaVer"> · {{ voucherFechaVer }}</span>
+      </p>
+      <img *ngIf="voucherUrlVer" [src]="voucherUrlVer" alt="Comprobante de pago"
+           style="max-width:100%; max-height:70vh; border-radius:8px; border:1px solid #ddd; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+      <div *ngIf="!voucherUrlVer" style="background:#fff3cd; border:1px solid #ffeaa7; border-radius:8px; padding:12px; color:#856404; font-weight:600;">
+        Esta inscripción no tiene comprobante guardado.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div class="footer-der">
+        <a *ngIf="voucherUrlVer" [href]="voucherUrlVer" target="_blank" rel="noopener"
+           class="btn-secundario" style="text-decoration:none; display:inline-flex; align-items:center;">Abrir en otra pestaña</a>
+        <button class="btn-secundario" (click)="cerrarComprobante()">Cerrar</button>
+      </div>
     </div>
   </div>
 </div>

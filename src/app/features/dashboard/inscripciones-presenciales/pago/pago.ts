@@ -37,7 +37,8 @@ export class PagoComponent implements OnInit {
 
   metodosPago = [
     { id: 'yape', nombre: 'YAPE', icono: '💜' },
-    { id: 'transferencia', nombre: 'TRANSFERENCIA', icono: '🏦' },
+    // Transferencia bancaria retirada de ventanilla: ya no se ofrece para inscripciones nuevas
+    // (las inscripciones antiguas con ese método siguen mostrando su información al editar).
     { id: 'efectivo', nombre: 'EFECTIVO', icono: '💵' }
   ];
 

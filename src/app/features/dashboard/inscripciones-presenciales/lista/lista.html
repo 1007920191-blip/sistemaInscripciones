@@ -50,6 +50,7 @@
           <th>Estudiante</th>
           <th>Colegio</th>
           <th>Fecha</th>
+          <th>Origen</th>
           <th>Estado</th>
           <th>Acciones</th>
          </tr>
@@ -66,6 +67,12 @@
           </td>
           <td>{{ ins.colegio?.IE }}</td>
           <td>{{ formatearFecha(ins.fechaInscripcion) }}</td>
+          <td>
+            <span [style.background]="$any(ins).origen === 'online' ? '#0ea5e9' : '#64748b'"
+                  style="color:#fff; font-weight:700; font-size:0.72rem; padding:2px 8px; border-radius:999px; letter-spacing:0.4px; white-space:nowrap;">
+              {{ $any(ins).origen === 'online' ? 'ONLINE' : 'VENTANILLA' }}
+            </span>
+          </td>
           <td>{{ ins.estado }}</td>
           
           <td class="acciones">
@@ -200,8 +207,8 @@
                 <span class="badge-sin-aula" *ngIf="!est.codigoAula">Sin aula</span>
               </td>
               <td style="text-align: center;">
-                <button class="btn-credencial-indiv" (click)="descargarCredencialIndividual(est)" title="Generar credencial individual">
-                  🪪 Credencial
+                <button class="btn-credencial-indiv" (click)="descargarCredencialIndividual(est)" [disabled]="generandoCredenciales" title="Generar credencial individual">
+                  {{ generandoCredenciales ? '⏳' : '🪪 Credencial' }}
                 </button>
                 <button class="btn-credencial-indiv" (click)="abrirModalImpresionIndividual(est)" title="Imprimir Tarjeta o Cartilla"
                   style="background: #6c5ce7; margin-top: 4px;">
@@ -240,15 +247,15 @@
         <button 
           class="btn-pdf-credenciales" 
           (click)="descargarCredencialesGrupales()" 
-          [disabled]="cargandoLista || estudiantesSeleccionados.size === 0"
+          [disabled]="cargandoLista || generandoCredenciales || estudiantesSeleccionados.size === 0"
           title="Generar credenciales tipo tiras de los seleccionados">
-          🪪 Credenciales
+          {{ generandoCredenciales ? '⏳ Generando...' : '🪪 Credenciales' }}
         </button>
 
         <button 
           class="btn-pdf-credenciales"
           (click)="abrirModalImpresionGrupal()"
-          [disabled]="cargandoLista || estudiantesSeleccionados.size === 0"
+          [disabled]="cargandoLista || generandoCredenciales || estudiantesSeleccionados.size === 0"
           title="Generar Tarjeta o Cartilla de los seleccionados"
           style="background: #6c5ce7;">
           🖨️ Cartillas
@@ -318,11 +325,28 @@
       </div>
 
       <div class="botones" style="margin-top: 2rem;">
-        <button class="btn-cancelar" (click)="cerrarModalImpresionIndividual()" type="button" [disabled]="cargandoImpresion">Cancelar</button>
-        <button class="btn-guardar" (click)="confirmarImpresionIndividual()" type="button" [disabled]="cargandoImpresion">
+        <button class="btn-guardar" (click)="confirmarImpresionIndividual()" type="button" [disabled]="cargandoImpresion"
+                style="background:#2563eb; color:#fff; border:none; min-width:120px;">
           {{ cargandoImpresion ? 'Generando...' : 'Aceptar' }}
+        </button>
+        <button class="btn-cancelar" (click)="cerrarModalImpresionIndividual()" type="button" [disabled]="cargandoImpresion"
+                style="background:#e5e7eb; color:#374151; border:1px solid #d1d5db; min-width:120px;">
+          Cancelar
         </button>
       </div>
     </div>
   </div>
 </div>
+
+<!-- Aviso con el diseño del sistema (alumnos ya inscritos, importación, etc.) -->
+<app-aviso-modal
+  [visible]="aviso.visible"
+  [tipo]="aviso.tipo"
+  [titulo]="aviso.titulo"
+  [mensaje]="aviso.mensaje"
+  [detalles]="aviso.detalles"
+  [textoAceptar]="aviso.textoAceptar"
+  [textoCancelar]="aviso.textoCancelar"
+  (aceptar)="cerrarAviso()"
+  (cancelar)="cerrarAviso()">
+</app-aviso-modal>

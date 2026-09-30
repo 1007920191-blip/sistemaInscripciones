@@ -35,6 +35,13 @@ export class ListaO implements OnInit {
   inscripcionParaLista: Inscripcion | null = null;
   estudiantesParaLista: Estudiante[] = [];
   cargandoLista = false;
+  /** Generación de credenciales: no usa cargandoLista para no vaciar el modal. */
+  generandoCredenciales = false;
+  /** Comprobante (voucher) de la inscripción que se está viendo. */
+  voucherVisible = false;
+  voucherUrlVer = '';
+  voucherNombreVer = '';
+  voucherFechaVer = '';
 
   // Filtros y Búsqueda
   fechaSeleccionada: string = this.obtenerFechaHoyTexto();
@@ -285,6 +292,45 @@ export class ListaO implements OnInit {
     this.estudiantesSeleccionados.clear();
   }
 
+  /**
+   * Usuario que generó la inscripción (el mismo que imprime el recibo en "USUARIO").
+   * Se prefiere el correo; si solo hay uid se muestra recortado.
+   */
+  usuarioInscripcion(ins: Inscripcion): string {
+    const data: any = ins as any;
+    const correo = String(data.correoApoderado || '').trim();
+    if (correo) return correo;
+    const usr = String(data.usuarioId || '').trim();
+    if (!usr) return '—';
+    return usr.includes('@') ? usr : `uid: ${usr.slice(0, 12)}…`;
+  }
+
+  /** Comprobante (voucher Yape) que subió el usuario en el sistema online. */
+  verComprobante(ins: Inscripcion): void {    const data: any = ins as any;
+    const url = String(data.voucherUrl || data.voucherStoragePath || '');
+    let detalle = String(data.voucherNombreArchivo || `Voucher de la inscripción ${data.codigo || ins.id || ''}`);
+    const numOp = String(data.voucherNumeroOperacion || '').trim();
+    if (numOp) detalle += ` · N° operación: ${numOp}`;
+    this.voucherUrlVer = url;
+    this.voucherNombreVer = detalle;
+    this.voucherFechaVer = this.formatearFechaTexto(data.fechaInscripcion);
+    this.voucherVisible = true;
+  }
+
+  cerrarComprobante(): void {
+    this.voucherVisible = false;
+    this.voucherUrlVer = '';
+    this.voucherNombreVer = '';
+    this.voucherFechaVer = '';
+  }
+
+  private formatearFechaTexto(valor: any): string {
+    if (!valor) return '';
+    const d = valor instanceof Date ? valor : (valor?.toDate ? valor.toDate() : new Date(valor));
+    if (!d || isNaN(d.getTime())) return '';
+    return d.toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
   // Controles de Selección para Checkboxes
   toggleSeleccionarEstudiante(dni: string) {
     if (this.estudiantesSeleccionados.has(dni)) {
@@ -435,7 +481,26 @@ export class ListaO implements OnInit {
 
   // ============================================
   // GENERACIÓN DE CREDENCIALES PDF (Media Hoja A4, Máx 4 por pág, 1 sola columna)
+  // Mismo diseño que la credencial del sistema presencial / Configuración.
   // ============================================
+
+  /** Resuelve el aula y turno asignados al estudiante dentro de la inscripción abierta. */
+  private asignacionDeEstudiante(est: Estudiante): { aulaId: string; codigoAula: string; turnoCodigo: string } {
+    const lista: any[] = (this.inscripcionParaLista as any)?.asignacionesAula || [];
+    const estudiantes: any[] = (this.inscripcionParaLista?.estudiantes || []) as any[];
+    const doc = String(est.numeroDocumento || '').trim();
+    const idx = doc ? estudiantes.findIndex(e => String(e.numeroDocumento || '').trim() === doc) : -1;
+    const porIndice = idx >= 0 ? lista.find(a => Number(a.estudianteIndex) === idx) : undefined;
+    const nombre = `${est.nombres || ''} ${est.apellidos || ''}`.trim().toUpperCase();
+    const porNombre = nombre ? lista.find(a => String(a.estudianteNombre || '').trim().toUpperCase() === nombre) : undefined;
+    const a = porIndice || porNombre || null;
+    return {
+      aulaId: String((est as any).aulaAsignadaId || a?.aulaId || ''),
+      codigoAula: String((est as any).codigoAula || a?.codigoAula || ''),
+      turnoCodigo: String((est as any).turnoCodigo || a?.turnoCodigo || '')
+    };
+  }
+
   async generarCredencialesPDF(estudiantesAImprimir: Estudiante[]) {
     if (!estudiantesAImprimir || estudiantesAImprimir.length === 0) {
       alert('Por favor, seleccione al menos un estudiante para generar las credenciales.');
@@ -444,9 +509,8 @@ export class ListaO implements OnInit {
 
     // 0. Validaciones Obligatorias
     const datosFaltantes = estudiantesAImprimir.some(est => {
-      const indexReal = this.inscripcionParaLista?.estudiantes?.findIndex(e => e.numeroDocumento === est.numeroDocumento) ?? -1;
-      const asignacion = this.inscripcionParaLista?.asignacionesAula?.find(a => a.estudianteIndex === indexReal);
-      return !asignacion || !asignacion.codigoAula || !asignacion.turnoCodigo || !est.grado || !est.nivel;
+      const asignacion = this.asignacionDeEstudiante(est);
+      return !asignacion.codigoAula || !asignacion.turnoCodigo || !est.grado || !est.nivel;
     });
 
     if (datosFaltantes) {
@@ -454,7 +518,7 @@ export class ListaO implements OnInit {
       return;
     }
 
-    this.cargandoLista = true;
+    this.generandoCredenciales = true;
     try {
       // 0.5 Obtener Información de Turno y Aulas desde Firestore por cada estudiante
       const db = getFirestore(firebaseApp);
@@ -462,23 +526,23 @@ export class ListaO implements OnInit {
       const turnoCache = new Map<string, any>();
 
       for (const est of estudiantesAImprimir) {
-        const indexReal = this.inscripcionParaLista?.estudiantes?.findIndex(e => e.numeroDocumento === est.numeroDocumento) ?? -1;
-        const asignacion = this.inscripcionParaLista?.asignacionesAula?.find(a => a.estudianteIndex === indexReal);
-        
-        if (asignacion) {
-          if (asignacion.aulaId && !aulaCache.has(asignacion.aulaId)) {
-            const aulaRef = firestoreDoc(db, 'turnosedicion', asignacion.aulaId);
+        const asignacion = this.asignacionDeEstudiante(est);
+        const aulaId = asignacion.aulaId;
+        const turnoCodigo = asignacion.turnoCodigo;
+        if (aulaId || turnoCodigo) {
+          if (aulaId && !aulaCache.has(aulaId)) {
+            const aulaRef = firestoreDoc(db, 'turnosedicion', aulaId);
             const aulaSnap = await getDoc(aulaRef);
             if (aulaSnap.exists()) {
-              aulaCache.set(asignacion.aulaId, aulaSnap.data());
+              aulaCache.set(aulaId, aulaSnap.data());
             }
           }
-          if (asignacion.turnoCodigo && !turnoCache.has(asignacion.turnoCodigo)) {
+          if (turnoCodigo && !turnoCache.has(turnoCodigo)) {
             const turnosRef = collection(db, 'turnos');
-            const qTurno = query(turnosRef, where('codigo', '==', asignacion.turnoCodigo));
+            const qTurno = query(turnosRef, where('codigo', '==', turnoCodigo));
             const snapTurno = await getDocs(qTurno);
             if (!snapTurno.empty) {
-              turnoCache.set(asignacion.turnoCodigo, snapTurno.docs[0].data());
+              turnoCache.set(turnoCodigo, snapTurno.docs[0].data());
             }
           }
         }
@@ -491,10 +555,10 @@ export class ListaO implements OnInit {
       } catch {
         // Config no disponible — se usarán fallbacks vectoriales
       }
-      const nombreConcurso = config?.nombreConcurso || 'Concurso Nacional de Matemática';
+      const nombreConcurso = config?.nombreConcurso || 'Concurso Nacional de Comprensión Lectora';
       const edicion = config?.edicion || new Date().getFullYear().toString();
       const eslogan = config?.eslogan || 'Edición Especial';
-      
+
       // 2. Cargar imágenes
       const [logoIzquierdoB64, logoDerechoB64, fondoCredencialB64] = await Promise.all([
         this.cargarImagenBase64(config?.logoIzquierdo || ''),
@@ -510,11 +574,11 @@ export class ListaO implements OnInit {
       const startX = 5;
 
       const totalEstudiantes = estudiantesAImprimir.length;
-      
+
       for (let index = 0; index < totalEstudiantes; index++) {
         const est = estudiantesAImprimir[index];
         const posEnPagina = index % 4;
-        
+
         // Paginación automática tras 4 credenciales
         if (index > 0 && posEnPagina === 0) {
           doc.addPage();
@@ -523,12 +587,10 @@ export class ListaO implements OnInit {
         const x = startX; // Una sola columna
         const y = startY + posEnPagina * (stripHeight + spacing);
 
-        const indexReal = this.inscripcionParaLista?.estudiantes?.findIndex(e => e.numeroDocumento === est.numeroDocumento) ?? -1;
-        const asignacion = this.inscripcionParaLista?.asignacionesAula?.find(a => a.estudianteIndex === indexReal);
-        
-        const aulaAsignadaId = asignacion?.aulaId || est.aulaAsignadaId;
-        const codigoAulaEst = asignacion?.codigoAula || est.codigoAula || 'PEND';
-        const turnoCodigoEst = asignacion?.turnoCodigo || 'T—';
+        const asignacion = this.asignacionDeEstudiante(est);
+        const aulaAsignadaId = asignacion.aulaId;
+        const codigoAulaEst = asignacion.codigoAula || 'PEND';
+        const turnoCodigoEst = asignacion.turnoCodigo || 'T—';
 
         const aulaInfo = aulaAsignadaId ? aulaCache.get(aulaAsignadaId) : null;
         const turnoInfo = turnoCodigoEst !== 'T—' ? turnoCache.get(turnoCodigoEst) : null;
@@ -537,7 +599,7 @@ export class ListaO implements OnInit {
         const pabellonVal = aulaInfo?.pabellon || '—';
         const pisoVal = aulaInfo?.piso || '—';
         const puertaVal = aulaInfo?.puertaAcceso || '—';
-        
+
         const fmtHora = (v:any): string => {
           if (!v) return '—';
           if (typeof v === 'string') { const m=v.match(/^(\d{1,2}):(\d{2})/); return m ? `${m[1].padStart(2,'0')}:${m[2]}` : v.slice(0,5); }
@@ -549,13 +611,23 @@ export class ListaO implements OnInit {
           if (!d || isNaN(d.getTime())) return '—';
           return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
         };
+        // Reduce el tamaño de la fuente (sin bajar del mínimo) para que un texto
+        // largo entre en UNA sola línea y no se monte sobre la fila de abajo.
+        const ajustarFuente = (texto: string, maxWidth: number, tamMax: number, tamMin: number) => {
+          let t = tamMax;
+          doc.setFontSize(t);
+          while (t > tamMin && doc.getTextWidth(texto) > maxWidth) {
+            t = Math.round((t - 0.2) * 10) / 10;
+            doc.setFontSize(t);
+          }
+        };
         const hIniEnt = turnoInfo?.horaInicioEntrada ? fmtHora(turnoInfo.horaInicioEntrada) : '—';
         const hFinEnt = turnoInfo?.horaFinEntrada ? fmtHora(turnoInfo.horaFinEntrada) : '—';
         const hIniPru = turnoInfo?.horaInicioPrueba ? fmtHora(turnoInfo.horaInicioPrueba) : '—';
         const hFinPru = turnoInfo?.horaFinPrueba ? fmtHora(turnoInfo.horaFinPrueba) : '—';
         const ingresoStr = (hIniEnt !== '—' && hFinEnt !== '—') ? `${hIniEnt} - ${hFinEnt}` : (hIniEnt !== '—' ? hIniEnt : '—');
         const examenStr = (hIniPru !== '—' && hFinPru !== '—') ? `${hIniPru} - ${hFinPru}` : (hIniPru !== '—' ? hIniPru : '—');
-        
+
         // Siempre usar inscripcion.colegio como fuente maestra (se sincroniza al guardar)
         const colInfo = this.inscripcionParaLista?.colegio || est.colegio;
         const gestionVal = colInfo?.GESTION || '—';
@@ -601,84 +673,144 @@ export class ListaO implements OnInit {
         doc.line(x - l, y + stripHeight, x, y + stripHeight); doc.line(x, y + stripHeight, x, y + stripHeight + l);
         doc.line(x + stripWidth, y + stripHeight, x + stripWidth + l, y + stripHeight); doc.line(x + stripWidth, y + stripHeight, x + stripWidth, y + stripHeight + l);
 
-        doc.setFillColor(azul[0], azul[1], azul[2]);
-        doc.rect(x, y, stripWidth, 16, 'F');
-        doc.setFillColor(255, 193, 7);
-        doc.rect(x, y + 15.1, stripWidth, 0.9, 'F');
+        // Logos: más arriba, en caja de 13 mm y SIN deformar (se respeta la
+        // proporción real de cada imagen para que no salgan "delgados").
+        const cajaLogo = 13;
+        const medidasLogo = (b64: string): { w: number; h: number } => {
+          try {
+            const props: any = (doc as any).getImageProperties(b64);
+            const ancho = Number(props?.width) || 0;
+            const alto = Number(props?.height) || 0;
+            if (!ancho || !alto) return { w: cajaLogo, h: cajaLogo };
+            const ratio = ancho / alto;
+            let w = cajaLogo;
+            let h = cajaLogo / ratio;
+            if (h > cajaLogo) { h = cajaLogo; w = cajaLogo * ratio; }
+            return { w, h };
+          } catch { return { w: cajaLogo, h: cajaLogo }; }
+        };
         if (logoIzquierdoB64) {
-          doc.addImage(logoIzquierdoB64, 'PNG', x + 2, y + 3, 10, 10, undefined, 'FAST');
+          const m = medidasLogo(logoIzquierdoB64);
+          doc.addImage(logoIzquierdoB64, 'PNG', x + 2, y + 1.5, m.w, m.h, undefined, 'FAST');
         }
         if (logoDerechoB64) {
-          doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 12, y + 3, 10, 10, undefined, 'FAST');
+          const m = medidasLogo(logoDerechoB64);
+          doc.addImage(logoDerechoB64, 'PNG', x + stripWidth - 2 - m.w, y + 1.5, m.w, m.h, undefined, 'FAST');
         }
-        doc.setTextColor(255, 193, 7); doc.setFont('Helvetica', 'bold'); doc.setFontSize(8.8);
-        doc.text(nombreConcurso.toUpperCase(), x + stripWidth / 2, y + 6.5, { align: 'center', maxWidth: stripWidth - 26 });
-        doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8); doc.setTextColor(255, 255, 255);
-        const esloganLine = eslogan ? `${eslogan} - EDICIÓN ${edicion}`.toUpperCase() : `EDICIÓN ${edicion}`.toUpperCase();
-        doc.text(esloganLine, x + stripWidth / 2, y + 12.2, { align: 'center', maxWidth: stripWidth - 26 });
+        // Título y eslogan centrados. El título se reduce de tamaño si el nombre
+        // del concurso es largo, para que entre en 2-3 líneas sin tapar el eslogan
+        // ni las filas de datos.
+        doc.setFont('Helvetica', 'bold');
+        let tamTitulo = 11;
+        let lineasTitulo: string[] = [];
+        while (tamTitulo > 6.5) {
+          doc.setFontSize(tamTitulo);
+          lineasTitulo = doc.splitTextToSize(nombreConcurso.toUpperCase(), stripWidth - 30) as string[];
+          if (lineasTitulo.length <= 2) break;
+          tamTitulo = Math.round((tamTitulo - 0.5) * 10) / 10;
+        }
+        doc.setFontSize(tamTitulo);
+        doc.setTextColor(azul[0], azul[1], azul[2]);
+        doc.text(lineasTitulo, x + stripWidth / 2, y + 4.5, { align: 'center' });
+        doc.setFont('Helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(gris[0], gris[1], gris[2]);
+        const esloganLine = eslogan ? `${eslogan} - EDICION ${edicion}`.toUpperCase() : `EDICION ${edicion}`.toUpperCase();
+        doc.text(esloganLine, x + stripWidth / 2, y + 14.5, { align: 'center', maxWidth: stripWidth - 30 });
 
-        let cy = y + 19;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8);
-        doc.text('DNI:', x + 3, cy); doc.text('TURNO:', x + 32, cy); doc.text('PUERTA:', x + 54, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.5);
-        doc.text(est.numeroDocumento || '—', x + 9, cy); doc.text(turnoCodigoEst, x + 42, cy); doc.text(puertaVal || 'C', x + 66, cy);
-        cy += 4.2;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8); doc.text('PARTICIPANTE:', x + 3, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(7);
+        let cy = y + 20.5;
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(7.5);
+        doc.text('DNI:', x + 2.5, cy); doc.text('TURNO:', x + 27, cy); doc.text('PUERTA:', x + 46, cy); doc.setFontSize(7.5);
+        doc.text('FECHA:', x + 64, cy);
+        doc.setFont('Helvetica', 'bold'); doc.setFontSize(8);
+        doc.text(fechaStr, x + 74, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(10);
+        doc.text(est.numeroDocumento || '\u2014', x + 9, cy); doc.text(turnoCodigoEst, x + 38, cy); doc.text(puertaVal || 'C', x + 58, cy);
+        cy += 4.5;
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8); doc.text('PARTICIPANTE:', x + 3, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(8.5);
         const nomCompleto = `${est.apellidos || ''} ${est.nombres || ''}`.trim().toUpperCase();
-        doc.text(nomCompleto, x + 20, cy, { maxWidth: stripWidth - 23 });
+        doc.text(nomCompleto, x + 27, cy, { maxWidth: stripWidth - 29 });
         cy += 4.2;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8);
         doc.text('CÓDIGO IE:', x + 3, cy); doc.text('ÁREA:', x + 42, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.2);
-        doc.text(codModular, x + 18, cy); doc.text(areaVal.toUpperCase(), x + 50, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(9.5);
+        doc.text(codModular, x + 20, cy); doc.text(areaVal.toUpperCase(), x + 53, cy);
         cy += 4.2;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8); doc.text('IE:', x + 3, cy);
-        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(7);
-        doc.text(colNombre, x + 15, cy, { maxWidth: stripWidth - 18 });
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8); doc.text('IE:', x + 3, cy);
+        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold');
+        // El nombre de la IE va en una sola línea (si es muy largo se reduce el
+        // tamaño de fuente en vez de montarse sobre la fila de abajo).
+        ajustarFuente(colNombre, stripWidth - 14, 10.5, 8.5);
+        doc.text(colNombre, x + 11, cy);
         cy += 3.8;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8);
-        doc.text('GESTIÓN:', x + 3, cy); doc.text('GRADO:', x + 42, cy);
-        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(6.5);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8);
+        doc.text('GESTIÓN:', x + 3, cy); doc.text('GRADO:', x + 40, cy);
+        doc.setTextColor(azulClaro[0], azulClaro[1], azulClaro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(10);
         const gradoNivelStr = `${String(est.grado||'').toUpperCase()} ${String(est.nivel||'').toUpperCase()}`.trim();
-        doc.text(gestionVal.toUpperCase(), x + 15, cy); doc.text(gradoNivelStr, x + 54, cy, { maxWidth: 40 });
-        cy += 4;
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.8);
-        doc.text('LUGAR:', x + 3, cy); doc.text('FECHA:', x + 58, cy);
-        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold'); doc.setFontSize(5.5);
-        doc.text(ieLugar.substring(0, 22).toUpperCase(), x + 12, cy); doc.text(fechaStr, x + 67, cy);
-        cy += 1.6;
-        doc.setDrawColor(linea[0], linea[1], linea[2]); doc.setLineWidth(0.18); doc.line(x + 2, cy, x + stripWidth - 2, cy);
+        ajustarFuente(gestionVal.toUpperCase(), 16, 10, 8);
+        doc.text(gestionVal.toUpperCase(), x + 20, cy);
+        ajustarFuente(gradoNivelStr, stripWidth - 54, 10, 8);
+        doc.text(gradoNivelStr, x + 52, cy);
+        cy += 4.2;
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(8);
+        doc.text('LUGAR:', x + 3, cy);
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'bold');
+        ajustarFuente(ieLugar.toUpperCase(), stripWidth - 17, 8.5, 7);
+        doc.text(ieLugar.toUpperCase(), x + 15, cy);
+        cy += 1.8;
         cy += 3.2;
-        const boxW1 = 52; const boxW2 = stripWidth - boxW1 - 8;
-        const boxH2 = 12.5;
-        const bx = x + 2; const by = cy;
-        doc.setFillColor(248, 249, 255); doc.setDrawColor(azul[0], azul[1], azul[2]); doc.setLineWidth(0.38);
-        doc.roundedRect(bx, by, boxW1, boxH2, 1, 1, 'FD');
-        doc.roundedRect(bx + boxW1 + 2, by, boxW2, boxH2, 1, 1, 'FD');
-        doc.setFont('Helvetica', 'normal'); doc.setFontSize(4.5); doc.setTextColor(gris[0], gris[1], gris[2]);
-        doc.text('AULA', bx + boxW1 * 0.25, by + 3.4, { align: 'center' });
-        doc.text('CÓDIGO', bx + boxW1 * 0.75, by + 3.4, { align: 'center' });
-        doc.text('PABELLÓN', bx + boxW1 + 2 + boxW2 * 0.30, by + 3.4, { align: 'center' }); doc.text('PISO', bx + boxW1 + 2 + boxW2 * 0.72, by + 3.4, { align: 'center' });
-        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(11.5);
-        doc.text(codigoAulaEst.toUpperCase(), bx + boxW1 * 0.25, by + 8.2, { align: 'center' });
-        doc.setFontSize(9.5); doc.setTextColor(azul[0], azul[1], azul[2]);
-        doc.text(codigoUnido, bx + boxW1 * 0.75, by + 8.2, { align: 'center' } as any);
-        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(10);
-        doc.text(pabellonVal.toUpperCase(), bx + boxW1 + 2 + boxW2 * 0.30, by + 8.2, { align: 'center' });
-        doc.text(String(pisoVal), bx + boxW1 + 2 + boxW2 * 0.72, by + 8.2, { align: 'center' });
-        const horaY = by + boxH2 + 1.6;
-        const horaH = 9.5;
-        doc.setDrawColor(azul[0], azul[1], azul[2]); doc.setLineWidth(0.38);
+        const boxW1 = 52;
+        const boxW2 = stripWidth - boxW1 - 8;
+        const boxH2 = 10.5;
+        const bx = x + 2;
+        const by = cy;
+
+        // --- CAJAS SUPERIORES (AULA, CÓDIGO, PABELLÓN, PISO) ---
+        doc.setDrawColor(azul[0], azul[1], azul[2]);
+        doc.setLineWidth(0.38);
+        doc.roundedRect(bx, by, boxW1, boxH2, 1, 1, 'D');
+        doc.roundedRect(bx + boxW1 + 2, by, boxW2, boxH2, 1, 1, 'D');
+
+        // Encabezados
+        doc.setFont('Helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(negro[0], negro[1], negro[2]);
+        doc.text('AULA', bx + boxW1 * 0.25, by + 3.0, { align: 'center' });
+        doc.text('CODIGO', bx + boxW1 * 0.75, by + 3.0, { align: 'center' });
+        doc.text('PABELLON', bx + boxW1 + 2 + boxW2 * 0.30, by + 3.0, { align: 'center' });
+        doc.text('PISO', bx + boxW1 + 2 + boxW2 * 0.72, by + 3.0, { align: 'center' });
+
+        // Valores ajustados en Y (by + 7.5 para centrar en caja de 10.5)
+        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(12);
+        doc.text(codigoAulaEst.toUpperCase(), bx + boxW1 * 0.25, by + 7.5, { align: 'center' });
+
+        doc.setFontSize(10); doc.setTextColor(azul[0], azul[1], azul[2]);
+        doc.text(codigoUnido, bx + boxW1 * 0.75, by + 7.5, { align: 'center' } as any);
+
+        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(13);
+        doc.text(pabellonVal.toUpperCase(), bx + boxW1 + 2 + boxW2 * 0.30, by + 7.5, { align: 'center' });
+        doc.text(String(pisoVal), bx + boxW1 + 2 + boxW2 * 0.72, by + 7.5, { align: 'center' });
+
+        // --- CAJA DE HORARIOS (Con AM/PM dinámico) ---
+        const horaY = by + boxH2 + 1.2;
+        const horaH = 11;
+
+        doc.setDrawColor(azul[0], azul[1], azul[2]);
+        doc.setLineWidth(0.38);
         doc.roundedRect(bx, horaY, stripWidth - 4, horaH, 0.8, 0.8, 'D');
-        doc.setFont('Helvetica', 'normal'); doc.setFontSize(5.2); doc.setTextColor(gris[0], gris[1], gris[2]);
+
+        doc.setFont('Helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(negro[0], negro[1], negro[2]);
         doc.text('HORA INGRESO', bx + (stripWidth - 4) * 0.25, horaY + 3.2, { align: 'center' });
         doc.text('HORA EXAMEN', bx + (stripWidth - 4) * 0.75, horaY + 3.2, { align: 'center' });
-        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(8.5);
-        doc.text(String(ingresoStr).toUpperCase(), bx + (stripWidth - 4) * 0.25, horaY + 7.2, { align: 'center' });
-        doc.text(String(examenStr).toUpperCase(), bx + (stripWidth - 4) * 0.75, horaY + 7.2, { align: 'center' });
-        doc.setTextColor(gris[0], gris[1], gris[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(4);
-        doc.text('Código claro para consultar resultados • Conservar', x + stripWidth / 2, y + stripHeight - 1.4, { align: 'center' });
+
+        const obtenerMeridiano = (rangoHoras: string) => {
+          const horaInicial = parseInt(String(rangoHoras).split(':')[0], 10);
+          return horaInicial >= 12 ? 'PM' : 'AM';
+        };
+        const sufijoIngreso = obtenerMeridiano(ingresoStr);
+        const sufijoExamen = obtenerMeridiano(examenStr);
+
+        doc.setFont('Helvetica', 'bold'); doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(13);
+        doc.text(`${ingresoStr} ${sufijoIngreso}`, bx + (stripWidth - 4) * 0.25, horaY + 8.0, { align: 'center' });
+        doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8.0, { align: 'center' });
+        doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFont('Helvetica', 'normal'); doc.setFontSize(9);
       }
 
       const ieNombre = (this.inscripcionParaLista?.colegio?.IE || 'Credenciales').replace(/\s+/g, '_');
@@ -688,7 +820,7 @@ export class ListaO implements OnInit {
       console.error('Error al generar credenciales:', error);
       alert('Ocurrió un error al generar las credenciales.');
     } finally {
-      this.cargandoLista = false;
+      this.generandoCredenciales = false;
     }
   }
 

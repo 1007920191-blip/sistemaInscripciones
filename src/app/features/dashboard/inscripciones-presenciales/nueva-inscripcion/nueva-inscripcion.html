@@ -200,3 +200,16 @@
     ← Volver a la lista de inscripciones
   </button>
 </div>
+
+<!-- Aviso con el diseño del sistema (alumno ya inscrito, etc.) -->
+<app-aviso-modal
+  [visible]="aviso.visible"
+  [tipo]="aviso.tipo"
+  [titulo]="aviso.titulo"
+  [mensaje]="aviso.mensaje"
+  [detalles]="aviso.detalles"
+  [textoAceptar]="aviso.textoAceptar"
+  [textoCancelar]="aviso.textoCancelar"
+  (aceptar)="onAvisoAceptar()"
+  (cancelar)="onAvisoCancelar()">
+</app-aviso-modal>

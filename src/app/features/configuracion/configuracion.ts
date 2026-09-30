@@ -38,6 +38,21 @@ export class ConfiguracionComponent implements OnInit {
   mensajeExito = '';
   mensajeError = '';
 
+  /**
+   * Tamaño del título en la vista previa. Se reduce si el nombre del concurso es
+   * largo para que entre completo (máx. 3 líneas) sin montarse sobre el eslogan,
+   * igual que se hace en la credencial impresa.
+   */
+  get tamanoTituloPreview(): number {
+    const largo = String(this.config?.nombreConcurso || '').trim().length || 1;
+    const anchoDisponible = 316; // 460 px de la tira menos 72 px de cada lado (logos)
+    for (const tam of [19, 17, 15, 13.5, 12, 11, 10, 9]) {
+      const porLinea = Math.max(1, Math.floor(anchoDisponible / (tam * 0.55)));
+      if (Math.ceil(largo / porLinea) <= 2) return tam;
+    }
+    return 8;
+  }
+
   constructor(
     private configService: ConfiguracionService,
     private cdr: ChangeDetectorRef, // ← Inyecta ChangeDetectorRef

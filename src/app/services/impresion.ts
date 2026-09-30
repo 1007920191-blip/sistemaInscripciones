@@ -92,8 +92,14 @@ export class ImpresionService {
       doc.rect(xactual - 0.5, yactual + 20 - 0.5, qrSize + 1, qrSize + 1, 'S');
       doc.addImage(qr, 'JPEG', xactual, yactual + 20, qrSize, qrSize);
 
+      // Código de barras SIN el número dentro (salía distorsionado): el número se
+      // imprime como texto justo debajo, dentro del mismo espacio.
       const barcodeDataUrl = this.generateBarcode(est.id || 'SIN_ID');
-      doc.addImage(barcodeDataUrl, 'PNG', xactual + 50, yactual + 52, 40, 13);
+      const altoBarra = 9.5;
+      doc.addImage(barcodeDataUrl, 'PNG', xactual + 50, yactual + 52, 40, altoBarra);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.text(String(est.id || '—'), xactual + 70, yactual + 52 + altoBarra + 4.2, { align: 'center' });
 
       if ((x + 1) % 2 === 0) {
         yactual = yactual + incy;
@@ -158,12 +164,30 @@ export class ImpresionService {
         inicioy = 10;
       }
 
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
+      // El nombre del concurso se ajusta al ancho de la cartilla (si es largo se
+      // reduce el tamaño) para que entre completo sin montarse sobre el QR ni
+      // sobre la otra cartilla.
+      const anchoCartilla = centerX - 8;
+      const ajustarLinea = (texto: string, tamMax: number): string[] => {
+        let t = tamMax;
+        let lineas: string[] = [];
+        while (t > 5) {
+          doc.setFontSize(t);
+          lineas = doc.splitTextToSize(texto, anchoCartilla) as string[];
+          if (lineas.length <= 2) break;
+          t = Math.round((t - 0.5) * 10) / 10;
+        }
+        doc.setFontSize(t);
+        return lineas;
+      };
+
       let yHeader = inicioy;
-      if (ie) { doc.text(ie, centerX / 2 + desplazamientox, yHeader, { align: 'center' }); yHeader += 6; } else { yHeader += 0; }
-      doc.text(nombre, centerX / 2 + desplazamientox, yHeader, { align: 'center' });
-      doc.text(slogan, centerX / 2 + desplazamientox, yHeader + 6, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      if (ie) { doc.text(ajustarLinea(ie, 10), centerX / 2 + desplazamientox, yHeader, { align: 'center' }); yHeader += 6; } else { yHeader += 0; }
+      doc.setFont('helvetica', 'bold');
+      doc.text(ajustarLinea(nombre, 10), centerX / 2 + desplazamientox, yHeader, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+      doc.text(ajustarLinea(slogan, 8), centerX / 2 + desplazamientox, yHeader + 6, { align: 'center' });
 
       const textToEncode = `${estTurno.codigo}/${estAula.codigoAula}/${est.inscripcionId || 'N/A'}/${est.id || 'N/A'}/${est.nombres || 'N/A'}/${est.apellidos || 'N/A'}`;
       const qr = await QRCode.toDataURL(textToEncode, { errorCorrectionLevel: 'M' });
@@ -289,6 +313,7 @@ export class ImpresionService {
     const canvas = document.createElement('canvas');
     JsBarcode(canvas, text, {
       format: 'CODE128',
+      displayValue: false,   // el número se imprime aparte con doc.text
     });
     return canvas.toDataURL('image/png');
   }

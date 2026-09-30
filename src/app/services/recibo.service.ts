@@ -26,7 +26,22 @@ export class ReciboService {
     const codigo = ins?.codigo || ins?.id || 'N/A';
     const sede = config?.sede || 'ANDAHUAYLAS';
 
-    center('SOLARISLEE - 2026', y, 11, 'bold'); y += 5;
+    // Nombre del concurso tomado de la configuración (si es largo se reduce el
+    // tamaño para que entre completo en el ancho del recibo).
+    const nombreConcursoRecibo = String(config?.nombreConcurso || 'SOLARISLEE - 2026');
+    let tamTitulo = 11;
+    let lineasTitulo: string[] = [];
+    while (tamTitulo > 7) {
+      doc.setFontSize(tamTitulo);
+      doc.setFont('Helvetica', 'bold');
+      lineasTitulo = doc.splitTextToSize(nombreConcursoRecibo.toUpperCase(), cw) as string[];
+      if (lineasTitulo.length <= 3) break;
+      tamTitulo = Math.round((tamTitulo - 0.5) * 10) / 10;
+    }
+    doc.setFontSize(tamTitulo);
+    doc.setFont('Helvetica', 'bold');
+    doc.text(lineasTitulo, pw / 2, y, { align: 'center' });
+    y += lineasTitulo.length * (tamTitulo * 0.45) + 2;
     center(String(sede).toUpperCase(), y, 8, 'normal'); y += 6;
     line(y); y += 4;
 
@@ -34,11 +49,18 @@ export class ReciboService {
     if (barcodeValue && barcodeValue.length >= 3) {
       try {
         const canvas = document.createElement('canvas');
-        JsBarcode(canvas, barcodeValue, { format: 'CODE128', width: 1.5, height: 28, displayValue: true, fontSize: 10, margin: 0, textMargin: 1, background: 'transparent', lineColor: '#000000' });
+        // El código de barras va SIN el número dentro (salía distorsionado): el
+        // número se imprime como texto justo debajo, en el mismo sitio.
+        JsBarcode(canvas, barcodeValue, { format: 'CODE128', width: 1.5, height: 28, displayValue: false, margin: 0, background: 'transparent', lineColor: '#000000' });
         const imgData = canvas.toDataURL('image/png');
         const imgH = (canvas.height / canvas.width) * cw;
-        doc.addImage(imgData, 'PNG', mL, y, cw, Math.min(imgH, 22));
-        y += Math.min(imgH, 22) + 3;
+        const altoBarra = Math.min(imgH, 15);
+        doc.addImage(imgData, 'PNG', mL, y, cw, altoBarra);
+        // El número va claramente debajo de las barras (la línea base del texto
+        // queda más abajo para que no se monte sobre el código de barras).
+        y += altoBarra + 4.5;
+        center(String(codigo), y, 9, 'bold');
+        y += 5;
       } catch { center(String(codigo), y, 8, 'bold'); y += 5; }
     }
 
