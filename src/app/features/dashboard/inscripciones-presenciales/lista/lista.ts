@@ -6,6 +6,7 @@ import { NuevaInscripcion } from '../nueva-inscripcion/nueva-inscripcion';
 import { InscripcionService } from '../../../../services/inscripcion';
 import { ConfiguracionService } from '../../../../services/configuracion';
 import { ReciboService } from '../../../../services/recibo.service';
+import { ReporteCajaService, UsuarioConInscripciones } from '../../../../services/reporte-caja.service';
 import { ImpresionService } from '../../../../services/impresion';
 import { Inscripcion, Estudiante } from '../../../../models/inscripcion.model';
 import { AvisoModalComponent } from '../../../../shared/aviso-modal/aviso-modal';
@@ -87,6 +88,18 @@ export class Lista implements OnInit {
   estudianteAEliminar: Estudiante | null = null;
   eliminando = false;
 
+  // ============ REPORTES DE CAJA ============
+  mostrarModalReporte = false;
+  /** false: reporte de MI cuenta (solo fechas). true: elegir usuario y tipo. */
+  reportePorUsuario = false;
+  reporteUsuario = '';
+  reporteTipo: 'DETALLADO' | 'POR DIA' = 'DETALLADO';
+  reporteDesde = this.obtenerFechaHoyTexto();
+  reporteHasta = this.obtenerFechaHoyTexto();
+  reporteUsuarios: UsuarioConInscripciones[] = [];
+  reporteCargando = false;
+  reporteGenerando = false;
+
   configuracion: Configuracion | null = null;
 
   @Output() volver = new EventEmitter<void>();
@@ -97,8 +110,101 @@ export class Lista implements OnInit {
     private configuracionService: ConfiguracionService,
     private impresionService: ImpresionService,
     private reciboService: ReciboService,
+    private reporteCajaService: ReporteCajaService,
     private ngZone: NgZone
   ) {}
+
+  // ============ REPORTES DE CAJA (ingresos por usuario y por día) ============
+
+  /** Botón 1: reporte de caja de MI cuenta. Se eligen el tipo y las dos fechas. */
+  abrirReporteCaja(): void {
+    const hoy = this.obtenerFechaHoyTexto();
+    this.reportePorUsuario = false;
+    this.reporteTipo = 'DETALLADO';
+    this.reporteUsuario = this.correoActual();
+    this.reporteDesde = hoy;
+    this.reporteHasta = hoy;
+    this.reporteUsuarios = [];
+    this.mostrarModalReporte = true;
+  }
+
+  /** Botón 2: se elige la cuenta (con más de una inscripción) y el tipo de reporte. */
+  async abrirReportePorUsuario(): Promise<void> {
+    const hoy = this.obtenerFechaHoyTexto();
+    this.reportePorUsuario = true;
+    this.reporteTipo = 'DETALLADO';
+    this.reporteDesde = hoy;
+    this.reporteHasta = hoy;
+    this.reporteUsuario = '';
+    this.reporteUsuarios = [];
+    this.mostrarModalReporte = true;
+    this.reporteCargando = true;
+    try {
+      const todos = await this.reporteCajaService.obtenerUsuariosConInscripciones(1);
+      const yo = this.correoActual();
+      // Solo cuentas con más de una inscripción (como pidió el asesor); la cuenta
+      // abierta siempre se incluye para poder ver su detalle.
+      const usuarios = todos.filter(u => u.total >= 2 || (!!yo && u.usuario === yo));
+      this.ngZone.run(() => {
+        this.reporteUsuarios = usuarios.sort((a, b) => a.usuario.localeCompare(b.usuario));
+        if (!this.reporteUsuario && this.reporteUsuarios.length) this.reporteUsuario = this.reporteUsuarios[0].usuario;
+      });
+    } catch (e) {
+      console.warn('No se pudieron cargar los usuarios para el reporte:', e);
+      this.mostrarAviso({
+        tipo: 'alerta',
+        titulo: 'No se pudieron cargar los usuarios',
+        mensaje: 'Revise su conexión e intente nuevamente.'
+      });
+    } finally {
+      this.ngZone.run(() => this.reporteCargando = false);
+    }
+  }
+
+  cerrarModalReporte(): void {
+    this.mostrarModalReporte = false;
+    this.reporteGenerando = false;
+  }
+
+  async confirmarReporte(): Promise<void> {
+    if (!this.reporteUsuario) {
+      this.mostrarAviso({ tipo: 'alerta', titulo: 'Falta el usuario', mensaje: 'Seleccione la cuenta de la que desea el reporte.' });
+      return;
+    }
+    if (!this.reporteDesde || !this.reporteHasta) {
+      this.mostrarAviso({ tipo: 'alerta', titulo: 'Faltan las fechas', mensaje: 'Seleccione la fecha inicial y la fecha final.' });
+      return;
+    }
+    if (this.reporteDesde > this.reporteHasta) {
+      this.mostrarAviso({ tipo: 'alerta', titulo: 'Rango de fechas inválido', mensaje: 'La fecha inicial no puede ser posterior a la fecha final.' });
+      return;
+    }
+    this.reporteGenerando = true;
+    try {
+      // El botón "Reporte de caja" siempre genera el DETALLADO (simple, sin opciones);
+      // el botón "Reporte por usuario" permite elegir DETALLADO o POR DIA.
+      if (this.reportePorUsuario && this.reporteTipo === 'POR DIA') {
+        await this.reporteCajaService.generarReportePorDia(this.reporteUsuario, this.reporteDesde, this.reporteHasta);
+      } else {
+        await this.reporteCajaService.generarReporteDetallado(this.reporteUsuario, this.reporteDesde, this.reporteHasta);
+      }
+      this.mostrarModalReporte = false;
+    } catch (e: any) {
+      console.error('Error al generar el reporte de caja:', e);
+      this.mostrarAviso({ tipo: 'error', titulo: 'No se pudo generar el reporte', mensaje: e?.message || 'Intente nuevamente.' });
+    } finally {
+      this.ngZone.run(() => this.reporteGenerando = false);
+    }
+  }
+
+  /** Correo de la cuenta abierta (el mismo dato con el que se guarda usuarioId). */
+  private correoActual(): string {
+    try {
+      return String(getAuth(firebaseApp).currentUser?.email || '').toLowerCase().trim();
+    } catch {
+      return '';
+    }
+  }
 
   obtenerFechaHoyTexto(): string {
     const hoy = new Date();

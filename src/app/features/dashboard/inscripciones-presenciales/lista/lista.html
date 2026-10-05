@@ -13,6 +13,12 @@
       <button class="btn-excel" (click)="excelInput.click()" title="Subir plantilla Excel grupal">
         📊 Subir Excel
       </button>
+      <button class="btn-reporte" (click)="abrirReporteCaja()" title="Reporte de caja de mi cuenta (por rango de fechas)">
+        Reporte de caja
+      </button>
+      <button class="btn-reporte btn-reporte-alt" (click)="abrirReportePorUsuario()" title="Reporte de caja de una cuenta: detallado o por día">
+        Reporte por usuario
+      </button>
       <input #excelInput type="file" accept=".xlsx,.xls" (change)="onExcelSelected($event)" hidden>
       
       <div class="filtros-container">
@@ -330,6 +336,60 @@
           {{ cargandoImpresion ? 'Generando...' : 'Aceptar' }}
         </button>
         <button class="btn-cancelar" (click)="cerrarModalImpresionIndividual()" type="button" [disabled]="cargandoImpresion"
+                style="background:#e5e7eb; color:#374151; border:1px solid #d1d5db; min-width:120px;">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Reporte de Caja (ingresos por usuario y por día) -->
+<div class="modal-overlay" *ngIf="mostrarModalReporte" (click)="cerrarModalReporte()">
+  <div class="modal-content modal-form" (click)="$event.stopPropagation()" style="max-width:430px;">
+    <div class="header">
+      <h2>REPORTE DE CAJA</h2>
+      <button class="btn-cerrar" (click)="cerrarModalReporte()" type="button">×</button>
+    </div>
+
+    <div class="form-container">
+      <!-- Solo en el reporte por usuario -->
+      <div class="campo campo-full" *ngIf="reportePorUsuario">
+        <label>Usuario *</label>
+        <select [(ngModel)]="reporteUsuario" [disabled]="reporteCargando">
+          <option value="">{{ reporteCargando ? 'Cargando usuarios...' : 'Seleccione...' }}</option>
+          <option *ngFor="let u of reporteUsuarios" [value]="u.usuario">{{ u.usuario }} ({{ u.total }} inscripciones)</option>
+        </select>
+      </div>
+
+      <div class="campo campo-full" *ngIf="reportePorUsuario">
+        <label>Tipo *</label>
+        <select [(ngModel)]="reporteTipo">
+          <option value="DETALLADO">DETALLADO (una fila por inscripción)</option>
+          <option value="POR DIA">POR DIA (resumen por fecha)</option>
+        </select>
+      </div>
+
+      <div class="campo">
+        <label>Desde *</label>
+        <input type="date" [(ngModel)]="reporteDesde">
+      </div>
+      <div class="campo">
+        <label>Hasta *</label>
+        <input type="date" [(ngModel)]="reporteHasta">
+      </div>
+
+      <p class="campo-full" style="margin:8px 0 0; font-size:0.82rem; color:#64748b;">
+        Para un solo día, seleccione la misma fecha en ambos campos.
+        <span *ngIf="reportePorUsuario" style="display:block;">Solo se listan las cuentas con más de una inscripción.</span>
+      </p>
+
+      <div class="botones" style="margin-top:1.2rem;">
+        <button class="btn-guardar" (click)="confirmarReporte()" type="button" [disabled]="reporteGenerando || reporteCargando"
+                style="background:#2563eb; color:#fff; border:none; min-width:120px;">
+          {{ reporteGenerando ? 'Generando...' : 'Aceptar' }}
+        </button>
+        <button class="btn-cancelar" (click)="cerrarModalReporte()" type="button" [disabled]="reporteGenerando"
                 style="background:#e5e7eb; color:#374151; border:1px solid #d1d5db; min-width:120px;">
           Cancelar
         </button>
