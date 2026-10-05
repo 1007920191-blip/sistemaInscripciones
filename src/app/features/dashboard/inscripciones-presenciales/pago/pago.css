@@ -133,3 +133,42 @@ h2 {
   background: #ccc;
   cursor: not-allowed;
 }
+/* Comprobante (voucher) en el paso de pago: se muestra el actual y se puede reemplazar */
+.voucher-edicion {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #d9e0ea;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.voucher-edicion .sub-titulo {
+  margin: 0 0 10px;
+  color: #005cbf;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.voucher-caja { text-align: center; margin-bottom: 12px; }
+.voucher-datos { margin: 0 0 4px; font-size: 0.85rem; color: #334155; }
+.voucher-img {
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 8px;
+  border: 1px solid #d9e0ea;
+  background: #fff;
+}
+.voucher-edicion .campo-archivo { margin-bottom: 8px; }
+.voucher-nuevo { text-align: center; }
+.voucher-ok { color: #15803d; font-weight: 700; font-size: 0.85rem; margin: 0 0 6px; }
+.btn-descartar {
+  margin-left: 8px;
+  background: #e5e7eb;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-descartar:hover { background: #d7dbe2; }
+.voucher-error { color: #b91c1c; font-weight: 700; font-size: 0.82rem; margin: 6px 0 0; }

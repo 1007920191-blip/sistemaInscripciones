@@ -17,6 +17,7 @@ import {
   setDoc
 } from '@angular/fire/firestore';
 import { getAuth } from 'firebase/auth';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { firebaseApp } from '../firebase-config';
 import { Inscripcion, Estudiante } from '../models/inscripcion.model';
 
@@ -165,6 +166,45 @@ export class InscripcionService {
       tx.update(ref, { valor: valor + 1 });
       return String(valor);
     });
+  }
+
+  /**
+   * Sube el comprobante que reemplaza el operador de ventanilla (corrección de una
+   * inscripción que ya tenía voucher, típicamente de las inscripciones online).
+   * Usa la MISMA ruta que el sistema online (`inscripciones-online/vouchers/<uid>/…`)
+   * para que todo el sistema siga encontrando el archivo igual.
+   */
+  async subirVoucherVentanilla(file: File): Promise<{ downloadURL: string; storagePath: string; nombreArchivo: string }> {
+    const auth = getAuth(firebaseApp);
+    const uid = auth.currentUser?.uid || 'ventanilla';
+    const storage = getStorage(firebaseApp);
+    const nombreArchivo = file.name || 'voucher.jpg';
+    const storagePath = `inscripciones-online/vouchers/${uid}/${Date.now()}_${nombreArchivo}`;
+    const referencia = ref(storage, storagePath);
+    await uploadBytes(referencia, file);
+    const downloadURL = await getDownloadURL(referencia);
+    return { downloadURL, storagePath, nombreArchivo };
+  }
+
+  /**
+   * Hash SHA-256 del archivo, EXACTAMENTE igual que el sistema online: así se puede
+   * detectar si la misma foto de comprobante ya fue usada en otra inscripción.
+   */
+  async calcularHashArchivo(file: File): Promise<string> {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /** ¿Esa imagen de comprobante ya está usada? (se excluye la inscripción actual). */
+  async existeVoucherHash(hash: string, excludeId?: string): Promise<boolean> {
+    if (!hash) return false;
+    const q = query(this.inscripcionesRef, where('voucherHash', '==', hash));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return false;
+    if (excludeId) return snapshot.docs.some(d => d.id !== excludeId);
+    return true;
   }
 
   async guardarInscripcion(inscripcion: Inscripcion): Promise<string> {

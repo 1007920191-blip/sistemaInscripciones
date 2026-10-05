@@ -167,13 +167,15 @@ export class ListaO implements OnInit {
       console.log('7. Cantidad de registros finales en la lista:', resultado.length);
       console.log('============================================');
 
-      this.inscripciones = resultado;
-      this.paginaActual = 1;
+      this.ngZone.run(() => {
+        this.inscripciones = resultado;
+        this.paginaActual = 1;
+      });
     } catch (error) {
       console.error('Error al cargar inscripciones:', error);
-      this.inscripciones = [];
+      this.ngZone.run(() => this.inscripciones = []);
     } finally {
-      this.cargando = false;
+      this.ngZone.run(() => this.cargando = false);
     }
   }
 
@@ -1295,7 +1297,7 @@ export class ListaO implements OnInit {
       let estudiantes: Estudiante[] = [];
       try { estudiantes = await this.inscripcionService.obtenerEstudiantes(ins.id!); } catch {}
       if (!estudiantes || estudiantes.length===0) estudiantes = (ins.estudiantes as Estudiante[]) || [];
-      if (estudiantes.length===0) { alert('No hay estudiantes para validar.'); this.validando=false; return; }
+      if (estudiantes.length===0) { alert('No hay estudiantes para validar.'); this.ngZone.run(() => this.validando = false); return; }
       const turnos = await this.turnoService.obtenerTurnos();
       const asignacionesAula: any[] = [];
       // Plazas que SI se reservaron (incrementaron turnosedicion) en esta
@@ -1337,7 +1339,8 @@ export class ListaO implements OnInit {
             await this.asignacionService.liberarEstudiantes(asignacionesReservadas.map(a => ({ aulaId: a.aulaId, colegioId })));
           }
           alert(`No hay turno para ${est.nombres} ${est.apellidos} (${est.grado} ${est.nivel})`);
-          this.validando=false; return;
+          this.ngZone.run(() => this.validando = false);
+          return;
         }
         if (!primerTurnoId) { primerTurnoId = turno.id!; primerTurnoCodigo = turno.codigo; }
         const modo = await this.turnoGestion.determinarModoActual(turno);
@@ -1348,7 +1351,8 @@ export class ListaO implements OnInit {
             await this.asignacionService.liberarEstudiantes(asignacionesReservadas.map(a => ({ aulaId: a.aulaId, colegioId })));
           }
           alert(`No se pudo asignar aula para ${est.nombres}: ${razon}`);
-          this.validando=false; return;
+          this.ngZone.run(() => this.validando = false);
+          return;
         }
         const asig = resultado.asignaciones[0];
         (est as any).aulaAsignadaId = asig.aulaId;
@@ -1367,9 +1371,15 @@ export class ListaO implements OnInit {
       console.error('Error al validar inscripción:', error);
       alert('Error al validar.');
     } finally {
-      this.validando = false;
-      this.cerrarModalValidar();
-      await this.cargarInscripciones();
+      // El trabajo con Firestore termina FUERA de la zona de Angular, por lo que los
+      // cambios de estado no se repintaban: el modal se quedaba en "Validando…"
+      // aunque la validación ya había terminado (solo se cerraba si el usuario
+      // pulsaba la X). Con ngZone.run se repinta y el modal se cierra solo.
+      this.ngZone.run(() => {
+        this.validando = false;
+        this.cerrarModalValidar();
+      });
+      try { await this.cargarInscripciones(); } catch {}
     }
   }
 }

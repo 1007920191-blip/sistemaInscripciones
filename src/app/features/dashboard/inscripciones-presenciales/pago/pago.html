@@ -62,6 +62,32 @@
     </div>
   </div>
 
+  <!-- Comprobante: se muestra cuando la inscripción ya tiene uno (inscripciones
+       online) y se puede reemplazar por otra foto para corregirlo -->
+  <div class="voucher-edicion" *ngIf="voucherActual?.url || voucherNuevo">
+    <h3 class="sub-titulo">Comprobante de pago</h3>
+
+    <div class="voucher-caja" *ngIf="voucherActual?.url">
+      <p class="voucher-datos"><strong>Comprobante actual:</strong> {{ voucherActual?.nombre || 'voucher' }}</p>
+      <p class="voucher-datos" *ngIf="voucherActual?.numeroOperacion"><strong>N° de operación:</strong> {{ voucherActual?.numeroOperacion }}</p>
+      <img [src]="voucherActual?.url" alt="Comprobante actual" class="voucher-img">
+      <p class="voucher-datos"><a [href]="voucherActual?.url" target="_blank" rel="noopener">Ver en tamaño completo</a></p>
+    </div>
+
+    <div class="campo campo-archivo">
+      <label>Subir otro comprobante (opcional, para corregir)</label>
+      <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/*" (change)="onVoucherChange($event)">
+    </div>
+
+    <div class="voucher-nuevo" *ngIf="voucherNuevo">
+      <p class="voucher-ok">✔ Se reemplazará por: <strong>{{ voucherNuevo.name }}</strong>
+        <button type="button" class="btn-descartar" (click)="quitarVoucherNuevo()">Descartar</button>
+      </p>
+      <img *ngIf="voucherPreviewUrl" [src]="voucherPreviewUrl" alt="Nuevo comprobante" class="voucher-img">
+    </div>
+    <p class="voucher-error" *ngIf="voucherError">{{ voucherError }}</p>
+  </div>
+
   <!-- Botones -->
   <div class="botones">
     <button class="btn-volver" (click)="onVolver()">

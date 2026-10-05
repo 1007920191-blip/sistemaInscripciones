@@ -755,6 +755,22 @@ export class NuevaInscripcion implements OnInit {
     if (accion) accion();
   }
 
+  /**
+   * Comprobante que ya tiene la inscripción que se está editando (las inscripciones
+   * online suben un voucher desde el sistema externo). Se muestra en el paso Pago.
+   */
+  get voucherActualEdicion(): { url: string; nombre: string; numeroOperacion: string } | null {
+    const ins: any = this.inscripcionEditar;
+    if (!this.modoEdicion || !ins) return null;
+    const url = String(ins.voucherUrl || ins.voucherStoragePath || '').trim();
+    if (!url) return null;
+    return {
+      url,
+      nombre: String(ins.voucherNombreArchivo || 'comprobante'),
+      numeroOperacion: String(ins.voucherNumeroOperacion || ins.datosPago?.numeroOperacion || '')
+    };
+  }
+
   private async ejecutarFinalizacionConAsignacion() {
     const fin = Date.now();
     const inicio = this.inicioCronometro || fin;
@@ -838,7 +854,7 @@ export class NuevaInscripcion implements OnInit {
       const slotsLlenos = this.estudiantesRegistrados.filter((s:any)=> String(s.numeroDocumento||'').trim()).length;
       // Cantidad real es max entre existentes y llenos (no contar vacíos)
       const cantidadReal = Math.max(realesCount, slotsLlenos);
-      await this.inscripcionService.actualizarInscripcion(this.inscripcionId, {
+      const datosEdicion: any = {
         colegio: inscripcionData.colegio,
         metodoPago: inscripcionData.metodoPago,
         cantidadEstudiantes: cantidadReal,
@@ -848,7 +864,44 @@ export class NuevaInscripcion implements OnInit {
         tiempoInscripcion: inscripcionData.tiempoInscripcion,
         inicioInscripcion: inscripcionData.inicioInscripcion,
         finInscripcion: inscripcionData.finInscripcion
-      });
+      };
+      // Si el operador reemplazó el comprobante (corrección de una inscripción que ya
+      // tenía voucher, típicamente online), se sube a Storage y se actualizan los
+      // MISMOS campos que usa el sistema online.
+      const voucherNuevo: File | null = (this.datosPago as any)?.voucherFile || null;
+      if (voucherNuevo) {
+        try {
+          // Igual que el sistema online: la MISMA foto no puede usarse en otra inscripción.
+          let hash = '';
+          try { hash = await this.inscripcionService.calcularHashArchivo(voucherNuevo); } catch {}
+          if (hash) {
+            const repetida = await this.inscripcionService.existeVoucherHash(hash, this.inscripcionId);
+            if (repetida) {
+              this.finalizando = false;
+              this.mostrarAviso({
+                tipo: 'alerta',
+                titulo: 'Esa imagen de comprobante ya fue usada',
+                mensaje: 'Esta imagen ya figura en otra inscripción. Suba una foto distinta del comprobante.'
+              });
+              return;
+            }
+          }
+          const subido = await this.inscripcionService.subirVoucherVentanilla(voucherNuevo);
+          datosEdicion.voucherUrl = subido.downloadURL;
+          datosEdicion.voucherStoragePath = subido.storagePath;
+          datosEdicion.voucherNombreArchivo = subido.nombreArchivo;
+          if (hash) datosEdicion.voucherHash = hash;
+        } catch (e: any) {
+          this.finalizando = false;
+          this.mostrarAviso({
+            tipo: 'error',
+            titulo: 'No se pudo subir el comprobante',
+            mensaje: e?.message || 'Revise su conexión e intente nuevamente.'
+          });
+          return;
+        }
+      }
+      await this.inscripcionService.actualizarInscripcion(this.inscripcionId, datosEdicion);
       inscripcionId = this.inscripcionId;
     } else {
       inscripcionId = await this.inscripcionService.guardarInscripcion(inscripcionData as Inscripcion);
