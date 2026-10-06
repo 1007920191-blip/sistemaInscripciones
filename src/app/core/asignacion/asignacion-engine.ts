@@ -202,7 +202,8 @@ export class AsignacionEngine {
     limite: number
   ): boolean {
     if (aula.estudiantes + cantidad > limite) return false;
-    const limiteColegio = Math.floor(this.CAPACIDAD_DEFAULT * this.MAX_POR_COLEGIO);
+    // Límite por colegio = 50% de la capacidad REAL del aula (dinámico).
+    const limiteColegio = Math.floor(this.capacidadDe(aula.capacidad) * this.MAX_POR_COLEGIO);
     const actualColegio = aula.porColegio[colegioId] || 0;
     if (actualColegio + cantidad > limiteColegio) return false;
     return true;

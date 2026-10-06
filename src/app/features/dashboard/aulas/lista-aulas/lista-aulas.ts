@@ -123,9 +123,24 @@ export class ListaAulasComponent implements OnInit {
   }
 
   async eliminarAula(aula: Aula) {
-    if (aula.id && confirm(`¿Eliminar el aula ${aula.codigo}?`)) {
+    if (!aula.id) return;
+    try {
+      // Un aula con estudiantes inscritos NO se puede borrar: primero hay que
+      // reasignar a los participantes (pantalla Turnos → Gestionar aulas).
+      const uso = await this.aulaService.estaEnUso(aula.id);
+      if (uso.conInscritos > 0) {
+        alert(`No se puede eliminar el aula ${aula.codigo} porque tiene estudiantes inscritos en ${uso.conInscritos} turno(s).\n\nPrimero reasigne a los participantes desde Turnos → Gestionar aulas del turno.`);
+        return;
+      }
+      const aviso = uso.asignaciones > 0
+        ? `El aula ${aula.codigo} está asignada a ${uso.asignaciones} turno(s), pero sin estudiantes inscritos.\n\n¿Está seguro de eliminarla?`
+        : `¿Eliminar el aula ${aula.codigo}?`;
+      if (!confirm(aviso)) return;
       await this.aulaService.deleteAula(aula.id);
       await this.cargarDatos();
+    } catch (error) {
+      console.error('Error al eliminar aula:', error);
+      alert('No se pudo eliminar el aula.');
     }
   }
 

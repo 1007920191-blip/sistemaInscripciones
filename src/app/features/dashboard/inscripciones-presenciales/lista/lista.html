@@ -88,8 +88,12 @@
             <button class="btn-editar" (click)="editarInscripcion(ins)">
               Editar
             </button>
-            <button class="btn-lista" (click)="enviarWhatsapp(ins)" title="Enviar WhatsApp" style="background:#25D366;color:white;margin-left:4px;">
-              WhatsApp
+            <button class="btn-lista" (click)="enviarWhatsapp(ins)"
+                    [disabled]="enviandoWhatsappId === ins.id || $any(ins).whatsappEnviado === true"
+                    [title]="$any(ins).whatsappEnviado ? 'Ya enviado por WhatsApp' : 'Enviar por WhatsApp'"
+                    [style.background]="$any(ins).whatsappEnviado ? '#94a3b8' : '#25D366'"
+                    style="color:white;margin-left:4px;">
+              {{ $any(ins).whatsappEnviado ? '✓ Enviado' : (enviandoWhatsappId === ins.id ? 'Enviando…' : 'WhatsApp') }}
             </button>
             <button class="btn-lista" (click)="descargarRecibo(ins)" title="Descargar recibo" style="background:#0d6efd;color:white;margin-left:4px;">
               Recibo
@@ -220,8 +224,10 @@
                   style="background: #6c5ce7; margin-top: 4px;">
                   🖨️
                 </button>
-                <button class="btn-credencial-indiv" (click)="enviarWhatsappEstudiante(est)" title="Enviar WhatsApp" style="background: #25D366; margin-top: 4px;">
-                  💬 WhatsApp
+                <button class="btn-credencial-indiv" (click)="enviarWhatsappEstudiante(est)"
+                        [disabled]="enviandoWhatsappId === inscripcionParaLista?.id"
+                        title="Enviar por WhatsApp" style="background: #25D366; margin-top: 4px;">
+                  {{ enviandoWhatsappId === inscripcionParaLista?.id ? '⏳ Enviando…' : '💬 WhatsApp' }}
                 </button>
                 <button class="btn-credencial-indiv" (click)="abrirModalEliminar(est)" title="Eliminar estudiante" style="background:#dc2626; color:white; margin-top:4px;">
                   🗑️ Eliminar

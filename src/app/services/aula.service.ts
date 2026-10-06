@@ -177,4 +177,22 @@ export class AulaService {
     const aulas = await this.getAulas();
     return aulas.reduce((total, aula) => total + (aula.capacidad || 0), 0);
   }
+
+  /**
+   * Indica si un aula maestra está en uso: asignada a algún turno/edición y
+   * cuántas de esas asignaciones ya tienen estudiantes inscritos. Se usa para
+   * no borrar un aula que está en funcionamiento.
+   */
+  async estaEnUso(aulaId: string): Promise<{ asignaciones: number; conInscritos: number }> {
+    try {
+      const q = query(collection(db, 'turnosedicion'), where('aulaId', '==', aulaId));
+      const snap = await getDocs(q);
+      const conInscritos = snap.docs.filter(d => Number(d.data()['inscritos'] || 0) > 0).length;
+      return { asignaciones: snap.size, conInscritos };
+    } catch (error) {
+      console.error('Error verificando uso del aula:', error);
+      // Si no se puede verificar, por seguridad se asume que está en uso.
+      return { asignaciones: 1, conInscritos: 0 };
+    }
+  }
 }

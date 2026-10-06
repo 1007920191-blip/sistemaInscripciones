@@ -9,6 +9,7 @@ import { ImpresionService } from '../../../../services/impresion';
 import { AsignacionService } from '../../../../services/asignacion.service';
 import { TurnoService } from '../../../../services/turno.service';
 import { TurnoGestionService } from '../../../../services/turno-gestion.service';
+import { WhatsappService } from '../../../../services/whatsapp';
 import { Inscripcion, Estudiante } from '../../../../models/inscripcion.model';
 import { AulaTurnoDisplay, Turno } from '../../../../models/turno.model';
 import { getAuth } from 'firebase/auth';
@@ -70,7 +71,11 @@ export class ListaO implements OnInit {
   mostrarModalValidar = false;
   inscripcionAValidar: Inscripcion | null = null;
   confirmacionValidacion = false;
+  /** N° de operación que se puede corregir antes de validar. */
+  numeroOperacionValidacion = '';
   validando = false;
+  /** Inscripción cuyo WhatsApp se está enviando (para bloquear el botón). */
+  enviandoWhatsappId = '';
 
   mostrarModalEliminar = false;
   estudianteAEliminar: Estudiante | null = null;
@@ -86,7 +91,8 @@ export class ListaO implements OnInit {
     private asignacionService: AsignacionService,
     private turnoService: TurnoService,
     private turnoGestion: TurnoGestionService,
-    private ngZone: NgZone
+    private ngZone: NgZone,
+    private whatsappService: WhatsappService
   ) {}
 
   obtenerFechaHoyTexto(): string {
@@ -126,7 +132,10 @@ export class ListaO implements OnInit {
     try {
       const tieneBusqueda = !!this.terminoBusqueda.trim();
 
-      let rawDocs: Inscripcion[] = await this.inscripcionService.obtenerInscripcionesPorOrigen('online');
+      // Esta sección muestra TODAS las inscripciones (online y ventanilla) de
+      // TODOS los usuarios, del día seleccionado: sirve para supervisar,
+      // validar y corregir lo que registran otras cuentas.
+      let rawDocs: Inscripcion[] = await this.inscripcionService.obtenerInscripciones();
 
       console.log('=== LOGS ONLINE GENERAL ===');
       console.log('Fecha seleccionada:', this.fechaSeleccionada);
@@ -1133,59 +1142,126 @@ export class ListaO implements OnInit {
   async enviarWhatsapp(ins: Inscripcion): Promise<void> {
     // El botón siempre está visible y clickeable: la configuración decide qué
     // ocurre al hacer clic (no se oculta ni se deshabilita).
-    if (!(await this.leerPermisoResultados())) {
-      alert('Los resultados aún no están disponibles.');
-      return;
+    // Sistema de administración: el envío no depende del interruptor de
+    // "resultados publicados" (ese interruptor es para el sistema online, que es
+    // donde los padres ven los resultados).
+    if ((ins as any).whatsappEnviado === true) {
+      const guardada: any = (ins as any).whatsappFecha;
+      const fecha = guardada?.toDate ? guardada.toDate() : (guardada ? new Date(guardada) : null);
+      // Ya se envió: se pregunta antes de reenviar (útil para pruebas).
+      if (!confirm(`Los resultados de esta inscripción ya fueron enviados por WhatsApp${fecha ? ' el ' + fecha.toLocaleString('es-PE') : ''}.\n\n¿Desea enviar el mensaje otra vez?`)) {
+        return;
+      }
     }
-    const telRaw = String((ins as any).telefonoApoderado || '').replace(/\D/g, '');
-    if (!telRaw) { alert('No hay teléfono del apoderado registrado'); return; }
-    const telefono = telRaw.startsWith('51') ? telRaw : `51${telRaw}`;
-    const codigoIns = String((ins as any).codigo || ins.id || '').trim();
-    if (!/^\d{4}$/.test(codigoIns)) { alert('Código de inscripción inválido: ' + codigoIns); return; }
-    let est: any = (ins.estudiantes && ins.estudiantes[0]) ? ins.estudiantes[0] as any : null;
-    let codigoEst = String(est?.codigo || (est as any)?.id || '').trim();
-    if (!/^\d{5}$/.test(codigoEst)) {
-      try {
-        const lista = await this.inscripcionService.obtenerEstudiantes(codigoIns);
-        const primero = lista && lista.length ? (lista as any[]).sort((a:any,b:any)=> Number(a.codigo||a.id)-Number(b.codigo||b.id))[0] : null;
-        if (primero) { est = primero; codigoEst = String((primero as any).codigo || (primero as any).id || '').trim(); }
-      } catch {}
-    }
-    if (!/^\d{5}$/.test(codigoEst)) { alert('No se encontró código de 5 dígitos del estudiante. Abra "Lista" y use el botón por estudiante.'); return; }
-    const codigo = `${codigoIns}-${codigoEst}`;
-    const nombre = est ? `${est.nombres || ''} ${est.apellidos || ''}`.trim() || 'PARTICIPANTE' : 'PARTICIPANTE';
-    const enlace = `https://solarislee-resultados.web.app/?tipo=individual&codigo=${codigo}`;
-    const mensaje = `RESULTADOS SOLARISLEE 2026\nEstimado(a) participante:\nA traves de este enlace puede consultar su resultado:\n${enlace}\nParticipante: ${nombre}\nCódigo: ${codigo}`;
-    window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank', 'noopener,noreferrer');
+    await this.enviarWhatsappInscripcion(ins, '', true);
   }
 
   enviarWhatsappEstudiante(est: Estudiante): void {
     const ins: any = this.inscripcionParaLista;
     if (!ins) return;
-    // El envío del enlace de resultados depende de la configuración (se re-verifica aquí).
-    void this.leerPermisoResultados().then(permitido => {
-      if (!permitido) {
-        alert('Los resultados aún no están disponibles.');
-        return;
-      }
-      this.enviarWhatsappEstudianteConPermiso(est);
-    });
+    const codigoEst = String((est as any).codigo || (est as any).id || '').trim();
+    if (!/^\d{5}$/.test(codigoEst)) {
+      alert('El código del estudiante debe tener 5 dígitos (actual: ' + (codigoEst || 'vacío') + ').');
+      return;
+    }
+    // Envío individual a este alumno (no marca la inscripción como enviada).
+    void this.enviarWhatsappInscripcion(ins, codigoEst, false);
   }
 
-  private enviarWhatsappEstudianteConPermiso(est: Estudiante): void {
-    const ins: any = this.inscripcionParaLista;
-    if (!ins) return;
-    const telRaw = String(ins.telefonoApoderado || '').replace(/\D/g, '');
+  /** Nombre del evento y edición que usa la plantilla de WhatsApp. */
+  private async datosEventoWhatsapp(): Promise<{ evento: string; edicion: string }> {
+    let cfg: any = null;
+    try { cfg = await this.configuracionService.obtenerConfiguracion(); } catch { cfg = null; }
+    const evento = String(cfg?.nombreConcurso || '').trim() || 'SOLARISLEE';
+    const edicion = String(cfg?.edicion || '').trim() || String(new Date().getFullYear());
+    return { evento, edicion };
+  }
+
+  /**
+   * Envía el mensaje por WhatsApp con la función del servidor (WhatsApp
+   * Business). Ya NO abre WhatsApp Web ni usa wa.me.
+   *  - 1 alumno  → individual (código de inscripción + alumno)
+   *  - 2 o más   → UN solo mensaje institucional (código + código modular)
+   * @param codigoEstudiante cuando viene, se envía solo a ese alumno
+   * @param marcarEnviado    guarda el estado (no se reenvía por accidente)
+   */
+  private async enviarWhatsappInscripcion(ins: Inscripcion, codigoEstudiante: string, marcarEnviado: boolean): Promise<void> {
+    const telRaw = String((ins as any).telefonoApoderado || '').replace(/\D/g, '');
     if (!telRaw) { alert('No hay teléfono del apoderado registrado'); return; }
     const telefono = telRaw.startsWith('51') ? telRaw : `51${telRaw}`;
-    const codigoIns = String(ins.codigo || ins.id || '').trim();
-    const codigoEst = String((est as any).codigo || (est as any).id || '').trim();
-    if (!/^\d{4}$/.test(codigoIns) || !/^\d{5}$/.test(codigoEst)) { alert('Código inválido: ' + codigoIns + '-' + codigoEst); return; }
-    const codigo = `${codigoIns}-${codigoEst}`;
-    const nombre = `${est.nombres || ''} ${est.apellidos || ''}`.trim();
-    const enlace = `https://solarislee-resultados.web.app/?tipo=individual&codigo=${codigo}`;
-    const mensaje = `RESULTADOS SOLARISLEE 2026\nEstimado(a) participante:\nA traves de este enlace puede consultar su resultado:\n${enlace}\nParticipante: ${nombre}\nCódigo: ${codigo}`;
-    window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank', 'noopener,noreferrer');
+
+    const codigoIns = String((ins as any).codigo || ins.id || '').trim();
+    if (!/^\d{4}$/.test(codigoIns)) { alert('Código de inscripción inválido: ' + codigoIns); return; }
+
+    let alumnos: any[] = Array.isArray((ins as any).estudiantes) ? [...(ins as any).estudiantes] : [];
+    if (!alumnos.length) {
+      try { alumnos = (await this.inscripcionService.obtenerEstudiantes(ins.id!)) as any[]; } catch { alumnos = []; }
+    }
+    alumnos = alumnos.filter((e: any) => /^\d{5}$/.test(String(e?.codigo || e?.id || '').trim()));
+    if (!alumnos.length) { alert('La inscripción no tiene estudiantes con código de 5 dígitos registrados.'); return; }
+
+    let tipo: 'individual' | 'institucional';
+    let codigo = '';
+    let nombre = '';
+    let codigoModular: string | undefined;
+    let cantidad = alumnos.length;
+
+    if (codigoEstudiante) {
+      const est: any = alumnos.find((e: any) => String(e.codigo || e.id) === codigoEstudiante) || alumnos[0];
+      tipo = 'individual';
+      cantidad = 1;
+      codigo = `${codigoIns}-${String(est.codigo || est.id).trim()}`;
+      nombre = `${est.nombres || ''} ${est.apellidos || ''}`.trim() || 'PARTICIPANTE';
+    } else if (alumnos.length === 1) {
+      const est: any = alumnos[0];
+      tipo = 'individual';
+      codigo = `${codigoIns}-${String(est.codigo || est.id).trim()}`;
+      nombre = `${est.nombres || ''} ${est.apellidos || ''}`.trim() || 'PARTICIPANTE';
+    } else {
+      tipo = 'institucional';
+      codigo = codigoIns;
+      codigoModular = String((ins as any).colegio?.CODIGOMODULAR || (ins as any).colegio?.codigoModular || '').trim();
+      if (!codigoModular) { alert('La inscripción no tiene código modular de la institución.'); return; }
+      nombre = String((ins as any).nombreContacto || '').trim() || 'Responsable';
+    }
+
+    const baseUrl = 'https://solarislee-resultados.web.app/';
+    // El portal lee: individual → ?tipo=individual&codigo=AAAA-BBBBB
+    //                institucional → ?tipo=institucional&codigoInscripcion=XXXX&codigoModular=YYYY
+    const enlace = tipo === 'institucional'
+      ? `${baseUrl}?tipo=institucional&codigoInscripcion=${codigoIns}&codigoModular=${codigoModular}`
+      : `${baseUrl}?tipo=individual&codigo=${codigo}`;
+    const sede = String((ins as any).colegio?.DISTRITO || (ins as any).colegio?.PROVINCIA || '').trim();
+
+    this.ngZone.run(() => this.enviandoWhatsappId = String(ins.id || ''));
+    try {
+      const { evento, edicion } = await this.datosEventoWhatsapp();
+      const respuesta = await this.whatsappService.enviar({
+        telefono, tipo, nombre, evento, edicion,
+        url: enlace, codigo, sede: sede || 'ANDAHUAYLAS', cantidad, codigoModular
+      });
+      const messageId = String(respuesta?.messageId || '');
+
+      if (marcarEnviado) {
+        await this.inscripcionService.actualizarInscripcion(ins.id!, {
+          whatsappEnviado: true,
+          whatsappFecha: new Date(),
+          whatsappMessageId: messageId
+        });
+        this.ngZone.run(() => {
+          (ins as any).whatsappEnviado = true;
+          (ins as any).whatsappFecha = new Date();
+          (ins as any).whatsappMessageId = messageId;
+        });
+      }
+
+      this.ngZone.run(() => alert(`Mensaje enviado correctamente por WhatsApp a ${nombre}.`));
+    } catch (error: any) {
+      console.error('Error enviando WhatsApp:', error);
+      this.ngZone.run(() => alert(String(error?.message || 'No se pudo enviar el mensaje por WhatsApp.')));
+    } finally {
+      this.ngZone.run(() => this.enviandoWhatsappId = '');
+    }
   }
 
   async recargarInscripciones() {
@@ -1206,6 +1282,8 @@ export class ListaO implements OnInit {
   abrirModalValidar(ins: Inscripcion) {
     this.inscripcionAValidar = ins;
     this.confirmacionValidacion = false;
+    // Se muestra el número guardado y se puede corregir antes de validar.
+    this.numeroOperacionValidacion = String((ins as any).voucherNumeroOperacion || (ins as any).datosPago?.numeroOperacion || '');
     this.mostrarModalValidar = true;
   }
 
@@ -1363,7 +1441,18 @@ export class ListaO implements OnInit {
         asignacionesReservadas.push(asignacionReservada);
       }
       for (const est of estudiantes) { await this.inscripcionService.guardarEstudiante(est, ins.id!); }
-      await this.inscripcionService.actualizarInscripcion(ins.id!, { estado: 'completada', asignacionesAula, turnoId: primerTurnoId, turnoCodigo: primerTurnoCodigo, estudiantes });
+      await this.inscripcionService.actualizarInscripcion(ins.id!, (() => {
+        // Si el operador corrigió el N° de operación en esta ventana, se guarda.
+        const numeroCorregido = String(this.numeroOperacionValidacion || '').trim();
+        const cambios: any = { estado: 'completada', asignacionesAula, turnoId: primerTurnoId, turnoCodigo: primerTurnoCodigo, estudiantes };
+        if (numeroCorregido && numeroCorregido !== String((ins as any).voucherNumeroOperacion || '')) {
+          cambios.voucherNumeroOperacion = numeroCorregido;
+          if ((ins as any).datosPago && typeof (ins as any).datosPago === 'object') {
+            cambios.datosPago = { ...(ins as any).datosPago, numeroOperacion: numeroCorregido };
+          }
+        }
+        return cambios;
+      })());
       const idx = this.inscripciones.findIndex(i => i.id === ins.id);
       if (idx>=0) this.inscripciones[idx] = { ...this.inscripciones[idx], estado: 'completada' as any, asignacionesAula, turnoId: primerTurnoId, turnoCodigo: primerTurnoCodigo } as any;
       if (this.inscripcionAValidar) { this.inscripcionAValidar.estado='completada'; (this.inscripcionAValidar as any).asignacionesAula=asignacionesAula; }

@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { jsPDF } from 'jspdf';
 import { NuevaInscripcion } from '../nueva-inscripcion/nueva-inscripcion';
 import { InscripcionService } from '../../../../services/inscripcion';
+import { WhatsappService } from '../../../../services/whatsapp';
 import { ConfiguracionService } from '../../../../services/configuracion';
 import { ReciboService } from '../../../../services/recibo.service';
 import { ReporteCajaService, UsuarioConInscripciones } from '../../../../services/reporte-caja.service';
@@ -40,6 +41,8 @@ export class Lista implements OnInit {
   /** Generación de credenciales: NO usa cargandoLista para que el modal siga
    *  mostrando la lista de estudiantes mientras se arma el PDF. */
   generandoCredenciales = false;
+  /** Inscripción cuyo WhatsApp se está enviando (para bloquear el botón). */
+  enviandoWhatsappId = '';
 
   // Aviso con el diseño del sistema (reemplaza los alert del navegador)
   aviso = { visible: false, tipo: 'info' as 'error' | 'alerta' | 'info', titulo: '', mensaje: '', detalles: [] as string[], textoAceptar: 'Entendido', textoCancelar: '' };
@@ -111,7 +114,8 @@ export class Lista implements OnInit {
     private impresionService: ImpresionService,
     private reciboService: ReciboService,
     private reporteCajaService: ReporteCajaService,
-    private ngZone: NgZone
+    private ngZone: NgZone,
+    private whatsappService: WhatsappService
   ) {}
 
   // ============ REPORTES DE CAJA (ingresos por usuario y por día) ============
@@ -1095,29 +1099,141 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
     });
   }
 
+  /**
+   * Envía el mensaje de resultados por WhatsApp usando la función ya desplegada
+   * en el servidor (WhatsApp Business). Ya NO abre WhatsApp Web ni usa wa.me.
+   *  - 1 alumno  → mensaje individual (código de inscripción + alumno)
+   *  - 2 o más   → UN solo mensaje institucional (código + código modular)
+   * Al enviarse bien queda marcado para no reenviarlo por accidente.
+   */
   async enviarWhatsapp(ins: Inscripcion): Promise<void> {
-    const telRaw = String((ins as any).telefonoApoderado || '').replace(/\D/g, '');
-    if (!telRaw) { alert('No hay telÃ©fono del apoderado registrado'); return; }
-    const telefono = telRaw.startsWith('51') ? telRaw : `51${telRaw}`;
-    const codigoIns = String((ins as any).codigo || ins.id || '').trim();
-    if (!/^\d{4}$/.test(codigoIns)) { alert('CÃ³digo de inscripciÃ³n invÃ¡lido: ' + codigoIns); return; }
-    let est: any = (ins.estudiantes && ins.estudiantes[0]) ? ins.estudiantes[0] as any : null;
-    let codigoEst = String(est?.codigo || (est as any)?.id || '').trim();
-    if (!/^\d{5}$/.test(codigoEst)) {
-      try {
-        const lista = await this.inscripcionService.obtenerEstudiantes(codigoIns);
-        const primero = lista && lista.length ? (lista as any[]).sort((a:any,b:any)=> Number(a.codigo||a.id)-Number(b.codigo||b.id))[0] : null;
-        if (primero) { est = primero; codigoEst = String((primero as any).codigo || (primero as any).id || '').trim(); }
-      } catch {}
+    if ((ins as any).whatsappEnviado === true) {
+      const guardada: any = (ins as any).whatsappFecha;
+      const fecha = guardada?.toDate ? guardada.toDate() : (guardada ? new Date(guardada) : null);
+      // Ya se envió: se pregunta antes de reenviar (útil para pruebas).
+      const reenviar = confirm(`Los resultados de esta inscripción ya fueron enviados por WhatsApp${fecha ? ' el ' + fecha.toLocaleString('es-PE') : ''}.\n\n¿Desea enviar el mensaje otra vez?`);
+      if (!reenviar) return;
+    } else {
+      this.mostrarAviso({ tipo: 'info', titulo: 'Enviando…', mensaje: 'Enviando mensaje por WhatsApp.' });
     }
-    if (!/^\d{5}$/.test(codigoEst)) { alert('No se encontrÃ³ cÃ³digo de 5 dÃ­gitos del estudiante. Verifique que la inscripciÃ³n tenga estudiantes registrados.'); return; }
-    const codigo = `${codigoIns}-${codigoEst}`;
-    const nombre = est ? `${est.nombres || ''} ${est.apellidos || ''}`.trim() || 'PARTICIPANTE' : 'PARTICIPANTE';
+    await this.enviarWhatsappInscripcion(ins, '', true);
+  }
+
+  /** Nombre del evento y edición que usa la plantilla de WhatsApp. */
+  private async datosEventoWhatsapp(): Promise<{ evento: string; edicion: string }> {
+    let cfg: any = this.configuracion;
+    if (!cfg) {
+      try { cfg = await this.configuracionService.obtenerConfiguracion(); } catch { cfg = null; }
+    }
+    const evento = String(cfg?.nombreConcurso || '').trim() || 'SOLARISLEE';
+    const edicion = String(cfg?.edicion || '').trim() || String(new Date().getFullYear());
+    return { evento, edicion };
+  }
+
+  /**
+   * Lógica común del envío.
+   * @param codigoEstudiante cuando viene, se envía SOLO a ese alumno (botón por alumno)
+   * @param marcarEnviado    guarda el estado en la inscripción (no se reenvía)
+   */
+  private async enviarWhatsappInscripcion(ins: Inscripcion, codigoEstudiante: string, marcarEnviado: boolean): Promise<void> {
+    const telRaw = String((ins as any).telefonoApoderado || '').replace(/\D/g, '');
+    if (!telRaw) {
+      this.mostrarAviso({ tipo: 'error', titulo: 'Sin teléfono', mensaje: 'La inscripción no tiene teléfono del apoderado registrado.' });
+      return;
+    }
+    const telefono = telRaw.startsWith('51') ? telRaw : `51${telRaw}`;
+
+    const codigoIns = String((ins as any).codigo || ins.id || '').trim();
+    if (!/^\d{4}$/.test(codigoIns)) {
+      this.mostrarAviso({ tipo: 'error', titulo: 'Código inválido', mensaje: `El código de inscripción debe tener 4 dígitos (actual: ${codigoIns || 'vacío'}).` });
+      return;
+    }
+
+    // Alumnos: primero del propio documento; si no, de la subcolección.
+    let alumnos: any[] = Array.isArray((ins as any).estudiantes) ? [...(ins as any).estudiantes] : [];
+    if (!alumnos.length) {
+      try { alumnos = (await this.inscripcionService.obtenerEstudiantes(ins.id!)) as any[]; } catch { alumnos = []; }
+    }
+    alumnos = alumnos.filter((e: any) => /^\d{5}$/.test(String(e?.codigo || e?.id || '').trim()));
+    if (!alumnos.length) {
+      this.mostrarAviso({ tipo: 'error', titulo: 'Sin estudiantes', mensaje: 'La inscripción no tiene estudiantes con código de 5 dígitos registrados.' });
+      return;
+    }
+
+    let tipo: 'individual' | 'institucional';
+    let codigo = '';
+    let nombre = '';
+    let codigoModular: string | undefined;
+    let cantidad = alumnos.length;
+
+    if (codigoEstudiante) {
+      // Botón por alumno: mensaje individual para ese alumno.
+      const est: any = alumnos.find((e: any) => String(e.codigo || e.id) === codigoEstudiante) || alumnos[0];
+      tipo = 'individual';
+      cantidad = 1;
+      codigo = `${codigoIns}-${String(est.codigo || est.id).trim()}`;
+      nombre = `${est.nombres || ''} ${est.apellidos || ''}`.trim() || 'PARTICIPANTE';
+    } else if (alumnos.length === 1) {
+      const est: any = alumnos[0];
+      tipo = 'individual';
+      codigo = `${codigoIns}-${String(est.codigo || est.id).trim()}`;
+      nombre = `${est.nombres || ''} ${est.apellidos || ''}`.trim() || 'PARTICIPANTE';
+    } else {
+      tipo = 'institucional';
+      codigo = codigoIns;
+      codigoModular = String((ins as any).colegio?.CODIGOMODULAR || (ins as any).colegio?.codigoModular || '').trim();
+      if (!codigoModular) {
+        this.mostrarAviso({ tipo: 'error', titulo: 'Falta código modular', mensaje: 'La inscripción no tiene código modular de la institución.' });
+        return;
+      }
+      nombre = String((ins as any).nombreContacto || '').trim() || 'Responsable';
+    }
+
     const baseUrl = 'https://solarislee-resultados.web.app/';
-    const enlace = `${baseUrl}?tipo=individual&codigo=${codigo}`;
-    const mensaje = `RESULTADOS SOLARISLEE 2026\nEstimado(a) participante:\nA traves de este enlace puede consultar su resultado:\n${enlace}\nParticipante: ${nombre}\nCÃ³digo: ${codigo}`;
-    const whatsappUrl = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
-    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    // El portal lee: individual → ?tipo=individual&codigo=AAAA-BBBBB
+    //                institucional → ?tipo=institucional&codigoInscripcion=XXXX&codigoModular=YYYY
+    const enlace = tipo === 'institucional'
+      ? `${baseUrl}?tipo=institucional&codigoInscripcion=${codigoIns}&codigoModular=${codigoModular}`
+      : `${baseUrl}?tipo=individual&codigo=${codigo}`;
+    const sede = String((ins as any).colegio?.DISTRITO || (ins as any).colegio?.PROVINCIA || '').trim();
+
+    this.ngZone.run(() => this.enviandoWhatsappId = String(ins.id || ''));
+    try {
+      const { evento, edicion } = await this.datosEventoWhatsapp();
+      const respuesta = await this.whatsappService.enviar({
+        telefono, tipo, nombre, evento, edicion,
+        url: enlace, codigo, sede: sede || 'ANDAHUAYLAS', cantidad, codigoModular
+      });
+      const messageId = String(respuesta?.messageId || '');
+
+      if (marcarEnviado) {
+        await this.inscripcionService.actualizarInscripcion(ins.id!, {
+          whatsappEnviado: true,
+          whatsappFecha: new Date(),
+          whatsappMessageId: messageId
+        });
+        this.ngZone.run(() => {
+          (ins as any).whatsappEnviado = true;
+          (ins as any).whatsappFecha = new Date();
+          (ins as any).whatsappMessageId = messageId;
+        });
+      }
+
+      this.ngZone.run(() => this.mostrarAviso({
+        tipo: 'info',
+        titulo: 'Mensaje enviado por WhatsApp',
+        mensaje: `Se envió correctamente el mensaje a ${nombre} (${telefono}).`
+      }));
+    } catch (error: any) {
+      console.error('Error enviando WhatsApp:', error);
+      this.ngZone.run(() => this.mostrarAviso({
+        tipo: 'error',
+        titulo: 'No se pudo enviar por WhatsApp',
+        mensaje: String(error?.message || 'No se pudo enviar el mensaje por WhatsApp. Intente nuevamente.')
+      }));
+    } finally {
+      this.ngZone.run(() => this.enviandoWhatsappId = '');
+    }
   }
 
   descargarRecibo(ins: Inscripcion): void {
@@ -1133,22 +1249,16 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
     }
   }
 
-  enviarWhatsappEstudiante(est: Estudiante): void {
+  async enviarWhatsappEstudiante(est: Estudiante): Promise<void> {
     const ins: any = this.inscripcionParaLista;
     if (!ins) return;
-    const telRaw = String(ins.telefonoApoderado || '').replace(/\D/g, '');
-    if (!telRaw) { alert('No hay telÃ©fono del apoderado registrado'); return; }
-    const telefono = telRaw.startsWith('51') ? telRaw : `51${telRaw}`;
-    const codigoIns = String(ins.codigo || ins.id || '').trim();
     const codigoEst = String((est as any).codigo || (est as any).id || '').trim();
-    if (!/^\d{4}$/.test(codigoIns) || !/^\d{5}$/.test(codigoEst)) { alert('CÃ³digo invÃ¡lido: se esperaba 4 dÃ­gitos inscripciÃ³n y 5 dÃ­gitos estudiante. Actual: ' + codigoIns + '-' + codigoEst); return; }
-    const codigo = `${codigoIns}-${codigoEst}`;
-    const nombre = `${est.nombres || ''} ${est.apellidos || ''}`.trim();
-    const baseUrl = 'https://solarislee-resultados.web.app/';
-    const enlace = `${baseUrl}?tipo=individual&codigo=${codigo}`;
-    const mensaje = `RESULTADOS SOLARISLEE 2026\nEstimado(a) participante:\nA traves de este enlace puede consultar su resultado:\n${enlace}\nParticipante: ${nombre}\nCÃ³digo: ${codigo}`;
-    const whatsappUrl = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
-    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    if (!/^\d{5}$/.test(codigoEst)) {
+      this.mostrarAviso({ tipo: 'error', titulo: 'Código inválido', mensaje: 'El código del estudiante debe tener 5 dígitos (actual: ' + (codigoEst || 'vacío') + ').' });
+      return;
+    }
+    // Envío individual a este alumno (no marca la inscripción como enviada).
+    await this.enviarWhatsappInscripcion(ins, codigoEst, false);
   }
 
   // ============================================

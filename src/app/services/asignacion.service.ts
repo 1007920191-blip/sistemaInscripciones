@@ -163,7 +163,15 @@ export class AsignacionService {
           if (modo === 'normal') {
             return await this.asignarNormal(transaction, aulasDelGrado, estudiante, colegioId, aulasDocs.length, turno.id!);
           } else {
-            return await this.asignarContingencia(transaction, aulasDelGrado, estudiante, colegioId);
+            // Contingencia (turno cerrado / último día): primero se llenan al 100% las
+            // aulas existentes, repartiendo en la que tenga más espacio. Si NINGUNA puede
+            // recibir al alumno, se delega al modo normal, que abre un aula nueva (con el
+            // tope de 9 aulas por turno) para no dejar al rezagado sin aula.
+            {
+              const porContingencia = await this.asignarContingencia(transaction, aulasDelGrado, estudiante, colegioId);
+              if (porContingencia.exito) return porContingencia;
+              return await this.asignarNormal(transaction, aulasDelGrado, estudiante, colegioId, aulasDocs.length, turno.id!);
+            }
           }
         });
 
@@ -273,7 +281,8 @@ export class AsignacionService {
       
       const cabeEnCapacidad = inscritos + 1 <= capacidadFisica;
       const cabeEnLimiteOperativo = inscritos + 1 <= limiteOperativoAula;
-      const cabeEnColegio = actualColegio + 1 <= Math.floor(CAPACIDAD * MAX_POR_COLEGIO);
+      // Límite por colegio = 50% de la capacidad REAL del aula (dinámico).
+      const cabeEnColegio = actualColegio + 1 <= Math.floor(capacidadFisica * MAX_POR_COLEGIO);
       
       if (cabeEnCapacidad && cabeEnLimiteOperativo && cabeEnColegio) {
         aulasValidas.push({ ref: aula.ref, data: { ...data, capacidad: capacidadFisica } });

@@ -4,7 +4,7 @@
   </div>
   
   <div *ngIf="!cargando">
-    <h2>Inscripciones Online</h2>
+    <h2>Inscripciones Externas</h2>
     
     <div class="header-acciones">
       <div class="filtros-container">
@@ -31,17 +31,8 @@
             class="input-date">
         </div>
 
-        <!-- Toggle Ver Todos -->
-        <div class="filter-item toggle-filter">
-          <label class="switch-container">
-            <input 
-              type="checkbox" 
-              [(ngModel)]="verTodos" 
-              (change)="onFiltrar()">
-            <span class="slider round"></span>
-          </label>
-          <span class="toggle-label" (click)="verTodos = !verTodos; onFiltrar()">Ver Históricos</span>
-        </div>
+        <!-- Filtro por fecha: ya no hay "Ver Históricos" (esta sección muestra
+             todas las inscripciones por fecha). -->
       </div>
     </div>
 
@@ -53,6 +44,7 @@
           <th>Colegio</th>
           <th>Usuario</th>
           <th>Fecha</th>
+          <th>Origen</th>
           <th>Estado</th>
           <th>Acciones</th>
          </tr>
@@ -72,6 +64,12 @@
             {{ usuarioInscripcion(ins) }}
           </td>
           <td>{{ formatearFecha(ins.fechaInscripcion) }}</td>
+          <td>
+            <span [style.background]="$any(ins).origen === 'online' ? '#0ea5e9' : '#64748b'"
+                  style="color:#fff; font-weight:700; font-size:0.72rem; padding:2px 8px; border-radius:999px; letter-spacing:0.4px; white-space:nowrap;">
+              {{ $any(ins).origen === 'online' ? 'ONLINE' : 'VENTANILLA' }}
+            </span>
+          </td>
           <td>{{ ins.estado }}</td>
           
           <td class="acciones">
@@ -81,8 +79,12 @@
             <button class="btn-editar" (click)="editarInscripcion(ins)">
               Editar
             </button>
-            <button class="btn-lista" (click)="enviarWhatsapp(ins)" title="Enviar WhatsApp" style="background:#25D366;color:white;margin-left:4px;">
-              WhatsApp
+            <button class="btn-lista" (click)="enviarWhatsapp(ins)"
+                    [disabled]="enviandoWhatsappId === ins.id"
+                    [title]="$any(ins).whatsappEnviado ? 'Ya enviado por WhatsApp' : 'Enviar por WhatsApp'"
+                    [style.background]="$any(ins).whatsappEnviado ? '#94a3b8' : '#25D366'"
+                    style="color:white;margin-left:4px;">
+              {{ $any(ins).whatsappEnviado ? '✓ Enviado' : (enviandoWhatsappId === ins.id ? 'Enviando…' : 'WhatsApp') }}
             </button>
             <button class="btn-lista" (click)="verComprobante(ins)" title="Ver el comprobante (voucher Yape) que subió el usuario" style="background:#0ea5e9;color:white;margin-left:4px;">
               VER VOUCHER
@@ -216,8 +218,10 @@
                   style="background: #6c5ce7; margin-top: 4px;">
                   🖨️
                 </button>
-                <button class="btn-credencial-indiv" (click)="enviarWhatsappEstudiante(est)" title="Enviar WhatsApp" style="background:#25D366;margin-top:4px;">
-                  💬 WhatsApp
+                <button class="btn-credencial-indiv" (click)="enviarWhatsappEstudiante(est)"
+                        [disabled]="enviandoWhatsappId === inscripcionParaLista?.id"
+                        title="Enviar por WhatsApp" style="background:#25D366;margin-top:4px;">
+                  {{ enviandoWhatsappId === inscripcionParaLista?.id ? '⏳ Enviando…' : '💬 WhatsApp' }}
                 </button>
                 <button class="btn-credencial-indiv" (click)="abrirModalEliminar(est)" title="Eliminar estudiante" style="background:#dc2626;color:white;margin-top:4px;">
                   🗑️ Eliminar
@@ -343,7 +347,7 @@
 <div class="modal-overlay" *ngIf="mostrarModalValidar" (click)="cerrarModalValidar()">
   <div class="modal-content modal-validar" (click)="$event.stopPropagation()" style="max-width:720px; width:92%; max-height:90vh; display:flex; flex-direction:column; border-radius:12px; overflow:hidden; box-shadow:0 12px 32px rgba(0,0,0,0.25);">
     <div class="modal-header" style="background:linear-gradient(135deg, #005cbf 0%, #0a3d8f 100%); padding:18px 24px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
-      <h2 style="margin:0; color:white; font-size:1.15rem; font-weight:700; letter-spacing:0.3px;">Validar Inscripción Online</h2>
+      <h2 style="margin:0; color:white; font-size:1.15rem; font-weight:700; letter-spacing:0.3px;">Validar Inscripción</h2>
       <button class="btn-cerrar" (click)="cerrarModalValidar()" style="background:rgba(255,255,255,0.2); border:none; color:white; width:32px; height:32px; border-radius:50%; font-size:1.3rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">×</button>
     </div>
     <div class="modal-body" *ngIf="inscripcionAValidar" style="padding:20px 24px; background:#f8f9fa; overflow-y:auto; flex:1; min-height:0;">
@@ -363,7 +367,9 @@
         </div>
         <div class="validation-col" style="background:white; border:1px solid #e3e8ef; border-radius:10px; padding:14px; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
           <h4 style="margin:0 0 10px; color:#005cbf; font-size:0.82rem; text-transform:uppercase; border-bottom:2px solid #e3e8ef; padding-bottom:6px;">Pago</h4>
-          <p style="margin:6px 0; font-size:0.88rem;"><strong>N° Operación:</strong> {{ $any(inscripcionAValidar).voucherNumeroOperacion || '-' }}</p>
+          <p style="margin:6px 0 4px; font-size:0.88rem;"><strong>N° Operación:</strong></p>
+          <input type="text" [(ngModel)]="numeroOperacionValidacion" placeholder="N° de operación" style="width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.85rem;">
+          <small style="color:#64748b; font-size:0.72rem;">Si el número está mal escrito, corrígelo aquí: se guardará al validar.</small>
           <p style="margin:6px 0; font-size:0.88rem;"><strong>Método:</strong> <span style="text-transform:capitalize;">{{ $any(inscripcionAValidar).metodoPago }}</span></p>
         </div>
       </div>
