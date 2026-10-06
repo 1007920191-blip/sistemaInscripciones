@@ -8,7 +8,7 @@
     <label>Método de pago *</label>
     <select [(ngModel)]="metodoPago">
       <option value="">Seleccione...</option>
-      <option *ngFor="let metodo of metodosPago" [value]="metodo.id">
+      <option *ngFor="let metodo of metodosDisponibles" [value]="metodo.id">
         {{metodo.icono}} {{metodo.nombre}}
       </option>
     </select>
@@ -93,7 +93,7 @@
     <button class="btn-volver" (click)="onVolver()">
       ← Volver
     </button>
-    <button class="btn-siguiente" (click)="onConfirmar()" [disabled]="!metodoPago || !telefonoApoderado">
+    <button class="btn-siguiente" (click)="onConfirmar()" [disabled]="!metodoPago || !telefonoApoderado || cantidadEstudiantes < 1">
       Siguiente →
     </button>
   </div>

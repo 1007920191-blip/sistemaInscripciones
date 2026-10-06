@@ -1,4 +1,4 @@
-﻿import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+﻿import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ConfiguracionService } from '../../../../services/configuracion';
@@ -10,7 +10,7 @@ import { ConfiguracionService } from '../../../../services/configuracion';
   templateUrl: './pago.html',
   styleUrls: ['./pago.css']
 })
-export class PagoComponent implements OnInit, OnDestroy {
+export class PagoComponent implements OnInit, OnDestroy, OnChanges {
   @Input() colegioSeleccionado: any;
   @Input() datosEdicion: any = null;
   @Input() modoEdicion = false;
@@ -25,6 +25,8 @@ export class PagoComponent implements OnInit, OnDestroy {
    * sin que el operador tenga que volver a escribir la cantidad.
    */
   @Input() cantidadInicial = 1;
+  /** Inscripción que se está editando (respaldo directo de sus datos de pago). */
+  @Input() inscripcionActual: any = null;
   
   @Output() volver = new EventEmitter<void>();
   @Output() confirmarPago = new EventEmitter<{
@@ -90,9 +92,53 @@ export class PagoComponent implements OnInit, OnDestroy {
     { id: 'efectivo', nombre: 'EFECTIVO', icono: '💵' }
   ];
 
+  /**
+   * Opciones del selector. Si la inscripción que se edita fue pagada por
+   * transferencia (método ya retirado), se agrega su opción para que el dato
+   * guardado se vea y no obligue al operador a elegir de nuevo / cambiarlo.
+   */
+  get metodosDisponibles(): { id: string; nombre: string; icono: string }[] {
+    if (this.metodoPago && !this.metodosPago.some(m => m.id === this.metodoPago)) {
+      return [...this.metodosPago, { id: this.metodoPago, nombre: this.metodoPago.toUpperCase(), icono: '🏦' }];
+    }
+    return this.metodosPago;
+  }
+
   constructor(private configService: ConfiguracionService) {}
 
+  private preloadAplicado = false;
+
+  /**
+   * Muestra TAL CUAL lo ya guardado en la inscripción que se edita: método de
+   * pago, teléfono y cantidad. No obliga a volver a elegir, y respeta la
+   * cantidad guardada aunque sea 0 (una inscripción puede quedar esperando los
+   * datos del alumno).
+   */
+  private aplicarDatosGuardados(): void {
+    const fuente: any = this.datosEdicion || {};
+    const ins: any = this.inscripcionActual || {};
+    const metodoGuardado = String(fuente.metodo || ins.metodoPago || ins.datosPago?.metodo || '').trim();
+    // Si no quedó registrado el método pero la inscripción tiene comprobante,
+    // se muestra YAPE (la inscripción externa/online solo usa Yape).
+    const tieneVoucher = !!(ins.voucherUrl || ins.voucherStoragePath || ins.voucherNombreArchivo || this.voucherActual?.url);
+    if (metodoGuardado) this.metodoPago = metodoGuardado;
+    else if (tieneVoucher) this.metodoPago = 'yape';
+    this.telefonoApoderado = String(fuente.telefono || ins.telefonoApoderado || ins.datosPago?.telefono || '').trim();
+    const cantidadGuardada = Number(fuente.cantidad ?? ins.cantidadEstudiantes ?? ins.datosPago?.cantidad);
+    if (Number.isFinite(cantidadGuardada)) this.cantidadEstudiantes = cantidadGuardada;
+    this.preloadAplicado = true;
+  }
+
+  ngOnChanges(): void {
+    // Si los datos de la inscripción llegan después de crear el paso de pago,
+    // se aplican una sola vez (no pisa lo que el operador escriba luego).
+    if (this.modoEdicion && !this.preloadAplicado) this.aplicarDatosGuardados();
+  }
+
   async ngOnInit() {
+    // Se muestra lo ya guardado de inmediato, sin esperar la configuración.
+    if (this.modoEdicion) this.aplicarDatosGuardados();
+
     // Cargar precio desde configuración
     try {
       const costo = await this.configService.obtenerCostoInscripcion();
@@ -103,11 +149,7 @@ export class PagoComponent implements OnInit, OnDestroy {
       // Mantener valor por defecto si hay error
     }
 
-    if (this.modoEdicion && this.datosEdicion) {
-      this.metodoPago = this.datosEdicion.metodo;
-      this.cantidadEstudiantes = this.datosEdicion.cantidad;
-      this.telefonoApoderado = this.datosEdicion.telefono;
-    } else {
+    if (!this.modoEdicion) {
       // Inscripción nueva: si ya hay estudiantes reconocidos (caso Excel), la
       // cantidad aparece ya puesta y el monto (cantidad x costo) ya calculado.
       const inicial = Number(this.cantidadInicial);
@@ -185,6 +227,13 @@ export class PagoComponent implements OnInit, OnDestroy {
     
     if (!this.telefonoApoderado) {
       alert('Ingrese el teléfono del apoderado');
+      return;
+    }
+
+    // La cantidad es obligatoria: no se puede continuar con 0 porque el monto
+    // quedaría en S/ 0.00 y la inscripción se guardaría sin alumnos.
+    if (!Number.isFinite(this.cantidadEstudiantes) || this.cantidadEstudiantes < 1) {
+      alert('Seleccione la cantidad de estudiantes a inscribir.');
       return;
     }
 

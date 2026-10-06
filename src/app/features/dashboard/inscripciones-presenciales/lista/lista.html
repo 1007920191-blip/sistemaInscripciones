@@ -52,7 +52,7 @@
     <table class="tabla-inscripciones" *ngIf="inscripciones.length > 0">
       <thead>
          <tr>
-          <th>N°</th>
+          <th>Código</th>
           <th>Estudiante</th>
           <th>Colegio</th>
           <th>Fecha</th>
@@ -64,7 +64,7 @@
       <tbody>
         <!-- ← CAMBIO: Usar inscripcionesPaginadas -->
         <tr *ngFor="let ins of inscripcionesPaginadas; let i = index">
-          <td>{{ getNumeroCorrelativo(i) }}</td>
+          <td><strong>{{ ins.codigo || ins.id }}</strong></td>
           <td>
             {{ ins.estudiantes[0]?.nombres }} {{ ins.estudiantes[0]?.apellidos }}
             <span *ngIf="ins.cantidadEstudiantes > 1">

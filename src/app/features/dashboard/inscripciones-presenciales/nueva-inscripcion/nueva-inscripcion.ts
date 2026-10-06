@@ -911,7 +911,49 @@ export class NuevaInscripcion implements OnInit {
       ? [...((this.inscripcionEditar as any)?.asignacionesAula || [])]
       : [];
     const fallidos: string[] = [];
-    const estudiantesReales = this.estudiantesRegistrados.filter((s:any)=> String(s.numeroDocumento||'').trim());
+    const estudiantesReales = this.estudiantesRegistrados.filter((s:any)=>
+      String(s.numeroDocumento||'').trim() || String(s.nombres||'').trim() || String(s.apellidos||'').trim()
+    );
+    if (estudiantesReales.length === 0) {
+      // Evita que una inscripción quede guardada SIN alumnos o marcada como
+      // "completada" sin nombre de niño (fue el caso reportado). Mientras los
+      // datos no lleguen, la inscripción se deja tal como está, sin volver a
+      // guardarla vacía.
+      this.ngZone.run(() => {
+        alert('No hay ningún estudiante con datos. Complete los datos del estudiante (o elimine la fila vacía) antes de guardar.');
+        this.finalizando = false;
+      });
+      return;
+    }
+    // Todos los alumnos deben estar completos antes de guardar: nombres,
+    // apellidos, grado y número de documento (salvo el tipo "sin documento").
+    const alumnosIncompletos: string[] = [];
+    const filasVacias: number[] = [];
+    this.estudiantesRegistrados.forEach((s: any, i: number) => {
+      const nombres = String(s?.nombres || '').trim();
+      const apellidos = String(s?.apellidos || '').trim();
+      const grado = String(s?.grado || '').trim();
+      const tipo = String(s?.tipoDocumento || '').trim().toLowerCase();
+      const documento = String(s?.numeroDocumento || '').trim();
+      if (!nombres && !apellidos && !grado && !documento) { filasVacias.push(i + 1); return; }
+      const faltan: string[] = [];
+      if (!nombres) faltan.push('nombres');
+      if (!apellidos) faltan.push('apellidos');
+      if (!grado) faltan.push('grado');
+      if (tipo && tipo !== 'sd' && !documento) faltan.push('número de documento');
+      if (faltan.length) alumnosIncompletos.push(`Alumno ${i + 1}: falta ${faltan.join(', ')}`);
+    });
+    if (alumnosIncompletos.length || filasVacias.length) {
+      const detalle = [
+        ...alumnosIncompletos,
+        ...(filasVacias.length ? [`Alumno(s) ${filasVacias.join(', ')} sin datos: complete sus datos o ajuste la cantidad de estudiantes`] : [])
+      ];
+      this.ngZone.run(() => {
+        alert('Complete los datos de todos los alumnos antes de guardar:\n\n' + detalle.join('\n'));
+        this.finalizando = false;
+      });
+      return;
+    }
     const originalColegioId = String((this.inscripcionEditar as any)?.colegio?.CODIGOMODULAR || this.colegioSeleccionado?.CODIGOMODULAR || '').trim();
 
     const estudiantesParaAsignar = this.modoEdicion
