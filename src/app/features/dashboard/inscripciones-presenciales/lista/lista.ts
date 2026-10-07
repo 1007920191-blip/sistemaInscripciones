@@ -1150,13 +1150,15 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
     }
 
     // Alumnos: primero del propio documento; si no, de la subcolección.
-    let alumnos: any[] = Array.isArray((ins as any).estudiantes) ? [...(ins as any).estudiantes] : [];
+    let alumnos: any[] = [];
+    // Los códigos de 5 dígitos viven en la SUBCOLECCIÓN estudiantes.
+    // El array del documento puede no traerlos (caso de las inscripciones online),
+    // por eso se lee primero la subcolección y solo si falla se usa el array.
+    try { alumnos = (await this.inscripcionService.obtenerEstudiantes(ins.id!)) as any[]; } catch { alumnos = []; }
+    if (!alumnos.length && Array.isArray((ins as any).estudiantes)) alumnos = [...(ins as any).estudiantes];
+    alumnos = alumnos.filter((e: any) => !!String(e?.codigo || e?.id || '').trim());
     if (!alumnos.length) {
-      try { alumnos = (await this.inscripcionService.obtenerEstudiantes(ins.id!)) as any[]; } catch { alumnos = []; }
-    }
-    alumnos = alumnos.filter((e: any) => /^\d{5}$/.test(String(e?.codigo || e?.id || '').trim()));
-    if (!alumnos.length) {
-      this.mostrarAviso({ tipo: 'error', titulo: 'Sin estudiantes', mensaje: 'La inscripción no tiene estudiantes con código de 5 dígitos registrados.' });
+      this.mostrarAviso({ tipo: 'error', titulo: 'Sin estudiantes', mensaje: 'La inscripción no tiene estudiantes registrados.' });
       return;
     }
 
@@ -1253,8 +1255,8 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
     const ins: any = this.inscripcionParaLista;
     if (!ins) return;
     const codigoEst = String((est as any).codigo || (est as any).id || '').trim();
-    if (!/^\d{5}$/.test(codigoEst)) {
-      this.mostrarAviso({ tipo: 'error', titulo: 'Código inválido', mensaje: 'El código del estudiante debe tener 5 dígitos (actual: ' + (codigoEst || 'vacío') + ').' });
+    if (!codigoEst) {
+      this.mostrarAviso({ tipo: 'error', titulo: 'Código inválido', mensaje: 'El estudiante no tiene código registrado (revise la inscripción en Lista).' });
       return;
     }
     // Envío individual a este alumno (no marca la inscripción como enviada).

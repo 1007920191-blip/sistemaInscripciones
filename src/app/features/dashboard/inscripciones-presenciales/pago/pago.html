@@ -25,7 +25,7 @@
       <label>Cantidad de estudiantes</label>
       <div class="contador">
         <button (click)="decrementar()">−</button>
-        <span>{{cantidadEstudiantes}}</span>
+        <input type="text" inputmode="numeric" maxlength="3" [value]="cantidadEstudiantes" (input)="onCantidadInput($event)" style="width:58px;text-align:center;font-weight:700;font-size:1.05rem;border:1px solid #cbd5e1;border-radius:6px;padding:6px 4px;" title="Puedes escribir la cantidad">
         <button (click)="incrementar()">+</button>
       </div>
     </div>

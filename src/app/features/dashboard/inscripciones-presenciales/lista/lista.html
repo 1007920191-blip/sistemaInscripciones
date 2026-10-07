@@ -79,7 +79,12 @@
               {{ $any(ins).origen === 'online' ? 'ONLINE' : 'VENTANILLA' }}
             </span>
           </td>
-          <td>{{ ins.estado }}</td>
+          <!-- Falta validar: el estado se muestra en ROJO y NEGRITA -->
+          <td [style.color]="ins.estado === 'pendiente' ? '#b91c1c' : null"
+              [style.font-weight]="ins.estado === 'pendiente' ? '800' : null"
+              [title]="ins.estado === 'pendiente' ? 'FALTA VALIDAR esta inscripción' : null">
+            {{ ins.estado }}
+          </td>
           
           <td class="acciones">
             <button class="btn-lista" (click)="verLista(ins)" title="Ver lista y credenciales">

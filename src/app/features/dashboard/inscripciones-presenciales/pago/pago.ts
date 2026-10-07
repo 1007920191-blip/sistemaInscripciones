@@ -205,6 +205,15 @@ export class PagoComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  /** Cantidad editable: se puede escribir directo (ej. 20) sin dar 20 clics. */
+  onCantidadInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const soloDigitos = String(input.value || '').replace(/\D/g, '').slice(0, 3);
+    const n = parseInt(soloDigitos || '0', 10);
+    this.cantidadEstudiantes = Number.isFinite(n) && n >= 1 ? n : 1;
+    input.value = String(this.cantidadEstudiantes);
+  }
+
   incrementar() {
     this.cantidadEstudiantes++;
   }
