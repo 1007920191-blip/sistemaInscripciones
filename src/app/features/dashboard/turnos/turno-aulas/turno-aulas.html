@@ -1,4 +1,9 @@
 <!-- features/dashboard/turnos/turno-aulas/turno-aulas.html -->
+<!-- Módulo de resultados: va FUERA del modal de aulas (capa propia, hermano) -->
+<app-resultados-turno *ngIf="mostrarResultados"
+  [turnoId]="turno?.id || ''" [turnoCodigo]="turno?.codigo || ''"
+  [grado]="gradoResultados" [nivel]="nivelResultados" [sede]="sedeResultados"
+  (cerrar)="mostrarResultados = false"></app-resultados-turno>
 <div class="modal-overlay" (click)="onCerrar()">
   <div class="modal-content turno-aulas-modal" (click)="$event.stopPropagation()">
     
@@ -28,6 +33,7 @@
         <span *ngIf="!cargandoModal">+</span>
         {{ cargandoModal ? 'Cargando...' : 'Agregar Aula' }}
       </button>
+          <button class="btn-resultados" (click)="abrirResultados()" style="background:#2563eb;color:#fff;border:none;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer;margin-left:8px;">&#127891; Procesar resultados</button>
     </div>
 
     <!-- Buscador -->

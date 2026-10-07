@@ -40,6 +40,8 @@ export class ListaO implements OnInit {
   generandoCredenciales = false;
   /** Comprobante (voucher) de la inscripción que se está viendo. */
   voucherVisible = false;
+  /** Inscripción que se está viendo en "VER VOUCHER" (para mostrar sus datos). */
+  inscripcionVerVoucher: any = null;
   voucherUrlVer = '';
   voucherNombreVer = '';
   voucherFechaVer = '';
@@ -325,6 +327,7 @@ export class ListaO implements OnInit {
     this.voucherUrlVer = url;
     this.voucherNombreVer = detalle;
     this.voucherFechaVer = this.formatearFechaTexto(data.fechaInscripcion);
+    this.inscripcionVerVoucher = ins;
     this.voucherVisible = true;
   }
 

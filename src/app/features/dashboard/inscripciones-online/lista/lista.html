@@ -399,12 +399,31 @@
 
 <!-- Modal Ver Comprobante (voucher Yape) de una inscripción online ya validada -->
 <div class="modal-overlay" *ngIf="voucherVisible" (click)="cerrarComprobante()">
-  <div class="modal-content" (click)="$event.stopPropagation()" style="max-width:680px; width:94%;">
+  <div class="modal-content" (click)="$event.stopPropagation()" style="max-width:960px; width:95%; background:#fff; border-radius:12px; overflow:hidden; max-height:92vh; display:flex; flex-direction:column;">
     <div class="modal-header">
       <h2>COMPROBANTE DE PAGO</h2>
       <button class="btn-cerrar" (click)="cerrarComprobante()" type="button">×</button>
     </div>
-    <div class="modal-body" style="text-align:center;">
+    <div class="modal-body" style="text-align:center; background:#fff; overflow-y:auto;">
+      <!-- Datos que llenó el apoderado (además de la imagen) -->
+      <div *ngIf="inscripcionVerVoucher" style="text-align:left; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; margin-bottom:14px;">
+        <div style="font-weight:800; color:#005cbf; font-size:0.82rem; text-transform:uppercase; margin-bottom:8px;">Datos de la inscripción</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:8px 18px; font-size:0.88rem; color:#334155;">
+          <div><b>Código:</b> {{ $any(inscripcionVerVoucher).codigo || $any(inscripcionVerVoucher).id }}</div>
+          <div><b>Estado:</b> {{ $any(inscripcionVerVoucher).estado || '—' }}</div>
+          <div><b>Usuario:</b> {{ $any(inscripcionVerVoucher).correoApoderado || $any(inscripcionVerVoucher).usuarioId || '—' }}</div>
+          <div><b>Teléfono apoderado:</b> {{ $any(inscripcionVerVoucher).telefonoApoderado || '—' }}</div>
+          <div><b>Colegio:</b> {{ $any(inscripcionVerVoucher).colegio?.IE || '—' }}</div>
+          <div><b>Código modular:</b> {{ $any(inscripcionVerVoucher).colegio?.CODIGOMODULAR || '—' }}</div>
+          <div><b>Estudiantes:</b> {{ $any(inscripcionVerVoucher).cantidadEstudiantes || '—' }}</div>
+          <div><b>Monto:</b> S/ {{ $any(inscripcionVerVoucher).montoTotal ?? '—' }}</div>
+          <div><b>Método de pago:</b> {{ $any(inscripcionVerVoucher).metodoPago || '—' }}</div>
+          <div><b>Fecha:</b> {{ voucherFechaVer || '—' }}</div>
+        </div>
+        <div style="margin-top:10px; padding:10px 12px; background:#e3f2fd; border:1px solid #bbdefb; border-radius:8px; color:#0d47a1; font-weight:800; font-size:0.95rem;">
+          N° de Operación (valor guardado actual): {{ $any(inscripcionVerVoucher).voucherNumeroOperacion || '(sin número)' }}
+        </div>
+      </div>
       <p style="margin:0 0 10px; font-size:0.86rem; color:#475569;">
         {{ voucherNombreVer }}<span *ngIf="voucherFechaVer"> · {{ voucherFechaVer }}</span>
       </p>

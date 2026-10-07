@@ -1,5 +1,6 @@
 // features/dashboard/turnos/turno-aulas/turno-aulas.ts
 import { Component, EventEmitter, Input, OnInit, OnChanges, OnDestroy, Output, SimpleChanges, NgZone } from '@angular/core';
+import { ResultadosTurno } from '../resultados/resultados';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TurnoAulaService } from '../../../../services/turno-aula.service';
@@ -14,7 +15,7 @@ import { jsPDF } from 'jspdf';
 @Component({
   selector: 'app-turno-aulas',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [ResultadosTurno, CommonModule, FormsModule],
   templateUrl: './turno-aulas.html',
   styleUrls: ['./turno-aulas.css']
 })
@@ -34,6 +35,22 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
   // Grados disponibles del turno actual (solo los que tiene el turno)
   gradosDelTurno: string[] = [];
   gradoSeleccionado: string = '';
+
+  /** --- Módulo de resultados (Procesar resultados) --- */
+  mostrarResultados = false;
+
+  get gradoResultados(): string {
+    const s = String(this.gradoSeleccionado || '').toUpperCase().trim();
+    return s.replace(/\s*(PRIMARIA|SECUNDARIA)\s*$/, '').trim() || s;
+  }
+  get nivelResultados(): string {
+    const s = String(this.gradoSeleccionado || '').toUpperCase();
+    if (s.includes('SECUNDARIA')) return 'SECUNDARIA';
+    if (s.includes('PRIMARIA')) return 'PRIMARIA';
+    return '';
+  }
+  get sedeResultados(): string { return String((this as any).sede || 'ANDAHUAYLAS'); }
+  abrirResultados(): void { this.mostrarResultados = true; }
   
   // Aula seleccionada para mostrar en preview
   aulaParaAsignar?: Aula;
