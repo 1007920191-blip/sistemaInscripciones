@@ -1,4 +1,5 @@
-import { Component, OnInit, Output, EventEmitter, NgZone } from '@angular/core';
+import { Component, OnInit, Output, EventEmitter, NgZone, inject } from '@angular/core';
+import { ReciboService } from '../../../../services/recibo.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { jsPDF } from 'jspdf';
@@ -24,6 +25,23 @@ import { firebaseApp } from '../../../../firebase-config';
   styleUrls: ['./lista.css']
 })
 export class ListaO implements OnInit {
+  /** Recibo (duplicado) — misma función que en Inscripciones Presenciales. */
+  private reciboService = inject(ReciboService);
+  descargarRecibo(ins: Inscripcion): void {
+    void this.generarReciboConConfig(ins);
+  }
+
+  /** Carga la configuración y genera el recibo (duplicado) de la inscripción. */
+  private async generarReciboConConfig(ins: Inscripcion): Promise<void> {
+    try {
+      const cfg: any = await this.configuracionService.obtenerConfiguracion();
+      if (!cfg) { alert('Configuración no cargada. Intente recargar la página.'); return; }
+      this.reciboService.generarRecibo(ins, cfg);
+    } catch (error) {
+      console.error('Error al generar recibo:', error);
+      alert('Error al generar el recibo');
+    }
+  }
   mostrarNuevaInscripcion = false;
   inscripciones: Inscripcion[] = [];
   cargando = true;
@@ -57,6 +75,10 @@ export class ListaO implements OnInit {
   // Modal de Impresión — compartido individual/grupal
   mostrarModalImpresionIndividual = false;
   tipoImpresionIndividual: 'TARJETA' | 'CARTILLA' = 'TARJETA';
+  /** Alineación al imprimir la credencial: centrada (actual) o a la izquierda (como el sistema online). */
+  alineacionImpresion: 'CENTRADA' | 'IZQUIERDA' = 'CENTRADA';
+  /** Si es true, la ventana solo pregunta la ALINEACIÓN y genera la CREDENCIAL (no tarjeta). */
+  modoCredencialImpresion = false;
   alternativasImpresionIndividual: number = 4;
   estudianteParaImpresion: Estudiante | null = null;
   estudiantesParaImpresionGrupal: Estudiante[] = []; // usado en modo grupal
@@ -515,7 +537,7 @@ export class ListaO implements OnInit {
     };
   }
 
-  async generarCredencialesPDF(estudiantesAImprimir: Estudiante[]) {
+  async generarCredencialesPDF(estudiantesAImprimir: Estudiante[], alineacion: string = 'CENTRADA') {
     if (!estudiantesAImprimir || estudiantesAImprimir.length === 0) {
       alert('Por favor, seleccione al menos un estudiante para generar las credenciales.');
       return;
@@ -580,7 +602,7 @@ export class ListaO implements OnInit {
         this.cargarImagenBase64(config?.fondoCredencial || '')
       ]);
 
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [105, 297] });
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: (alineacion === 'IZQUIERDA') ? [210, 297] : [105, 297] }); // A la izquierda: hoja A4 completa (8 por hoja)
       const stripWidth = 95;
       const stripHeight = 72.5;
       const spacing = 1.6;
@@ -591,15 +613,17 @@ export class ListaO implements OnInit {
 
       for (let index = 0; index < totalEstudiantes; index++) {
         const est = estudiantesAImprimir[index];
-        const posEnPagina = index % 4;
+        const posEnPagina = (alineacion === 'IZQUIERDA') ? (index % 8) : (index % 4); // Izquierda: 8 por hoja (2 columnas x 4 filas)
 
         // Paginación automática tras 4 credenciales
         if (index > 0 && posEnPagina === 0) {
           doc.addPage();
         }
 
-        const x = startX; // Una sola columna
-        const y = startY + posEnPagina * (stripHeight + spacing);
+        const esIzq = (alineacion === 'IZQUIERDA');
+      const colCred = esIzq ? Math.floor(posEnPagina / 4) : 0;
+      const x = esIzq ? (startX + colCred * (stripWidth + 4.2)) : (doc.internal.pageSize.getWidth() - stripWidth) / 2; // Centrada (1 por hoja) o a la izquierda (8 por hoja)
+        const y = (esIzq ? 1.5 : startY) + (esIzq ? (posEnPagina % 4) : posEnPagina) * (stripHeight + spacing); // 4 filas que entran en A4
 
         const asignacion = this.asignacionDeEstudiante(est);
         const aulaAsignadaId = asignacion.aulaId;
@@ -851,14 +875,20 @@ export class ListaO implements OnInit {
     this.generarCredencialesPDF(seleccionados);
   }
 
-  descargarCredencialIndividual(estudiante: Estudiante) {
-    this.generarCredencialesPDF([estudiante]);
+  descargarCredencialIndividual(estudiante: Estudiante, alineacion: string = 'CENTRADA') {
+    this.generarCredencialesPDF([estudiante], alineacion);
   }
 
   // ============================================
   // IMPRIMIR TARJETA / CARTILLA INDIVIDUAL
   // ============================================
+  abrirModalCredencial(est: Estudiante) {
+    this.abrirModalImpresionIndividual(est);
+    this.modoCredencialImpresion = true; // SIEMPRE al final (el metodo anterior la reinicia)
+  }
+
   abrirModalImpresionIndividual(est: Estudiante) {
+    this.modoCredencialImpresion = false;
     this.estudianteParaImpresion = est;
     this.modoImpresionGrupal = false;
     this.estudiantesParaImpresionGrupal = [];
@@ -868,6 +898,7 @@ export class ListaO implements OnInit {
   }
 
   abrirModalImpresionGrupal() {
+    this.modoCredencialImpresion = false; // grupal
     const seleccionados = this.estudiantesParaLista.filter(est =>
       est.numeroDocumento && this.estudiantesSeleccionados.has(est.numeroDocumento)
     );
@@ -889,6 +920,13 @@ export class ListaO implements OnInit {
   }
 
   async confirmarImpresionIndividual() {
+    if (this.modoCredencialImpresion) {
+      const estCred = this.estudianteParaImpresion;
+      this.modoCredencialImpresion = false;
+      this.mostrarModalImpresionIndividual = false;
+      if (estCred) { this.descargarCredencialIndividual(estCred, this.alineacionImpresion); }
+      return;
+    }
     this.cargandoImpresion = true;
     try {
       let config: any = null;
@@ -968,7 +1006,7 @@ export class ListaO implements OnInit {
       const dummyTurno = estudiantesEnriquecidos[0]?.turnoObj || {} as Turno;
 
       if (this.tipoImpresionIndividual === 'TARJETA') {
-        await this.impresionService.generarTarjetas(estudiantesEnriquecidos, dummyAula, dummyTurno, config);
+        await this.impresionService.generarTarjetas(estudiantesEnriquecidos, dummyAula, dummyTurno, config, this.alineacionImpresion);
       } else {
         await this.impresionService.generarCartillas(estudiantesEnriquecidos, dummyAula, dummyTurno, config, this.alternativasImpresionIndividual);
       }

@@ -1,7 +1,7 @@
 <!-- features/dashboard/turnos/turno-aulas/turno-aulas.html -->
 <!-- Módulo de resultados: va FUERA del modal de aulas (capa propia, hermano) -->
 <app-resultados-turno *ngIf="mostrarResultados"
-  [turnoId]="turno?.id || ''" [turnoCodigo]="turno?.codigo || ''"
+  [turnoId]="turno.id || ''" [turnoCodigo]="turno.codigo || ''"
   [grado]="gradoResultados" [nivel]="nivelResultados" [sede]="sedeResultados"
   (cerrar)="mostrarResultados = false"></app-resultados-turno>
 <div class="modal-overlay" (click)="onCerrar()">

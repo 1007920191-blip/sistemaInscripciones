@@ -11,7 +11,7 @@ export class ImpresionService {
 
   constructor() {}
 
-  async generarTarjetas(estudiantes: any[], aula: AulaTurnoDisplay, turno: Turno, config: any) {
+  async generarTarjetas(estudiantes: any[], aula: AulaTurnoDisplay, turno: Turno, config: any, alineacion: string = 'CENTRADA') {
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -101,7 +101,7 @@ export class ImpresionService {
       doc.setFont('helvetica', 'bold');
       doc.text(String(est.id || '—'), xactual + 70, yactual + 52 + altoBarra + 4.2, { align: 'center' });
 
-      if ((x + 1) % 2 === 0) {
+      if (alineacion !== 'IZQUIERDA' && (x + 1) % 2 === 0) {
         yactual = yactual + incy;
         xactual = 7;
         if ((x + 1) % 8 !== 0) {
@@ -110,10 +110,13 @@ export class ImpresionService {
           doc.setLineDashPattern([], 0);
         }
       } else {
-        xactual += incx;
+        if (alineacion !== 'IZQUIERDA') xactual += incx; // con IZQUIERDA se queda en la esquina
       }
 
-      if ((x + 1) % 8 === 0 && x < estudiantes.length - 1) {
+      if (alineacion === 'IZQUIERDA') {
+        // Una credencial por hoja (igual que el sistema online)
+        if (x < estudiantes.length - 1) { doc.addPage(); xactual = 7; yactual = 7; }
+      } else if ((x + 1) % 8 === 0 && x < estudiantes.length - 1) {
         doc.addPage();
         doc.setLineDashPattern([4, 2], 0);
         doc.line(105, 7, 105, 290, 'S');

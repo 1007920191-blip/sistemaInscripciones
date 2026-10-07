@@ -9,7 +9,7 @@
       <span>Nuevo Turno</span>
     </button>
     
-    <button class="btn-reporte">
+    <button class="btn-reporte" (click)="descargarReporteInscritos()" [disabled]="generandoReporte" title="Descargar el reporte de inscritos en PDF">
       <span class="icono">📊</span>
       <span>Reporte de inscritos</span>
     </button>

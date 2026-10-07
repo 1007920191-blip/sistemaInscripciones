@@ -5,6 +5,7 @@
   
   <div *ngIf="!cargando">
     <h2>Inscripciones Externas</h2>
+    <div style="margin:4px 0 10px;"><div style="display:inline-flex; align-items:center; gap:8px; background:#25D366; color:#ffffff; padding:6px 12px; border-radius:999px; font-weight:700; font-size:0.82rem; margin:6px 0;"><span style="font-size:1rem;">💬</span> Soporte y validaciones: 983 376 698</div></div>
     
     <div class="header-acciones">
       <div class="filtros-container">
@@ -94,6 +95,7 @@
             <button class="btn-lista" (click)="verComprobante(ins)" title="Ver el comprobante (voucher Yape) que subió el usuario" style="background:#0ea5e9;color:white;margin-left:4px;">
               VER VOUCHER
             </button>
+            <button class="btn-lista" (click)="descargarRecibo(ins)" title="Descargar recibo (duplicado)" style="background:#0d6efd;color:white;margin-left:4px;">RECIBO</button>
             <button class="btn-validar" (click)="abrirModalValidar(ins)" *ngIf="ins.estado === 'pendiente'" title="Validar inscripción" style="background:#28a745; color:white; margin-left:4px;">
               Validar
             </button>
@@ -216,7 +218,7 @@
                 <span class="badge-sin-aula" *ngIf="!est.codigoAula">Sin aula</span>
               </td>
               <td style="text-align: center;">
-                <button class="btn-credencial-indiv" (click)="descargarCredencialIndividual(est)" [disabled]="generandoCredenciales" title="Generar credencial individual">
+                <button class="btn-credencial-indiv" (click)="abrirModalCredencial(est)" [disabled]="generandoCredenciales" title="Generar credencial individual">
                   {{ generandoCredenciales ? '⏳' : '🪪 Credencial' }}
                 </button>
                 <button class="btn-credencial-indiv" (click)="abrirModalImpresionIndividual(est)" title="Imprimir Tarjeta o Cartilla"
@@ -265,7 +267,7 @@
 
         <button 
           class="btn-pdf-credenciales"
-          (click)="abrirModalImpresionGrupal()"
+          (click)="descargarCredencialesGrupales()"
           [disabled]="cargandoLista || generandoCredenciales || estudiantesSeleccionados.size === 0"
           title="Generar Tarjeta o Cartilla de los seleccionados"
           style="background: #6c5ce7;">
@@ -281,7 +283,7 @@
   <div class="modal-content modal-form" (click)="$event.stopPropagation()" style="max-width: 400px;">
 
     <div class="header">
-      <h2>OPCIONES DE IMPRESIÓN</h2>
+      <h2>{{ modoCredencialImpresion ? 'OPCIONES DEL CREDENCIAL' : 'OPCIONES DE IMPRESIÓN' }}</h2>
       <button class="btn-cerrar" (click)="cerrarModalImpresionIndividual()" type="button">×</button>
     </div>
 
@@ -299,7 +301,19 @@
         </ng-container>
       </div>
 
-      <div class="campo campo-full">
+      <div class="campo campo-full" style="margin-bottom: 14px;" *ngIf="modoCredencialImpresion">
+        <label>ALINEACIÓN DE LA CREDENCIAL</label>
+        <div style="display: flex; gap: 1.4rem; margin-top: 0.5rem; justify-content: center; align-items: center; padding: 8px;">
+          <label style="cursor: pointer; display: flex; gap: 6px; align-items: center;">
+            <input type="radio" name="alineacionImpresionLista" value="CENTRADA" [(ngModel)]="alineacionImpresion"> Centrada
+          </label>
+          <label style="cursor: pointer; display: flex; gap: 6px; align-items: center;">
+            <input type="radio" name="alineacionImpresionLista" value="IZQUIERDA" [(ngModel)]="alineacionImpresion"> A la izquierda
+          </label>
+        </div>
+      </div>
+
+      <div class="campo campo-full" *ngIf="!modoCredencialImpresion">
         <label>TIPO DE IMPRESIÓN</label>
         <div style="display: flex; gap: 1rem; margin-top: 0.5rem; justify-content: center; align-items: center; padding: 10px;">
           <label style="cursor: pointer;">
