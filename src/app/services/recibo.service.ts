@@ -92,10 +92,7 @@ export class ReciboService {
 
     const dniApoderado = ins?.telefonoApoderado || '';
     const nombreTitular = config?.nombreCompletoTitularYape || config?.titularYape || '';
-    left('A NOMBRE DE:', y, 7, 'bold'); y += 4;
-    if (dniApoderado) { left(String(dniApoderado), y, 7, 'normal'); y += 4; }
-    if (nombreTitular) { left(String(nombreTitular).toUpperCase().substring(0, 32), y, 7, 'normal'); y += 5; }
-    else { y += 1; }
+    // Bloque 'A NOMBRE DE:' retirado a pedido del asesor (no debe aparecer en el recibo).
 
     left('MET. PAGO:', y, 7, 'bold'); right(String(ins?.metodoPago || 'N/A').toUpperCase(), y, 7, 'normal'); y += 5;
 

@@ -570,6 +570,43 @@ export class Lista implements OnInit {
   // ============================================
   // GENERACIÃ“N DE CREDENCIALES PDF (Media Hoja A4, MÃ¡x 4 por pÃ¡g, 1 sola columna)
   // ============================================
+  /** LUGAR que sale en la credencial: se toma del LOCAL del aula (aula maestra), nunca del colegio del alumno. */
+  /** Caché del LOCAL por aula: evita leer Firestore una vez por alumno (así genera al instante). */
+  private lugarAulaCache = new Map<string, string>();
+
+  /** LUGAR de la credencial: LOCAL del aula maestra (nunca el colegio del alumno). */
+  private async obtenerLugarDelAula(aulaId: string, codigoAula?: string): Promise<string> {
+    const clave = String(aulaId || '') + '|' + String(codigoAula || '');
+    if (this.lugarAulaCache.has(clave)) { return this.lugarAulaCache.get(clave) as string; }
+    let lugar = '';
+    try {
+      const dbLocal = getFirestore(firebaseApp);
+      let idMaestra = '';
+      let codigo = String(codigoAula || '');
+      const asig = await getDoc(firestoreDoc(dbLocal, 'turnosedicion', aulaId));
+      if (asig.exists()) {
+        const d: any = asig.data();
+        lugar = String(d?.local || d?.sede || '');
+        idMaestra = String(d?.aulaId || '');
+        if (!codigo) { codigo = String(d?.codigoAula || ''); }
+      }
+      if (!idMaestra) { idMaestra = aulaId; }
+      let maestraSnap: any = await getDoc(firestoreDoc(dbLocal, 'aulas', idMaestra));
+      if ((!maestraSnap || !maestraSnap.exists()) && codigo) {
+        const q = await getDocs(query(collection(dbLocal, 'aulas'), where('codigo', '==', codigo)));
+        if (!q.empty) { maestraSnap = await getDoc(firestoreDoc(dbLocal, 'aulas', q.docs[0].id)); }
+      }
+      if (maestraSnap && maestraSnap.exists()) {
+        const localMaestra = String((maestraSnap.data() as any)?.local || '');
+        if (localMaestra) { lugar = localMaestra; }
+      }
+    } catch (e) {
+      console.warn('No se pudo leer el LOCAL del aula:', e);
+    }
+    this.lugarAulaCache.set(clave, lugar);
+    return lugar;
+  }
+
   async generarCredencialesPDF(estudiantesAImprimir: Estudiante[], alineacion: string = 'CENTRADA') {
     if (!estudiantesAImprimir || estudiantesAImprimir.length === 0) {
       alert('Por favor, seleccione al menos un estudiante para generar las credenciales.');
@@ -649,7 +686,7 @@ export class Lista implements OnInit {
       
       for (let index = 0; index < totalEstudiantes; index++) {
         const est = estudiantesAImprimir[index];
-        const posEnPagina = (alineacion === 'IZQUIERDA') ? (index % 8) : (index % 4); // Izquierda: 8 por hoja (2 columnas x 4 filas)
+        const posEnPagina = index % 4; // 4 por hoja (a la izquierda van 2 columnas x 2 filas)
         
         // PaginaciÃ³n automÃ¡tica tras 4 credenciales
         if (index > 0 && posEnPagina === 0) {
@@ -657,9 +694,9 @@ export class Lista implements OnInit {
         }
 
         const esIzq = (alineacion === 'IZQUIERDA');
-      const colCred = esIzq ? Math.floor(posEnPagina / 4) : 0;
+      const colCred = esIzq ? Math.floor(posEnPagina / 2) : 0;
       const x = esIzq ? (startX + colCred * (stripWidth + 4.2)) : (doc.internal.pageSize.getWidth() - stripWidth) / 2; // Centrada (1 por hoja) o a la izquierda (8 por hoja)
-        const y = (esIzq ? 1.5 : startY) + (esIzq ? (posEnPagina % 4) : posEnPagina) * (stripHeight + spacing); // 4 filas que entran en A4
+        const y = (esIzq ? 1.5 : startY) + (esIzq ? (posEnPagina % 2) : posEnPagina) * (stripHeight + spacing); // 2 columnas x 2 filas en A4
 
         const asignacion = this.asignacionParaEstudiante(est);
         
@@ -670,7 +707,7 @@ export class Lista implements OnInit {
         const aulaInfo = aulaAsignadaId ? aulaCache.get(aulaAsignadaId) : null;
         const turnoInfo = turnoCodigoEst !== 'T—' ? turnoCache.get(turnoCodigoEst) : null;
 
-        const sedeVal = aulaInfo?.local || aulaInfo?.sede || 'â€”';
+        const sedeVal = (await this.obtenerLugarDelAula(aulaAsignadaId || '', codigoAulaEst)) || aulaInfo?.local || aulaInfo?.sede || 'â€”';
         const pabellonVal = aulaInfo?.pabellon || 'â€”';
         const pisoVal = aulaInfo?.piso || 'â€”';
         const puertaVal = aulaInfo?.puertaAcceso || 'â€”';
@@ -718,7 +755,7 @@ export class Lista implements OnInit {
         const codigoUnido = `${codPago}-${codEst}`;
         const colNombre = (colInfo?.IE || 'N/A').toUpperCase();
         const codModular = colInfo?.CODIGOMODULAR || 'â€”';
-        const ieLugar = aulaInfo?.local || colInfo?.DISTRITO || sedeVal;
+        const ieLugar = (await this.obtenerLugarDelAula(aulaAsignadaId || '', codigoAulaEst)) || aulaInfo?.local || colInfo?.DISTRITO || sedeVal;
         const fechaVal = '22-08-2026';
         const fechaTurno: any = turnoInfo?.fecha;
         const f = fechaTurno?.toDate ? fechaTurno.toDate() : fechaTurno ? new Date(fechaTurno) : null;
@@ -915,7 +952,11 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
       return;
     }
 
-    this.generarCredencialesPDF(seleccionados);
+    // Preguntar la alineación (igual que en el credencial individual)
+    this.abrirModalImpresionIndividual(seleccionados[0]);
+    this.modoImpresionGrupal = true;
+    this.estudiantesParaImpresionGrupal = seleccionados;
+    this.modoCredencialImpresion = true;
   }
 
   descargarCredencialIndividual(estudiante: Estudiante, alineacion: string = 'CENTRADA') {
@@ -964,10 +1005,17 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
 
   async confirmarImpresionIndividual() {
     if (this.modoCredencialImpresion) {
+      const alineacionCred = this.alineacionImpresion;
+      const eraGrupal = this.modoImpresionGrupal;
       const estCred = this.estudianteParaImpresion;
+      const grupoCred = [...this.estudiantesParaImpresionGrupal];
       this.modoCredencialImpresion = false;
       this.mostrarModalImpresionIndividual = false;
-      if (estCred) { this.descargarCredencialIndividual(estCred, this.alineacionImpresion); }
+      if (eraGrupal && grupoCred.length) {
+        this.generandoCredenciales = true;
+        void this.generarCredencialesPDF(grupoCred, alineacionCred).finally(() => { this.generandoCredenciales = false; });
+      }
+      else if (estCred) { this.descargarCredencialIndividual(estCred, alineacionCred); }
       return;
     }
     this.cargandoImpresion = true;
@@ -1018,7 +1066,7 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
           pabellon: '',
           piso: 0,
           puertaAcceso: '',
-          sede: this.inscripcionParaLista?.colegio?.IE || '',
+          sede: (await this.obtenerLugarDelAula(aulaId, codigoAula)) || this.inscripcionParaLista?.colegio?.IE || '',
           turnoId: turnoId
         };
 

@@ -282,7 +282,18 @@ export class NuevaInscripcion implements OnInit {
     this.pasoActual = 'colegio';
   }
 
-  onConfirmarPago(datos: any) {
+  async onConfirmarPago(datos: any) {
+    // Evitar pagos Yape duplicados: el N° de operación no puede repetirse.
+    const numOperacionNuevo = String(datos?.numeroOperacion || '').trim();
+    if (String(datos?.metodo || '').toLowerCase() === 'yape' && numOperacionNuevo) {
+      try {
+        const yaUsado = await this.inscripcionService.existeNumeroOperacion(numOperacionNuevo, String((this.inscripcionEditar as any)?.id || ''));
+        if (yaUsado) {
+          alert('El N° de operación ' + numOperacionNuevo + ' ya está registrado en otra inscripción.\\n\\nVerifica el comprobante: no se puede usar el mismo Yape dos veces.');
+          return;
+        }
+      } catch (e) { console.warn('No se pudo verificar el N° de operación:', e); }
+    }
     // Precio por estudiante según la configuración (el componente de pago lo
     // resuelve y lo envía): evita montos inventados al recalcular la cantidad.
     const precioPorEstudiante = (Number(datos?.cantidad) > 0 && Number(datos?.monto) > 0)
@@ -821,6 +832,7 @@ export class NuevaInscripcion implements OnInit {
       cantidadEstudiantes: this.datosPago?.cantidad ?? estudiantesConColegioActualizado.length,
       montoTotal: this.datosPago?.monto ?? (estudiantesConColegioActualizado.length * this.precioPorEstudianteActual),
       telefonoApoderado: this.datosPago?.telefono || '',
+    voucherNumeroOperacion: this.datosPago?.numeroOperacion || undefined,
       estudiantes: estudiantesConColegioActualizado.map((e:any)=> {
         const clean: any = {};
         for (const k of Object.keys(e)) {

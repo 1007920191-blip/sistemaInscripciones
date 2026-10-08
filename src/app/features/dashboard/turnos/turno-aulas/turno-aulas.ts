@@ -1,3 +1,5 @@
+import { getFirestore, collection, getDocs, query, where } from 'firebase/firestore';
+import { firebaseApp } from '../../../../firebase-config';
 // features/dashboard/turnos/turno-aulas/turno-aulas.ts
 import { Component, EventEmitter, Input, OnInit, OnChanges, OnDestroy, Output, SimpleChanges, NgZone } from '@angular/core';
 import { ResultadosTurno } from '../resultados/resultados';
@@ -110,6 +112,8 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
 
   cargando: boolean = false;
   cargandoModal: boolean = false;
+  /** Interruptor propio del boton "Agregar Aula": no se comparte con la impresion (antes se quedaba cargando). */
+  cargandoAgregarAula: boolean = false;
 
   // Paginación
   itemsPorPagina: number = 4;
@@ -354,29 +358,61 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   // Gestión de aulas
-  async abrirModalAsignar() {
-    this.cargandoModal = true;
+  /** Lectura directa de respaldo: aulas maestras compatibles con el grado y aun no asignadas a este turno. */
+  private async obtenerAulasDisponiblesDirecto(grado: string, nivel: string): Promise<Aula[]> {
     try {
-      const grado = this.normalizarGradoDisplay(
-        (this.gradoSeleccionado || '').split(' ')[0] || this.gradoSeleccionado
-      );
-      const nivel = this.gradoSeleccionado.toUpperCase().includes('SECUNDARIA')
-        ? 'Secundaria'
-        : this.gradoSeleccionado.toUpperCase().includes('PRIMARIA')
-          ? 'Primaria'
-          : this.turno.nivel;
-      this.aulasDisponibles = await this.turnoAulaService.obtenerAulasDisponibles(
-        this.turno.id!,
-        grado,
-        nivel
-      );
-      this.mostrarModalAsignar = true;
-    } catch (error) {
-      console.error('Error cargando aulas:', error);
-      alert('Error al cargar aulas disponibles');
-    } finally {
-      this.cargandoModal = false;
+      const db = getFirestore(firebaseApp);
+      const [aulasSnap, asignadasSnap] = await Promise.all([
+        getDocs(collection(db, 'aulas')),
+        getDocs(query(collection(db, 'turnosedicion'), where('turnoId', '==', this.turno.id!)))
+      ]);
+      const ocupadas = new Set(asignadasSnap.docs.map(d => String((d.data() as any).aulaId || '')));
+      const g = (grado || '').toUpperCase();
+      const nv = (nivel || '').toUpperCase();
+      return aulasSnap.docs
+        .map(d => ({ id: d.id, ...(d.data() as any) } as Aula))
+        .filter(a => !ocupadas.has(String(a.id)))
+        .filter(a => {
+          const permitidos: string[] = ((a as any).gradosPermitidos || []).map((x: string) => String(x).toUpperCase());
+          if (!permitidos.length) return false;
+          return permitidos.some(x => (!g || x.includes(g)) && (!nv || x.includes(nv)));
+        });
+    } catch (e) {
+      console.error('Tampoco se pudo hacer la lectura directa de aulas:', e);
+      return [];
     }
+  }
+
+  async abrirModalAsignar() {
+    if (this.cargandoAgregarAula) return;
+    this.cargandoAgregarAula = true;
+
+    const gradoSel = this.gradoSeleccionado || '';
+    const grado = this.normalizarGradoDisplay((gradoSel || '').split(' ')[0] || gradoSel);
+    const nivel = gradoSel.toUpperCase().includes('SECUNDARIA')
+      ? 'Secundaria'
+      : gradoSel.toUpperCase().includes('PRIMARIA')
+      ? 'Primaria'
+      : this.turno.nivel;
+
+    try {
+      // Lectura acotada: si el servidor tarda, se corta a los 8 segundos y el boton se libera igual.
+      const consulta = this.turnoAulaService.obtenerAulasDisponibles(this.turno.id!, grado, nivel);
+      const tiempoMaximo = new Promise<never>((_, rechazar) => setTimeout(() => rechazar(new Error('tiempo excedido')), 8000));
+      this.aulasDisponibles = await Promise.race([consulta, tiempoMaximo]);
+    } catch (error) {
+      console.error('No se pudieron cargar las aulas disponibles:', error);
+      this.aulasDisponibles = [];
+    } finally {
+      this.cargandoAgregarAula = false;
+    }
+
+    if (!this.aulasDisponibles || this.aulasDisponibles.length === 0) {
+      alert('No hay aulas disponibles para ' + (this.gradoSeleccionado || '') + '.\n\nCrea el aula en la seccion "Aulas" (con este grado en GRADOS PERMITIDOS) y vuelve a intentar.');
+      return;
+    }
+
+    this.mostrarModalAsignar = true;
   }
 
   cerrarModalAsignar() {
@@ -413,14 +449,18 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
         aulaId: aula.id!,
         codigoAula: aula.codigo,
         grado: gradoSolo,
-        nivel: (this.turno.nivel || this.gradoSeleccionado.includes('SECUNDARIA') ? 'SECUNDARIA' : 'PRIMARIA') as any,
+        nivel: (this.gradoSeleccionado.toUpperCase().includes('SECUNDARIA')
+        ? 'SECUNDARIA'
+        : this.gradoSeleccionado.toUpperCase().includes('PRIMARIA')
+        ? 'PRIMARIA'
+        : (this.turno.nivel || 'PRIMARIA')) as any, // el nivel sale del GRADO elegido (antes siempre daba SECUNDARIA)
         inscritos: 0,
         capacidad: aula.capacidad,
-        local: this.LOCAL_DEFAULT,
+        local: (aula as any).local || this.LOCAL_DEFAULT, // LOCAL del aula (no valor fijo)
         pabellon: aula.pabellon,
         piso: aula.piso,
         puertaAcceso: aula.puertaAcceso,
-        sede: this.SEDE_DEFAULT
+        sede: (aula as any).sede || (aula as any).local || this.SEDE_DEFAULT // se guarda el local que corresponde
       };
 
       if (aula.gradosPermitidos !== undefined) {

@@ -30,6 +30,7 @@ export class PagoComponent implements OnInit, OnDestroy, OnChanges {
   
   @Output() volver = new EventEmitter<void>();
   @Output() confirmarPago = new EventEmitter<{
+    numeroOperacion?: string; // N° de operación del Yape
     metodo: string;
     cantidad: number;
     monto: number;
@@ -82,6 +83,8 @@ export class PagoComponent implements OnInit, OnDestroy, OnChanges {
   metodoPago = '';
   telefonoApoderado = '';
   cantidadEstudiantes = 1;
+  /** N° de operación del Yape (se pide en ventanilla para evitar duplicados). */
+  numeroOperacion = '';
   precioPorEstudiante = 15;
   config: any = null; // Valor por defecto, se actualizará
 
@@ -124,6 +127,7 @@ export class PagoComponent implements OnInit, OnDestroy, OnChanges {
     if (metodoGuardado) this.metodoPago = metodoGuardado;
     else if (tieneVoucher) this.metodoPago = 'yape';
     this.telefonoApoderado = String(fuente.telefono || ins.telefonoApoderado || ins.datosPago?.telefono || '').trim();
+    this.numeroOperacion = String((ins as any).datosPago?.numeroOperacion || (ins as any).voucherNumeroOperacion || '').trim();
     const cantidadGuardada = Number(fuente.cantidad ?? ins.cantidadEstudiantes ?? ins.datosPago?.cantidad);
     if (Number.isFinite(cantidadGuardada)) this.cantidadEstudiantes = cantidadGuardada;
     this.preloadAplicado = true;
@@ -239,6 +243,12 @@ export class PagoComponent implements OnInit, OnDestroy, OnChanges {
       return;
     }
 
+    // El N° de operación es obligatorio solo cuando el pago es YAPE
+    if (this.metodoPago === 'yape' && !String(this.numeroOperacion || '').trim()) {
+      alert('Ingrese el N° de operación del Yape');
+      return;
+    }
+
     // La cantidad es obligatoria: no se puede continuar con 0 porque el monto
     // quedaría en S/ 0.00 y la inscripción se guardaría sin alumnos.
     if (!Number.isFinite(this.cantidadEstudiantes) || this.cantidadEstudiantes < 1) {
@@ -251,6 +261,7 @@ export class PagoComponent implements OnInit, OnDestroy, OnChanges {
       cantidad: this.cantidadEstudiantes,
       monto: this.montoTotal,
       telefono: this.telefonoApoderado,
+      numeroOperacion: String(this.numeroOperacion || '').trim(),
       voucherFile: this.voucherNuevo
     });
   }

@@ -24,14 +24,14 @@
         </select>
       </div>
 
-      <button 
-        class="btn-agregar-aula" 
+      <button
+        class="btn-agregar-aula"
         (click)="abrirModalAsignar()"
-        [disabled]="cargandoModal"
+        [disabled]="cargandoAgregarAula"
         type="button">
-        <span *ngIf="cargandoModal">⏳</span>
-        <span *ngIf="!cargandoModal">+</span>
-        {{ cargandoModal ? 'Cargando...' : 'Agregar Aula' }}
+        <span *ngIf="cargandoAgregarAula">⏳</span>
+        <span *ngIf="!cargandoAgregarAula">+</span>
+        {{ cargandoAgregarAula ? 'Cargando...' : 'Agregar Aula' }}
       </button>
           <button class="btn-resultados" (click)="abrirResultados()" style="background:#2563eb;color:#fff;border:none;padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer;margin-left:8px;">&#127891; Procesar resultados</button>
     </div>

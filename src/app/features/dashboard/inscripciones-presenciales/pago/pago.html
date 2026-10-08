@@ -36,7 +36,14 @@
     <h3>{{datosPago.titulo}}</h3>
     
     <!-- YAPE -->
-    <div *ngIf="metodoPago === 'yape'" class="info-pago">
+        <!-- N° de operación (solo para YAPE) -->
+    <div class="campo" *ngIf="metodoPago === 'yape'" style="margin-top: 12px;">
+      <label>N° de operación del Yape *</label>
+      <input type="text" inputmode="numeric" maxlength="20" [(ngModel)]="numeroOperacion"
+             placeholder="Ej: 21330884"
+             style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px;">
+    </div>
+<div *ngIf="metodoPago === 'yape'" class="info-pago">
       <p><strong>Teléfono:</strong> {{datosPago.telefono}}</p>
       <p><strong>A nombre de:</strong> {{datosPago.nombre}}</p>
       <p><strong>Monto:</strong> S/. {{datosPago.monto | number:'1.2-2'}}</p>

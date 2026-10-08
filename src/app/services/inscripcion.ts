@@ -1,5 +1,4 @@
 import { Injectable } from '@angular/core';
-
 import {
   Firestore,
   collection,
@@ -572,5 +571,23 @@ export class InscripcionService {
       } as Inscripcion));
       callback(inscripciones);
     });
+  }
+
+/** ¿Ese N° de operación ya está usado en otra inscripción? (evita duplicados de pago Yape) */
+  async existeNumeroOperacion(numero: string, idExcluir: string = ''): Promise<boolean> {
+    const num = String(numero || '').trim();
+    if (!num) { return false; }
+    try {
+      const ref = this.inscripcionesRef;
+      const [porVoucher, porDatos] = await Promise.all([
+        getDocs(query(ref, where('voucherNumeroOperacion', '==', num))),
+        getDocs(query(ref, where('datosPago.numeroOperacion', '==', num)))
+      ]);
+      const otros = [...porVoucher.docs, ...porDatos.docs].filter(d => d.id !== idExcluir);
+      return otros.length > 0;
+    } catch (e) {
+      console.warn('No se pudo verificar el N° de operación:', e);
+      return false;
+    }
   }
 }

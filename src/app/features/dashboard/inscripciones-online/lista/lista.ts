@@ -1410,7 +1410,35 @@ export class ListaO implements OnInit {
     } catch {}
   }
 
+  /** Busca otra inscripcion que ya tenga ese N° de operacion (evita validar dos veces el mismo pago). */
+  private async buscarOperacionDuplicada(numero: string, idActual: string): Promise<any | null> {
+    const colOper = collection(getFirestore(firebaseApp), 'inscripciones');
+    const snaps = await Promise.all([
+      getDocs(query(colOper, where('voucherNumeroOperacion', '==', numero))),
+      getDocs(query(colOper, where('datosPago.numeroOperacion', '==', numero)))
+    ]);
+    for (const snap of snaps) {
+      for (const d of snap.docs) {
+        if (d.id !== idActual) { return { id: d.id, codigo: String((d.data() as any)?.codigo || '') }; }
+      }
+    }
+    return null;
+  }
+
   async confirmarValidacion() {
+    // Antes de validar: el N° de operacion no debe estar repetido en otra inscripcion.
+    const numVal = String(this.numeroOperacionValidacion || '').trim();
+    const insVal: any = this.inscripcionAValidar;
+    if (numVal && insVal?.id) {
+      try {
+        const dup = await this.buscarOperacionDuplicada(numVal, String(insVal.id));
+        if (dup) {
+          alert('El N° de operación ' + numVal + ' ya fue usado en la inscripción N° ' + (dup.codigo || dup.id) + '.\n\nVerifica el voucher: no se puede validar dos veces el mismo pago.');
+          this.ngZone.run(() => { this.validando = false; });
+          return;
+        }
+      } catch (e) { console.warn('No se pudo verificar duplicados del N° de operación:', e); }
+    }
     if (!this.inscripcionAValidar?.id || !this.confirmacionValidacion) return;
     this.validando = true;
     try {

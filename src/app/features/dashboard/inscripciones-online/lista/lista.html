@@ -5,39 +5,36 @@
   
   <div *ngIf="!cargando">
     <h2>Inscripciones Externas</h2>
-    <div style="margin:4px 0 10px;"><div style="display:inline-flex; align-items:center; gap:8px; background:#25D366; color:#ffffff; padding:6px 12px; border-radius:999px; font-weight:700; font-size:0.82rem; margin:6px 0;"><span style="font-size:1rem;">💬</span> Soporte y validaciones: 983 376 698</div></div>
-    
+    <div style="margin:2px 0 10px; font-size:0.9rem; color:#334155;">
+  💬 Soporte y ayuda: <a href="https://wa.me/51983376698?text=Hola%2C%20necesito%20ayuda%20con%20mi%20inscripci%C3%B3n%20al%20concurso%20SOLARIS%20LEE." target="_blank" rel="noopener" style="color:#334155; font-weight:700; text-decoration:underline;">983 376 698</a>
+</div>
+
     <div class="header-acciones">
-      <div class="filtros-container">
-        <!-- Buscador -->
-        <div class="search-box">
-          <input 
-            type="text" 
-            [(ngModel)]="terminoBusqueda" 
-            placeholder="Buscar por DNI, Nombres, IE o Cód. Modular..." 
-            (keyup.enter)="onFiltrar()"
-            class="input-search">
-          <button class="btn-buscar" (click)="onFiltrar()" title="Buscar">🔍</button>
-          <button class="btn-limpiar" *ngIf="terminoBusqueda" (click)="limpiarBusqueda()" title="Limpiar búsqueda">✕</button>
-        </div>
-
-        <!-- Selector de fecha -->
-        <div class="filter-item date-filter">
-          <label for="fechaFiltro">Fecha:</label>
-          <input 
-            id="fechaFiltro"
-            type="date" 
-            [(ngModel)]="fechaSeleccionada" 
-            (change)="onFiltrar()"
-            class="input-date">
-        </div>
-
-        <!-- Filtro por fecha: ya no hay "Ver Históricos" (esta sección muestra
-             todas las inscripciones por fecha). -->
-      </div>
+  <div class="filtros-container">
+    <!-- Buscador -->
+    <div class="search-box">
+      <input
+        type="text"
+        [(ngModel)]="terminoBusqueda"
+        placeholder="Buscar por DNI, Nombres, IE o Cód. Modular..."
+        (keyup.enter)="onFiltrar()"
+        class="input-search">
+      <button class="btn-buscar" (click)="onFiltrar()" title="Buscar">🔍</button>
+      <button class="btn-limpiar" *ngIf="terminoBusqueda" (click)="limpiarBusqueda()" title="Limpiar búsqueda">✕</button>
     </div>
 
-    <table class="tabla-inscripciones" *ngIf="inscripciones.length > 0">
+    <!-- Selector de fecha -->
+    <div class="filter-item date-filter">
+      <label for="fechaFiltro">Fecha:</label>
+      <input
+        id="fechaFiltro"
+        type="date"
+        [(ngModel)]="fechaSeleccionada"
+        (change)="onFiltrar()"
+        class="input-date">
+    </div>
+  </div>
+</div><table class="tabla-inscripciones" *ngIf="inscripciones.length > 0">
       <thead>
          <tr>
           <th>Código</th>
