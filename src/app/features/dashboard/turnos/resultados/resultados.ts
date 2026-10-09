@@ -35,6 +35,7 @@ interface FilaResultado {
   apellidos: string;
   nombres: string;
   ie: string;
+  area?: string;
   codigoModular: string;
   gestion: string;
   grado: string;
@@ -87,15 +88,42 @@ interface FilaResultado {
 
   <!-- Pestañas por nivel (como la ventana del asesor) -->
   <div class="tabs">
-    <button class="tab" [class.activo]="nivelActivo === 'PRIMARIA'" (click)="cambiarNivel('PRIMARIA')">
-      📊 PRIMARIA <span class="contador-tab">{{ porNivel('PRIMARIA').length }}</span>
-    </button>
-    <button class="tab" [class.activo]="nivelActivo === 'SECUNDARIA'" (click)="cambiarNivel('SECUNDARIA')">
-      📊 SECUNDARIA <span class="contador-tab">{{ porNivel('SECUNDARIA').length }}</span>
-    </button>
-  </div>
+        <button class="tab" *ngFor="let cat of categoriasVisibles"
+          [class.activo]="categoriaActiva === cat.nombre" (click)="cambiarCategoria(cat.nombre)">
+          {{ cat.nombre }} <span class="contador-tab">{{ porCategoria(cat.nombre).length }}</span>
+        </button>
+      </div>
 
-  <div class="tarjetas">
+      <!-- Botones de filtro (leyenda): al pulsarlos se filtra la tabla -->
+      <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:8px 0 10px;">
+        <button type="button" (click)="cambiarFiltroLeyenda('HORA_PENDIENTE')"
+          [style.box-shadow]="filtroLeyenda === 'HORA_PENDIENTE' ? 'inset 0 0 0 2px #ef4444' : 'none'"
+          style="display:inline-flex; align-items:center; gap:8px; background:#fff; border:1px solid #fecaca; color:#b91c1c; border-radius:999px; padding:7px 14px; font-weight:700; font-size:0.82rem; cursor:pointer;">
+          &#9201; HORA PENDIENTE <span style="background:#fee2e2; border-radius:999px; padding:1px 8px;">{{ filasHoraPendiente.length }}</span>
+        </button>
+        <button type="button" (click)="cambiarFiltroLeyenda('NO_SE_PRESENTO')"
+          [style.box-shadow]="filtroLeyenda === 'NO_SE_PRESENTO' ? 'inset 0 0 0 2px #2563eb' : 'none'"
+          style="display:inline-flex; align-items:center; gap:8px; background:#fff; border:1px solid #bfdbfe; color:#1d4ed8; border-radius:999px; padding:7px 14px; font-weight:700; font-size:0.82rem; cursor:pointer;">
+          &#128683; NO SE PRESENTARON <span style="background:#dbeafe; border-radius:999px; padding:1px 8px;">{{ filasNoSePresento.length }}</span>
+        </button>
+        <button type="button" (click)="cambiarFiltroLeyenda('SIN_ASISTENCIA')"
+          [style.box-shadow]="filtroLeyenda === 'SIN_ASISTENCIA' ? 'inset 0 0 0 2px #db2777' : 'none'"
+          style="display:inline-flex; align-items:center; gap:8px; background:#fff; border:1px solid #fbcfe8; color:#be185d; border-radius:999px; padding:7px 14px; font-weight:700; font-size:0.82rem; cursor:pointer;">
+          &#128101; SIN ASISTENCIA <span style="background:#fce7f3; border-radius:999px; padding:1px 8px;">{{ filasSinAsistencia.length }}</span>
+        </button>
+        <button type="button" (click)="cambiarFiltroLeyenda('DUPLICADOS')"
+          [style.box-shadow]="filtroLeyenda === 'DUPLICADOS' ? 'inset 0 0 0 2px #d97706' : 'none'"
+          style="display:inline-flex; align-items:center; gap:8px; background:#fff; border:1px solid #fde68a; color:#b45309; border-radius:999px; padding:7px 14px; font-weight:700; font-size:0.82rem; cursor:pointer;">
+          &#128196; DUPLICADOS <span style="background:#fef3c7; border-radius:999px; padding:1px 8px;">{{ filasDuplicadas.length }}</span>
+        </button>
+        <button type="button" (click)="cambiarFiltroLeyenda('COMPLETO')"
+          [style.box-shadow]="filtroLeyenda === 'COMPLETO' ? 'inset 0 0 0 2px #059669' : 'none'"
+          style="display:inline-flex; align-items:center; gap:8px; background:#fff; border:1px solid #bbf7d0; color:#047857; border-radius:999px; padding:7px 14px; font-weight:700; font-size:0.82rem; cursor:pointer;">
+          &#9989; COMPLETO <span style="background:#dcfce7; border-radius:999px; padding:1px 8px;">{{ filasCompletas.length }}</span>
+        </button>
+        <span style="margin-left:auto; font-weight:800; color:#0f172a; font-size:0.85rem;">TOTAL EN LA CATEGOR&#205;A {{ filasNivel.length }}</span>
+      </div>
+      <div class="tarjetas">
     <div class="tarjeta">
       <span>Total participantes</span>
       <strong>{{ filasNivel.length }}</strong>
@@ -352,6 +380,121 @@ export class ResultadosTurno implements OnInit {
   busqueda = '';
   mensajeCarga = '';
   nivelActivo = 'PRIMARIA';
+  /** Categorías de calificación configuradas (INTERNA, PRIVADA, PUBLICA RURAL, PUBLICA URBANA...). */
+  categorias: any[] = [];
+  /** Categoría activa (pestaña). */
+  categoriaActiva = '';
+  /** Filtro por leyenda: TODOS | HORA_PENDIENTE | NO_SE_PRESENTO | SIN_ASISTENCIA | DUPLICADOS | COMPLETO */
+  filtroLeyenda = 'TODOS';
+
+  cambiarFiltroLeyenda(f: string): void {
+    this.filtroLeyenda = this.filtroLeyenda === f ? 'TODOS' : f;
+    this.refrescar();
+  }
+
+  private esNoSePresento(f: any): boolean { return String(f?.asistencia || '').toUpperCase().includes('NO SE PRESENT'); }
+  private esSinAsistencia(f: any): boolean { const a = String(f?.asistencia || '').trim(); return !a || a === '—' || a === '-'; }
+  private esHoraPendiente(f: any): boolean { return !f?.mostrarHora; }
+
+  /** DNI que se repiten (solo los que realmente están repetidos). */
+  private dnisRepetidos(): Set<string> {
+    const vistos = new Set<string>(); const repetidos = new Set<string>();
+    for (const f of this.filas || []) {
+      const d = String(f?.documento || '').trim();
+      if (!d) continue;
+      if (vistos.has(d)) { repetidos.add(d); } else { vistos.add(d); }
+    }
+    return repetidos;
+  }
+
+  get filasHoraPendiente(): any[] { return this.filasNivel.filter(f => this.esHoraPendiente(f)); }
+  get filasNoSePresento(): any[] { return this.filasNivel.filter(f => this.esNoSePresento(f)); }
+  get filasSinAsistencia(): any[] { return this.filasNivel.filter(f => this.esSinAsistencia(f)); }
+  get filasDuplicadas(): any[] {
+    const rep = this.dnisRepetidos();
+    return this.filasNivel.filter(f => rep.has(String(f?.documento || '').trim()));
+  }
+  get filasCompletas(): any[] { return this.filasNivel.filter(f => this.esCompleto(f)); }
+
+  /** Aplica el filtro de leyenda sobre la lista (para la tabla). */
+  private aplicarFiltroLeyenda(lista: any[]): any[] {
+    switch (this.filtroLeyenda) {
+      case 'HORA_PENDIENTE': return lista.filter(f => this.esHoraPendiente(f));
+      case 'NO_SE_PRESENTO': return lista.filter(f => this.esNoSePresento(f));
+      case 'SIN_ASISTENCIA': return lista.filter(f => this.esSinAsistencia(f));
+      case 'COMPLETO': return lista.filter(f => this.esCompleto(f));
+      case 'DUPLICADOS': { const rep = this.dnisRepetidos(); return lista.filter(f => rep.has(String(f?.documento || '').trim())); }
+      default: return lista;
+    }
+  }
+
+  private normalizarTxt(v: any): string {
+    return String(v || '').trim().toUpperCase()
+      .replace(/[ÁÀÄÂ]/g, 'A').replace(/[ÉÈËÊ]/g, 'E').replace(/[ÍÌÏÎ]/g, 'I')
+      .replace(/[ÓÒÖÔ]/g, 'O').replace(/[ÚÙÜÛ]/g, 'U');
+  }
+
+  /** Categorías visibles en las pestañas (activas y ordenadas como en el módulo Categorías). */
+  get categoriasVisibles(): any[] {
+    const activas = (this.categorias || []).filter((c: any) => c && c.activa !== false);
+    const orden: string[] = ['INTERNA', 'PRIVADA', 'PUBLICA RURAL', 'PUBLICA URBANA'];
+    return activas.slice().sort((a: any, b: any) => {
+      const ia = orden.indexOf(this.normalizarTxt(a.nombre).replace('PÚBLICA', 'PUBLICA'));
+      const ib = orden.indexOf(this.normalizarTxt(b.nombre).replace('PÚBLICA', 'PUBLICA'));
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+  }
+
+  /** Categoría que le corresponde a una fila según el colegio de su inscripción. */
+  categoriaDe(f: any): string {
+    const codMod = this.normalizarTxt(f?.codigoModular);
+    const valores: any = {
+      GESTION: this.normalizarTxt(f?.gestion),
+      AREA: this.normalizarTxt(f?.area),
+      NIVEL: this.normalizarTxt(f?.nivel)
+    };
+    // 1) INTERNA: los códigos modulares de las instituciones internas quedan solo en esa categoría
+    for (const c of this.categorias || []) {
+      if (this.normalizarTxt(c?.tipo) !== 'INTERNA') continue;
+      const lista = (c.institucionesInternas || []).map((i: any) =>
+        this.normalizarTxt(typeof i === 'string' ? i : (i?.CODIGOMODULAR || i?.codigoModular || i?.codigo || i?.ie || '')));
+      if (codMod && lista.includes(codMod)) return String(c.nombre || 'INTERNA');
+    }
+    // 2) Categorías normales por condiciones (GESTION / AREA / NIVEL)
+    for (const c of this.categorias || []) {
+      if (this.normalizarTxt(c?.tipo) === 'INTERNA') continue;
+      const conds = c?.condiciones || [];
+      if (!conds.length) continue;
+      const cumple = conds.every((cd: any) => {
+        const campo = this.normalizarTxt(cd?.campo);
+        return this.normalizarTxt(valores[campo]) === this.normalizarTxt(cd?.valor);
+      });
+      if (cumple) return String(c.nombre || '');
+    }
+    return 'SIN CATEGORÍA';
+  }
+
+  /** Carga las categorías desde Firestore (módulo Categorías). */
+  async cargarCategorias(): Promise<void> {
+    try {
+      const snap = await getDocs(collection(this.db, 'categoriasCalificacion'));
+      this.categorias = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      if (!this.categoriaActiva) {
+        const primera = this.categoriasVisibles[0];
+        this.categoriaActiva = primera ? String(primera.nombre) : '';
+      }
+      this.refrescar();
+    } catch (e) { console.warn('No se pudieron cargar las categorías:', e); }
+  }
+
+  cambiarCategoria(nombre: string): void {
+    this.categoriaActiva = nombre;
+    this.refrescar();
+  }
+
+  porCategoria(nombre: string): any[] {
+    return (this.filas || []).filter(f => this.categoriaDe(f) === nombre);
+  }
   menuAsistencia = '';
   filas: FilaResultado[] = [];
 
@@ -392,7 +535,7 @@ export class ResultadosTurno implements OnInit {
 
   /** Participantes del nivel de la pestaña activa. */
   get filasNivel(): FilaResultado[] {
-    return this.filas.filter(f => this.normalizar(f.nivel) === this.nivelActivo);
+    return this.filas.filter(f => !this.categoriaActiva || this.categoriaDe(f) === this.categoriaActiva); // por categoría
   }
 
   /** Participantes de un nivel (para los contadores de las pestañas). */
@@ -407,8 +550,9 @@ export class ResultadosTurno implements OnInit {
       if (pb !== pa) return pb - pa;
       return (a.apellidos + ' ' + a.nombres).localeCompare(b.apellidos + ' ' + b.nombres);
     });
-    if (!t) return base;
-    return base.filter(f => (f.apellidos + ' ' + f.nombres + ' ' + f.documento + ' ' + f.ie).toLowerCase().includes(t));
+    const baseConFiltro = this.aplicarFiltroLeyenda(base);
+    if (!t) return baseConFiltro;
+    return baseConFiltro.filter(f => (f.apellidos + ' ' + f.nombres + ' ' + f.documento + ' ' + f.ie).toLowerCase().includes(t));
   }
 
   get sinAsistir(): number { return this.filasNivel.filter(f => f.asistencia === 'NO SE PRESENTÓ').length; }
@@ -436,20 +580,28 @@ export class ResultadosTurno implements OnInit {
     this.refrescar();
     try {
       const gradoBuscado = this.normalizar(this.grado);
+    const nivelBuscado = this.normalizar(this.nivel);
 
-      const mapaCodigos = new Map<string, string>();
+      if (!this.categorias.length) { void this.cargarCategorias(); }
+    const mapaCodigos = new Map<string, string>();
       let inscripciones: any[] = [];
       const refIns = collection(this.db, 'inscripciones');
-      if (this.turnoCodigo) {
-        const snap = await getDocs(query(refIns, where('turnoCodigo', '==', this.turnoCodigo)));
-        inscripciones = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      }
-      if (!inscripciones.length) {
-        const snap = await getDocs(refIns);
-        inscripciones = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-          .filter((i: any) => !this.turnoId || i.turnoId === this.turnoId || i.turnoCodigo === this.turnoCodigo);
-      }
-      for (const ins of inscripciones) mapaCodigos.set(ins.id, String(ins.codigo || ins.id || '').trim());
+    // Se leen TODAS las inscripciones (no depende de turnoCodigo ni de mayúsculas) y
+    // luego los alumnos se filtran localmente por grado.
+    try {
+      const snapTodas = await getDocs(refIns);
+      inscripciones = snapTodas.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+      console.warn('No se pudieron leer todas las inscripciones:', e);
+      inscripciones = [];
+    }
+    if (!inscripciones.length && this.turnoCodigo) {
+      try {
+        const snapTurno = await getDocs(query(refIns, where('turnoCodigo', '==', this.turnoCodigo)));
+        inscripciones = snapTurno.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch (e) { inscripciones = []; }
+    }
+    for (const ins of inscripciones) mapaCodigos.set(ins.id, String(ins.codigo || ins.id || '').trim());
 
       // 1) Intento rápido: estudiantes del turno en UNA consulta
       let crudos: any[] = [];
@@ -469,8 +621,33 @@ export class ResultadosTurno implements OnInit {
         } catch { crudos = []; }
       }
 
+    // 1b) Consulta por GRADO: trae a TODOS los alumnos de ese grado, aunque su turnoCodigo esté vacío o distinto.
+    if (this.grado) {
+      try {
+        this.mensajeCarga = '(consulta por grado)';
+        this.refrescar();
+        const gNorm = this.normalizar(this.grado);            // p. ej. TERCERO
+        const gCap = gNorm.charAt(0) + gNorm.slice(1).toLowerCase(); // p. ej. Tercero
+        for (const variante of [gNorm, gCap]) {
+          try {
+            const cgGrado = await getDocs(query(
+              collectionGroup(this.db, 'estudiantes'),
+              where('grado', '==', variante)
+            ));
+            for (const d of cgGrado.docs) {
+              crudos.push({
+                id: d.id,
+                inscripcionId: d.ref.parent && d.ref.parent.parent ? d.ref.parent.parent.id : '',
+                ...d.data()
+              });
+            }
+          } catch (e) { console.warn('No se pudo consultar por grado (' + variante + '):', e); }
+        }
+      } catch (e) { console.warn('No se pudo consultar por grado:', e); }
+    }
+
       // 2) Respaldo: inscripción por inscripción (en paralelo)
-      if (!crudos.length) {
+      {
         this.mensajeCarga = 'leyendo ' + inscripciones.length + ' inscripciones...';
         this.refrescar();
         const conEstudiantes = await Promise.all(inscripciones.map(async (ins) => {
@@ -487,10 +664,21 @@ export class ResultadosTurno implements OnInit {
         for (const lista of conEstudiantes) crudos.push(...lista);
       }
 
+    // Quitar repetidos: un mismo alumno puede venir de la consulta rápida y del respaldo.
+    const vistosCarga = new Set<string>();
+    crudos = crudos.filter((e: any) => {
+      const k = String(e.inscripcionId || '') + '|' + String(e.codigo || e.id || '');
+      if (vistosCarga.has(k)) { return false; }
+      vistosCarga.add(k);
+      return true;
+    });
+
       for (const est of crudos) {
         const nivelEst = this.normalizar(est.nivel || '');
         const gradoEst = this.normalizar(est.grado || '');
         if (gradoBuscado && gradoEst && gradoEst !== gradoBuscado) continue;
+      // Además del grado, se respeta el NIVEL (Cuarto PRIMARIA ≠ Cuarto SECUNDARIA)
+      if (nivelBuscado && nivelEst && nivelEst !== nivelBuscado) continue;
 
         const puntajeRaw = est.PUNTAJE_FINAL ?? est.PUNTAJEFINAL ?? est.puntajeFinal ?? est.puntaje ?? null;
         const puntaje = puntajeRaw === null || puntajeRaw === '' || isNaN(Number(puntajeRaw)) ? null : Number(puntajeRaw);
@@ -512,6 +700,7 @@ export class ResultadosTurno implements OnInit {
           ie: String((est.colegio && est.colegio.IE) || '').trim(),
           codigoModular: String((est.colegio && est.colegio.CODIGOMODULAR) || '').trim(),
           gestion: String((est.colegio && est.colegio.GESTION) || '').trim(),
+      area: String((est.colegio && est.colegio.AREA) || '').trim(),
           grado: String(est.grado || '').trim(),
           nivel: String(est.nivel || '').trim(),
           asistencia: String(est.ASISTENCIA || est.asistencia || '').trim().toUpperCase(),
@@ -686,9 +875,9 @@ export class ResultadosTurno implements OnInit {
         puesto++;
         f.puesto = puesto;
         const ref = doc(this.db, 'inscripciones', f.inscripcionId, 'estudiantes', f.estudianteId);
-        await updateDoc(ref, { PUESTO: puesto, MOSTRARHORA: true, FECHAPROCESAMIENTOPUESTOS: serverTimestamp() });
+        await updateDoc(ref, { PUESTO: puesto, CATEGORIA: this.categoriaActiva, MOSTRARHORA: true, FECHAPROCESAMIENTOPUESTOS: serverTimestamp() });
       }
-      alert('Puestos guardados: ' + puesto + ' clasificado(s) en ' + this.nivelActivo + '.');
+      alert('Puestos guardados: ' + puesto + ' clasificado(s) en la categoría ' + (this.categoriaActiva || '') + '.');
     } catch (error: any) {
       alert('No se pudieron guardar los puestos: ' + (error?.message || ''));
     } finally {
@@ -708,7 +897,7 @@ export class ResultadosTurno implements OnInit {
       const lista = [...this.filas].sort((a, b) =>
         orden(a.nivel) - orden(b.nivel) || ((a.puesto === null ? 9999 : a.puesto) - (b.puesto === null ? 9999 : b.puesto)));
 
-      const armar = (nivel: string) => lista.filter(f => orden(f.nivel) === orden(nivel)).map(f => ({
+      const armar = (categoria: string) => this.filas.filter(f => this.categoriaDe(f) === categoria).map(f => ({
         PUESTO: f.puesto === null ? '' : f.puesto,
         CODIGO: f.inscripcionCodigo + '-' + f.estudianteId,
         APELLIDOS: f.apellidos,
@@ -731,8 +920,14 @@ export class ResultadosTurno implements OnInit {
       }));
 
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(armar('PRIMARIA')), 'PRIMARIA');
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(armar('SECUNDARIA')), 'SECUNDARIA');
+    // Una hoja por CATEGORÍA (INTERNA, PRIVADA, PUBLICA RURAL, PUBLICA URBANA...)
+    const catsXls: any[] = this.categoriasVisibles.length
+      ? this.categoriasVisibles
+      : [{ nombre: 'PRIMARIA' }, { nombre: 'SECUNDARIA' }];
+    for (const catXls of catsXls) {
+      const nombreCat = String(catXls?.nombre || '').substring(0, 31) || 'CATEGORIA';
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(armar(String(catXls?.nombre || ''))), nombreCat);
+    }
       const nombre = ('Resultados_' + this.grado + (this.sede ? '_' + this.sede : '') + '.xlsx').replace(/\s+/g, '_');
       XLSX.writeFile(wb, nombre);
     } catch (error: any) {
