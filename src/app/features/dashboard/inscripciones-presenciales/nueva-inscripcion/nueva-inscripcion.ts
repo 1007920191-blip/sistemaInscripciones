@@ -832,7 +832,10 @@ export class NuevaInscripcion implements OnInit {
       cantidadEstudiantes: this.datosPago?.cantidad ?? estudiantesConColegioActualizado.length,
       montoTotal: this.datosPago?.monto ?? (estudiantesConColegioActualizado.length * this.precioPorEstudianteActual),
       telefonoApoderado: this.datosPago?.telefono || '',
-    voucherNumeroOperacion: this.datosPago?.numeroOperacion || undefined,
+    // Solo se incluye si tiene valor (Firestore no acepta undefined)
+    ...(String(this.datosPago?.numeroOperacion || '').trim()
+      ? { voucherNumeroOperacion: String(this.datosPago?.numeroOperacion).trim() }
+      : {}),
       estudiantes: estudiantesConColegioActualizado.map((e:any)=> {
         const clean: any = {};
         for (const k of Object.keys(e)) {
@@ -915,7 +918,12 @@ export class NuevaInscripcion implements OnInit {
       }
       // El N° de operación del Yape también se actualiza al editar la inscripción
     const numOpEdicion = String(this.datosPago?.numeroOperacion || '').trim();
-    (datosEdicion as any).voucherNumeroOperacion = numOpEdicion || undefined;
+    // IMPORTANTE: Firestore rechaza "undefined". Solo se escribe si hay valor real.
+    if (numOpEdicion) {
+      (datosEdicion as any).voucherNumeroOperacion = numOpEdicion;
+    } else if ('voucherNumeroOperacion' in (datosEdicion as any)) {
+      delete (datosEdicion as any).voucherNumeroOperacion;
+    }
     (datosEdicion as any).datosPago = { ...((datosEdicion as any).datosPago || {}), numeroOperacion: numOpEdicion };
     await this.inscripcionService.actualizarInscripcion(this.inscripcionId, datosEdicion);
       inscripcionId = this.inscripcionId;

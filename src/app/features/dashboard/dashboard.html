@@ -7,6 +7,7 @@
       <li><button (click)="section = 'aulas'">Aulas</button></li>
       <li><button (click)="section = 'turnos'">Turnos</button></li>
       <li><button (click)="section = 'categorias'">Categorías</button></li>
+<li><button (click)="section = 'scanner'">Scanner</button></li>
       <li><button (click)="irAConfiguracion()">Configuración</button></li>
       <li><button (click)="logout()">Salir</button></li>
     </ul>
@@ -58,6 +59,9 @@
 
     <!-- Categorías -->
     <app-categorias *ngIf="section === 'categorias'"></app-categorias>
+
+<!-- Scanner -->
+<app-scanner *ngIf="section === 'scanner'"></app-scanner>
     
   </main>
 </div>

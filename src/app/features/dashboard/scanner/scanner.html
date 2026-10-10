@@ -1,0 +1,77 @@
+<div class="scanner-wrap">
+  <h2>Escáner de calificaciones</h2>
+  <p class="sub">Escriba o escanee el código del estudiante (ej. <strong>1492-11094</strong>) y complete la calificación.</p>
+
+  <!-- Buscador -->
+  <div class="buscador">
+    <div class="input-busqueda">
+      <span class="icono">▣</span>
+      <input
+        #codigoInput
+        type="text"
+        autocomplete="off"
+        placeholder="Escanee el QR o escriba el código"
+        [(ngModel)]="codigo"
+        (ngModelChange)="onCodigoChange($event)"
+        (keyup.enter)="buscar()">
+      <button *ngIf="codigo" class="limpiar" type="button" (click)="limpiar()" title="Limpiar">✕</button>
+    </div>
+    <button class="btn-buscar" type="button" [disabled]="buscando || !codigo" (click)="buscar()">
+      {{ buscando ? 'Buscando…' : '🔍 Buscar' }}
+    </button>
+    <button class="btn-escanear" type="button" *ngIf="!camaraActiva" (click)="abrirCamara()">⌗ Escanear</button>
+    <button class="btn-cancelar" type="button" *ngIf="camaraActiva" (click)="detenerCamara()">✕ Cancelar</button>
+  </div>
+
+  <!-- Cámara -->
+  <div class="camara" *ngIf="camaraActiva">
+    <video #videoCamara autoplay playsinline muted webkit-playsinline></video>
+    <p class="ayuda">Apunte la cámara al código QR de la tarjeta del estudiante…</p>
+  </div>
+
+  <!-- Aviso -->
+  <div class="aviso" *ngIf="mensaje"
+       [class.ok]="tipoMensaje === 'ok'"
+       [class.error]="tipoMensaje === 'error'">
+    {{ mensaje }}
+  </div>
+
+  <!-- Datos del estudiante -->
+  <div class="datos">
+    <p><strong>Documento:</strong> {{ documento || '—' }}</p>
+    <p><strong>Nombres:</strong> {{ nombres || '—' }}</p>
+    <p><strong>IE:</strong> {{ ie || '—' }}</p>
+    <p><strong>Gestión:</strong> {{ gestion || '—' }}</p>
+    <p><strong>Grado:</strong> {{ grado || '—' }}</p>
+  </div>
+
+  <!-- Calificación manual -->
+  <div class="calificacion">
+    <div class="campo">
+      <label>C (correctas)</label>
+      <input type="number" min="0" [(ngModel)]="correctas" (ngModelChange)="recalcular()">
+    </div>
+    <div class="campo">
+      <label>I (incorrectas)</label>
+      <input type="number" min="0" [(ngModel)]="incorrectas" (ngModelChange)="recalcular()">
+    </div>
+    <div class="campo">
+      <label>B (en blanco)</label>
+      <input type="number" min="0" [(ngModel)]="blanco" readonly>
+    </div>
+    <div class="campo">
+      <label>P (puntaje)</label>
+      <input type="number" min="0" [(ngModel)]="puntaje" readonly>
+    </div>
+  </div>
+
+  <div class="aviso error" *ngIf="!sumaValida">
+    La suma de correctas, incorrectas y en blanco debe ser exactamente {{ totalPreguntas }}.
+  </div>
+
+  <div class="acciones">
+    <button class="btn-guardar" type="button" [disabled]="guardando || !encontrado" (click)="guardar()">
+      {{ guardando ? 'Guardando…' : '💾 Guardar' }}
+    </button>
+  </div>
+</div>

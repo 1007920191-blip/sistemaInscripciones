@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { ChangeDetectorRef, Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Estudiante } from '../../../../models/inscripcion.model';
@@ -46,7 +46,12 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
   private personaTimer: any = null;
   private personaAutocompletada: { numero: string; nombres: string; apellidos: string } | null = null;
 
-  constructor(private personasService: PersonasService) {}
+  constructor(private personasService: PersonasService, private cdr: ChangeDetectorRef) {}
+
+  /** Repinta la pantalla (las cargas de Firebase corren fuera de la zona de Angular). */
+  private refrescar(): void {
+    try { this.cdr.detectChanges(); } catch { /* aún no inicializado */ }
+  }
 
   // ✅ DEBUG: Para mostrar en pantalla qué está pasando
   debugInfo = {
@@ -178,6 +183,8 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
   // ✅ ANTERIOR: Guarda sin validar y emite navegación
   irAnterior() {
     console.log('[Hijo] Botón ANTERIOR clickeado');
+    this.procesando = false;
+    this.refrescar();
     if (this.esPrimeroEstudiante) return;
     
     this.navegarAnterior.emit({ ...this.estudiante });
@@ -186,6 +193,8 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
   // ✅ SIGUIENTE: Valida, guarda y emite navegación
   irSiguiente() {
     console.log('[Hijo] Botón SIGUIENTE clickeado');
+    this.procesando = false;
+    this.refrescar();
     if (this.esUltimoEstudiante) return;
     
     if (!this.validarFormulario()) return;
@@ -204,6 +213,8 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
     if (this.esUltimoEstudiante) {
       console.log('[Hijo] Emitiendo FINALIZAR');
       this.finalizar.emit({ ...this.estudiante });
+      // Rescate: si el padre no cierra la ventana (falla la vista previa), el boton no queda bloqueado
+      setTimeout(() => { this.procesando = false; this.refrescar(); }, 15000);
       // No resetear procesando aquí, el padre cierra la ventana
     } else {
       console.log('[Hijo] Emitiendo GUARDAR (continuar)');
@@ -213,10 +224,12 @@ export class RegistroEstudianteComponent implements OnInit, OnChanges {
   }
 
   onCancelar() {
+    this.procesando = false;
     this.cancelar.emit();
   }
 
   onVolver() {
+    this.procesando = false;
     this.volver.emit();
   }
 

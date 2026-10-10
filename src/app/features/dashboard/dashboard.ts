@@ -7,6 +7,7 @@ import { NuevaInscripcion } from './inscripciones-presenciales/nueva-inscripcion
 import { ListaTurnos } from './turnos/lista-turnos/lista-turnos';
 import { TurnoForm } from './turnos/turno-form/turno-form';
 import { CategoriasComponent } from './categorias/categorias';
+import { ScannerComponent } from './scanner/scanner';
 
 import { Turno } from '../../models/turno.model';
 import { ListaAulasComponent } from './aulas/lista-aulas/lista-aulas';
@@ -25,7 +26,8 @@ import { Aula } from '../../models/aula.model';
     TurnoForm,
     ListaAulasComponent,
     AulaFormComponent,
-    CategoriasComponent
+    CategoriasComponent,
+    ScannerComponent
   ],
   templateUrl: './dashboard.html',
   styleUrls: ['./dashboard.css']
