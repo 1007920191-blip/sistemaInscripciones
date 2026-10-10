@@ -87,6 +87,21 @@
         <small>Activa esta opción para que los resultados estén visibles en la plataforma de consulta pública.</small>
       </div>
 
+
+      <!-- Cerrar inscripciones del sistema online -->
+      <div class="form-group form-switch">
+        <label for="inscripcionesCerradas">Cerrar inscripciones (sistema online)</label>
+        <div class="switch-container">
+          <input
+            type="checkbox"
+            id="inscripcionesCerradas"
+            [(ngModel)]="config.inscripcionesCerradas"
+            name="inscripcionesCerradas"
+            class="switch-input">
+          <label for="inscripcionesCerradas" class="switch-label"></label>
+        </div>
+        <small>Activa esta opción para que los padres NO puedan registrar nuevas inscripciones en el sistema online (verán el aviso "LAS INSCRIPCIONES YA ESTÁN CERRADAS").</small>
+      </div>
     </section>
 
     <section class="form-section">

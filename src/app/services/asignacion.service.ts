@@ -263,7 +263,8 @@ export class AsignacionService {
     turnoId: string
   ): Promise<{ exito: boolean; aulaId?: string; codigoAula?: string; mensaje?: string }> {
     
-    const CAPACIDAD = 30;
+
+  const CAPACIDAD = 30;
     const limiteOperativo = (capacidad: number) =>
       Math.min(capacidad, Math.max(1, Math.floor(capacidad * 0.9)));
     const MAX_POR_COLEGIO = 0.5;
@@ -381,7 +382,8 @@ export class AsignacionService {
     colegioId: string
   ): Promise<{ exito: boolean; aulaId?: string; codigoAula?: string; mensaje?: string }> {
     
-    const CAPACIDAD = 30;
+
+  const CAPACIDAD = 30;
     const MAX_POR_COLEGIO = 0.5;
 
     const aulasConEspacio: typeof aulasDelGrado = [];

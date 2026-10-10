@@ -524,17 +524,25 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
         console.warn('No se pudo cargar la configuración para la impresión');
       }
 
-      const inscripcionesRelacionadas = this.inscripcionesActuales.filter(ins => 
+    const codAulaImp = String((this.aulaParaImpresion as any)?.codigoAula || '').trim().toUpperCase();
+    // Comparadores tolerantes: la asignación puede apuntar al id o al aulaId del registro
+    const idAulaImp = String((this.aulaParaImpresion as any)?.id || '').trim();
+    const aulaIdImp = String((this.aulaParaImpresion as any)?.aulaId || '').trim();
+    const coincideAula = (v: any) => { const s = String(v || '').trim(); return !!s && (s === idAulaImp || s === aulaIdImp); };
+      const inscripcionesRelacionadas = (this.todasLasInscripciones || this.inscripcionesActuales).filter(ins => 
         ins.asignacionesAula?.some((asig: any) => asig.aulaId === this.aulaParaImpresion!.aulaId || asig.aulaId === this.aulaParaImpresion!.id)
+      || ins.estudiantes?.some((est: any) => coincideAula((est as any)?.aulaAsignadaId))
       );
 
-      const estudiantesFinales: any[] = [];
+      // Código del aula que se está imprimiendo (2B-S): respaldo cuando los ids no coinciden
+    const estudiantesFinales: any[] = [];
       
       for (const ins of inscripcionesRelacionadas) {
         if (ins.id) {
           const estudiantes = await this.inscripcionService.obtenerEstudiantes(ins.id);
           for (const est of estudiantes) {
-            if (est.aulaAsignadaId === this.aulaParaImpresion!.aulaId || est.aulaAsignadaId === this.aulaParaImpresion!.id) {
+            const mismoCodigo = !!codAulaImp && String((est as any).codigoAula || '').trim().toUpperCase() === codAulaImp;
+        if (coincideAula(est.aulaAsignadaId)) { // solo el aula exacta (mismo id/aulaId), no por código
               estudiantesFinales.push({
                 ...est,
                 colegioObj: est.colegio || ins.colegio,
@@ -602,7 +610,13 @@ export class TurnoAulasComponent implements OnInit, OnChanges, OnDestroy {
         ins.estudiantes?.some((est: any) => String(est.aulaAsignadaId || '').trim() === String(aula.id).trim())
       );
 
-      const estudiantesFinales: any[] = [];
+      // Código del aula que se está imprimiendo (2B-S): respaldo cuando los ids no coinciden
+    const codAulaImp = String((this.aulaParaImpresion as any)?.codigoAula || '').trim().toUpperCase();
+    // Comparadores tolerantes: la asignación puede apuntar al id o al aulaId del registro
+    const idAulaImp = String((this.aulaParaImpresion as any)?.id || '').trim();
+    const aulaIdImp = String((this.aulaParaImpresion as any)?.aulaId || '').trim();
+    const coincideAula = (v: any) => { const s = String(v || '').trim(); return !!s && (s === idAulaImp || s === aulaIdImp); };
+    const estudiantesFinales: any[] = [];
       
       for (const ins of inscripcionesRelacionadas) {
         if (ins.id) {

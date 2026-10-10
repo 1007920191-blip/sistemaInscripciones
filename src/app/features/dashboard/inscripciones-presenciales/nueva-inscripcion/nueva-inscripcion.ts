@@ -913,7 +913,11 @@ export class NuevaInscripcion implements OnInit {
           return;
         }
       }
-      await this.inscripcionService.actualizarInscripcion(this.inscripcionId, datosEdicion);
+      // El N° de operación del Yape también se actualiza al editar la inscripción
+    const numOpEdicion = String(this.datosPago?.numeroOperacion || '').trim();
+    (datosEdicion as any).voucherNumeroOperacion = numOpEdicion || undefined;
+    (datosEdicion as any).datosPago = { ...((datosEdicion as any).datosPago || {}), numeroOperacion: numOpEdicion };
+    await this.inscripcionService.actualizarInscripcion(this.inscripcionId, datosEdicion);
       inscripcionId = this.inscripcionId;
     } else {
       inscripcionId = await this.inscripcionService.guardarInscripcion(inscripcionData as Inscripcion);

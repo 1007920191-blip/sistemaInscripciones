@@ -1045,9 +1045,54 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
         const turnoCodigo = asignacion?.turnoCodigo || 'â€”';
         
         let turnoId = '';
-        if (turnoCodigo !== 'â€”') {
+
+    // Si la asignación no trajo un turno válido (ej. "T1"), se deduce del AULA registrada.
+    let turnoCodigoFinal = String(turnoCodigo || '').trim();
+    if (!/^T\d+$/i.test(turnoCodigoFinal)) {
+      try {
+        let aulaSnap: any = null;
+        if (aulaId) { aulaSnap = await getDoc(firestoreDoc(db, 'turnosedicion', aulaId)); }
+        if ((!aulaSnap || !aulaSnap.exists()) && codigoAula && codigoAula.length > 1) {
+          const qAula = await getDocs(query(collection(db, 'turnosedicion'), where('codigoAula', '==', codigoAula)));
+          if (!qAula.empty) { aulaSnap = qAula.docs[0]; }
+        }
+        const dAula: any = (aulaSnap && aulaSnap.exists && typeof aulaSnap.exists === 'function') ? aulaSnap.data() : (aulaSnap && aulaSnap.data ? aulaSnap.data() : null);
+        if (dAula) {
+          const tc = String(dAula.turnoCodigo || '').trim();
+          if (/^T\d+$/i.test(tc)) { turnoCodigoFinal = tc; }
+          if (!turnoId && dAula.turnoId) { turnoId = String(dAula.turnoId); }
+        }
+      } catch (e) { console.warn('No se pudo deducir el turno desde el aula:', e); }
+      // Si el aula no tenía el código (solo turnoId), se busca el código en la colección turnos
+      if (!/^T\d+$/i.test(turnoCodigoFinal) && turnoId) {
+        try {
+          const snapTurnoId = await getDoc(firestoreDoc(db, 'turnos', turnoId));
+          if (snapTurnoId.exists()) {
+            const tc2 = String((snapTurnoId.data() as any)?.codigo || '').trim();
+            if (/^T\d+$/i.test(tc2)) { turnoCodigoFinal = tc2; }
+          }
+        } catch (e) { console.warn('No se pudo leer el código del turno:', e); }
+      }
+      // Último recurso: se deduce por el aula registrada en el turno de la inscripción
+      if (!/^T\d+$/i.test(turnoCodigoFinal)) {
+        try {
+          const qA = await getDocs(query(collection(db, 'turnosedicion'), where('codigoAula', '==', codigoAula)));
+          for (const d of qA.docs) {
+            const dA: any = d.data();
+            const tc3 = String(dA.turnoCodigo || '').trim();
+            if (/^T\d+$/i.test(tc3)) { turnoCodigoFinal = tc3; break; }
+            if (dA.turnoId) {
+              const st = await getDoc(firestoreDoc(db, 'turnos', String(dA.turnoId)));
+              const tc4 = st.exists() ? String((st.data() as any)?.codigo || '').trim() : '';
+              if (/^T\d+$/i.test(tc4)) { turnoCodigoFinal = tc4; break; }
+            }
+          }
+        } catch (e) { console.warn('No se pudo deducir el turno (último recurso):', e); }
+      }
+    }
+        if (/^T\d+$/i.test(turnoCodigoFinal.trim())) {
           const turnosRef = collection(db, 'turnos');
-          const qTurno = query(turnosRef, where('codigo', '==', turnoCodigo));
+          const qTurno = query(turnosRef, where('codigo', '==', turnoCodigoFinal));
           const snapTurno = await getDocs(qTurno);
           if (!snapTurno.empty) {
             turnoId = snapTurno.docs[0].id;
@@ -1072,7 +1117,7 @@ doc.text(`${examenStr} ${sufijoExamen}`, bx + (stripWidth - 4) * 0.75, horaY + 8
 
         const estTurnoObj: Turno = {
           id: turnoId,
-          codigo: turnoCodigo,
+          codigo: turnoCodigoFinal,
           fecha: new Date(),
           horaInicioEntrada: '',
           horaFinEntrada: '',

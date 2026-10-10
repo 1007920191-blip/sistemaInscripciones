@@ -75,6 +75,8 @@ export class ConfiguracionService {
         titularYape: data['titularYape'] || data['nombreYape'] || '',
         nombreCompletoTitularYape: data['nombreCompletoTitularYape'] || data['titularYape'] || '',
         publicarResultados: data['publicarResultados'] === true,
+      usarCapacidadCompleta: data['usarCapacidadCompleta'] === true,
+      inscripcionesCerradas: data['inscripcionesCerradas'] === true,
         fechaActualizacion: data['fechaActualizacion']?.toDate?.() || new Date()
       } as Configuracion;
     }
@@ -122,6 +124,8 @@ export class ConfiguracionService {
       titularYape: (config as any).titularYape || '',
       nombreCompletoTitularYape: (config as any).nombreCompletoTitularYape || '',
       publicarResultados: config.publicarResultados === true,
+      usarCapacidadCompleta: (config as any).usarCapacidadCompleta === true,
+      inscripcionesCerradas: (config as any).inscripcionesCerradas === true,
       fechaActualizacion: Timestamp.now()
     };
     

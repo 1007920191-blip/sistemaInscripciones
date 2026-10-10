@@ -47,6 +47,10 @@ export interface ResultadoSimulacion {
 
 export class AsignacionEngine {
   private readonly LIMITE_OPERATIVO = 0.9;
+  /** true = llenar las aulas al 100% de su capacidad (se configura en Configuración). */
+  usarCapacidadCompleta = false;
+  /** Factor del límite por aula: 1 al 100%, 0.9 con margen. */
+  private get factorLimite(): number { return this.usarCapacidadCompleta ? 1 : this.LIMITE_OPERATIVO; }
   private readonly MAX_POR_COLEGIO = 0.5;
   private readonly CAPACIDAD_DEFAULT = 30;
   private readonly MAX_AULAS = 9;
@@ -61,7 +65,7 @@ export class AsignacionEngine {
     aulasFisicasDisponibles: AulaFisicaDisponible[] = []
   ): ResultadoSimulacion {
     const limiteOperativo = (capacidad: number) =>
-      Math.min(capacidad, Math.max(1, Math.floor(capacidad * this.LIMITE_OPERATIVO)));
+      Math.min(capacidad, Math.max(1, Math.floor(capacidad * this.factorLimite))); // 90% o 100% según configuración
     
     const aulasValidas = aulasExistentes.filter(a => 
       a.grado === solicitud.grado &&

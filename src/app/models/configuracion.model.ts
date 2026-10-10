@@ -11,5 +11,9 @@ export interface Configuracion {
   titularYape?: string;
   nombreCompletoTitularYape?: string;
   publicarResultados?: boolean;
+  /** Si está activo, las aulas se llenan al 100% de su capacidad (si no, al 90%). */
+  usarCapacidadCompleta?: boolean;
+  /** Si está activo, el sistema online NO permite registrar nuevas inscripciones. */
+  inscripcionesCerradas?: boolean;
   fechaActualizacion?: Date;
 }
